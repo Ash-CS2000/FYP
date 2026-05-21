@@ -111,6 +111,9 @@ The backend runs at:
 
 ```text
 http://127.0.0.1:8000
+
+http://127.0.0.1:8000/api/auth/login/
+
 ```
 
 ## Email Testing
