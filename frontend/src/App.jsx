@@ -5,6 +5,7 @@ import AuthorDashboard from './pages/AuthorDashboard.jsx';
 import SubmitPaper from './pages/SubmitPaper.jsx';
 import MyPapers from './pages/MyPapers.jsx';
 import Revision from './pages/Revision.jsx';
+import TrainingModule from './pages/TrainingModule.jsx';
 import ReviewerDashboard from './pages/ReviewerDashboard.jsx';
 import ReviewForm from './pages/ReviewForm.jsx';
 import ReviewerCompleted from './pages/ReviewerCompleted.jsx';
@@ -16,6 +17,8 @@ import Notifications from './pages/Notifications.jsx';
 import Profile from './pages/Profile.jsx';
 import Settings from './pages/Settings.jsx';
 import NotFound from './pages/NotFound.jsx';
+import StudentProgress from './pages/StudentProgress.jsx';
+import StudentResources from './pages/StudentResources.jsx';
 
 export default function App() {
   return (
@@ -34,6 +37,16 @@ export default function App() {
       <Route path="/author/notifications" element={<Notifications role="author" />} />
       <Route path="/author/profile" element={<Profile role="author" />} />
       <Route path="/author/settings" element={<Settings role="author" />} />
+
+      {/* Student */}
+      <Route path="/student" element={<Navigate to="/student/training" replace />} />
+      <Route path="/student/dashboard" element={<Navigate to="/student/training" replace />} />
+      <Route path="/student/training" element={<TrainingModule />} />
+      <Route path="/student/progress" element={<StudentProgress />} />
+      <Route path="/student/resources" element={<StudentResources />} />
+      <Route path="/student/notifications" element={<Notifications role="student" />} />
+      <Route path="/student/profile" element={<Profile role="student" />} />
+      <Route path="/student/settings" element={<Settings role="student" />} />
 
       {/* Reviewer */}
       <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />

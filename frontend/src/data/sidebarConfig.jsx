@@ -41,6 +41,28 @@ export const SIDEBAR_CONFIG = {
       },
     ],
   },
+  student: {
+    role: 'Student',
+    user: { name: 'Nur Aisyah', initials: 'NA', role: 'Software Engineering Student · UTM' },
+    sections: [
+      {
+        title: 'Learning',
+        items: [
+          { id: 'training', label: 'Training', to: '/student/training', icon: ICONS.book },
+          { id: 'progress', label: 'Progress', to: '/student/progress', icon: ICONS.done },
+          { id: 'resources', label: 'Resources', to: '/student/resources', icon: ICONS.list },
+        ],
+      },
+      {
+        title: 'Account',
+        items: [
+          { id: 'notifications', label: 'Notifications', to: '/student/notifications', icon: ICONS.bell, badge: 2 },
+          { id: 'profile', label: 'Profile', to: '/student/profile', icon: ICONS.user },
+          { id: 'settings', label: 'Settings', to: '/student/settings', icon: ICONS.settings },
+        ],
+      },
+    ],
+  },
   reviewer: {
     role: 'Reviewer',
     user: { name: 'Dr. Lim Wei Ping', initials: 'LW', role: 'Senior Reviewer · UM' },

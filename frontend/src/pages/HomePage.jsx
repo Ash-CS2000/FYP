@@ -126,6 +126,7 @@ export default function HomePage() {
             <Link to="/" className="active">Home</Link>
             <a href="#features">Features</a>
             <a href="#workflow">Workflow</a>
+            <Link to="/student/training">Student</Link>
             <Link to="/author/dashboard">Author</Link>
             <Link to="/reviewer/dashboard">Reviewer</Link>
             <Link to="/editor/dashboard">Editor</Link>
