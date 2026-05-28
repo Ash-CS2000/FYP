@@ -11,14 +11,16 @@ const SUBMISSIONS = [
   { id: 'MS-2025-142', title: 'Blockchain Applications in Finance', author: 'Ahmad Razif', cat: 'Finance', status: 'approved', label: 'Approved' },
 ];
 
-export default function EditorSubmissions() {
+export default function EditorSubmissions({ role = 'editor' }) {
+  const isAdmin = role === 'admin';
+
   return (
-    <AppShell role="editor" searchPlaceholder="Search submissions...">
+    <AppShell role={role} searchPlaceholder="Search submissions...">
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">Editorial</span>
+          <span className="eyebrow">{isAdmin ? 'Administration' : 'Editorial'}</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>All <em className="serif-italic">Submissions</em>.</h1>
-          <p className="page-subtitle">Every paper currently in the system, across all stages.</p>
+          <p className="page-subtitle">{isAdmin ? 'Monitor every submission without switching into the editor workspace.' : 'Every paper currently in the system, across all stages.'}</p>
         </div>
       </div>
 

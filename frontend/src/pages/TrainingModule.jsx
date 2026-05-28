@@ -249,6 +249,8 @@ export default function TrainingModule() {
 
   const modulePercent = Math.round((moduleProgress.completedLessons.length / selectedModule.lessons.length) * 100);
   const quizAnswered = moduleProgress.quizScore !== null;
+  const selectedLessonIndex = selectedModule.lessons.findIndex((lesson) => lesson.id === selectedLesson.id);
+  const nextLesson = selectedModule.lessons[selectedLessonIndex + 1];
 
   function selectModule(module) {
     setSelectedModuleId(module.id);
@@ -273,6 +275,11 @@ export default function TrainingModule() {
         },
       };
     });
+  }
+
+  function goToNextLesson() {
+    if (!nextLesson) return;
+    setSelectedLessonId(nextLesson.id);
   }
 
   function submitQuiz() {
@@ -324,12 +331,10 @@ export default function TrainingModule() {
       </div>
 
       <div className="training-layout">
-        <section className="training-path fade-up delay-2">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Learning Path</div>
-              <div className="card-meta">Based on training_modules and student_training_progress.</div>
-            </div>
+        <aside className="training-path fade-up delay-2">
+          <div className="training-path-header">
+            <div className="label">Modules</div>
+            <div className="training-path-count">{TRAINING_MODULES.length}</div>
           </div>
 
           <div className="training-module-list">
@@ -345,27 +350,24 @@ export default function TrainingModule() {
                   type="button"
                   onClick={() => selectModule(module)}
                 >
-                  <div className="training-module-topline">
-                    <span className="training-step">{String(index + 1).padStart(2, '0')}</span>
-                    <span className={`pill ${itemProgress.completed ? 'pill-approved' : percent > 0 ? 'pill-review' : 'pill-pending'}`}>
-                      {itemProgress.completed ? 'Completed' : percent > 0 ? 'In Progress' : 'Not Started'}
-                    </span>
+                  <div className="training-module-index" style={{ '--accent': module.accent }}>
+                    {itemProgress.completed ? 'OK' : String(index + 1).padStart(2, '0')}
                   </div>
-                  <h2>{module.title}</h2>
-                  <p>{module.description}</p>
-                  <div className="training-card-meta">
-                    <span>{module.track}</span>
-                    <span>{module.lessons.length} lessons</span>
-                    <span>{module.level}</span>
+                  <div className="training-module-summary">
+                    <div className="training-module-title">{module.title}</div>
+                    <div className="training-module-meta">{module.track} · {module.lessons.length} lessons</div>
+                    <div className="progress" style={{ '--accent': module.accent }}>
+                      <div className="progress-fill" style={{ width: `${percent}%` }}></div>
+                    </div>
                   </div>
-                  <div className="progress" style={{ '--accent': module.accent }}>
-                    <div className="progress-fill" style={{ width: `${percent}%` }}></div>
+                  <div className="training-module-percent">
+                    {percent}%
                   </div>
                 </button>
               );
             })}
           </div>
-        </section>
+        </aside>
 
         <section className="training-workspace fade-up delay-3">
           <div className="training-workspace-header">
@@ -393,7 +395,7 @@ export default function TrainingModule() {
                     key={lesson.id}
                     onClick={() => setSelectedLessonId(lesson.id)}
                   >
-                    <span className={completed ? 'lesson-check done' : 'lesson-check'}>{completed ? '✓' : ''}</span>
+                    <span className={completed ? 'lesson-check done' : 'lesson-check'}>{completed ? 'OK' : ''}</span>
                     <span>
                       <strong>{lesson.title}</strong>
                       <small>{lesson.duration}</small>
@@ -420,9 +422,14 @@ export default function TrainingModule() {
                 </div>
               </div>
 
-              <button className="btn btn-success" type="button" onClick={markLessonComplete}>
-                Mark Lesson Complete
-              </button>
+              <div className="training-lesson-actions">
+                <button className="btn btn-success" type="button" onClick={markLessonComplete}>
+                  Mark Lesson Complete
+                </button>
+                <button className="btn btn-ghost" type="button" onClick={goToNextLesson} disabled={!nextLesson}>
+                  Next Lesson
+                </button>
+              </div>
             </article>
           </div>
 

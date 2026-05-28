@@ -69,7 +69,7 @@ export default function App() {
       <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
       <Route path="/admin/dashboard" element={<AdminDashboard />} />
       <Route path="/admin/users" element={<AdminUsers />} />
-      <Route path="/admin/submissions" element={<EditorSubmissions />} />
+      <Route path="/admin/submissions" element={<EditorSubmissions role="admin" />} />
       <Route path="/admin/settings" element={<Settings role="admin" />} />
 
       {/* Fallback */}
