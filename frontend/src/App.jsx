@@ -19,6 +19,7 @@ import Settings from './pages/Settings.jsx';
 import NotFound from './pages/NotFound.jsx';
 import StudentProgress from './pages/StudentProgress.jsx';
 import StudentResources from './pages/StudentResources.jsx';
+import UserPapers from './pages/UserPapers.jsx';
 
 export default function App() {
   return (
@@ -38,15 +39,19 @@ export default function App() {
       <Route path="/author/profile" element={<Profile role="author" />} />
       <Route path="/author/settings" element={<Settings role="author" />} />
 
-      {/* Student */}
-      <Route path="/student" element={<Navigate to="/student/training" replace />} />
-      <Route path="/student/dashboard" element={<Navigate to="/student/training" replace />} />
-      <Route path="/student/training" element={<TrainingModule />} />
-      <Route path="/student/progress" element={<StudentProgress />} />
-      <Route path="/student/resources" element={<StudentResources />} />
-      <Route path="/student/notifications" element={<Notifications role="student" />} />
-      <Route path="/student/profile" element={<Profile role="student" />} />
-      <Route path="/student/settings" element={<Settings role="student" />} />
+      {/* User */}
+      <Route path="/user" element={<Navigate to="/user/papers" replace />} />
+      <Route path="/user/dashboard" element={<Navigate to="/user/papers" replace />} />
+      <Route path="/user/papers" element={<UserPapers />} />
+      <Route path="/user/training" element={<TrainingModule />} />
+      <Route path="/user/progress" element={<StudentProgress />} />
+      <Route path="/user/resources" element={<StudentResources />} />
+      <Route path="/user/notifications" element={<Notifications role="user" />} />
+      <Route path="/user/profile" element={<Profile role="user" />} />
+      <Route path="/user/settings" element={<Settings role="user" />} />
+
+      {/* Backward-compatible student links */}
+      <Route path="/student/*" element={<Navigate to="/user/training" replace />} />
 
       {/* Reviewer */}
       <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />

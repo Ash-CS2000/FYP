@@ -36,7 +36,7 @@ export default function AuthorDashboard() {
           <div className="card-header">
             <div>
               <div className="card-title">My Submissions</div>
-              <div className="card-meta">Track every paper you've sent to JSRMS.</div>
+              <div className="card-meta">Track every paper you've sent to PaperBridge.</div>
             </div>
             <div className="row">
               <button className="filter-chip active">All <span style={{ opacity: .6 }}>4</span></button>

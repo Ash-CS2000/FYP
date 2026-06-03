@@ -7,7 +7,7 @@ export default function Settings({ role = 'author' }) {
         <div>
           <span className="eyebrow">Account</span>
           <h1 className="page-title" style={{ marginTop: 8 }}><em className="serif-italic">Settings</em>.</h1>
-          <p className="page-subtitle">Manage how JSRMS works for you.</p>
+          <p className="page-subtitle">Manage how PaperBridge works for you.</p>
         </div>
         <button className="btn btn-primary btn-sm">Save Changes</button>
       </div>
@@ -66,7 +66,7 @@ export default function Settings({ role = 'author' }) {
           </div>
           {[
             { label: 'Email digest', desc: 'A daily summary delivered to your inbox.', checked: true },
-            { label: 'In-app notifications', desc: 'Real-time alerts in the JSRMS notification bell.', checked: true },
+            { label: 'In-app notifications', desc: 'Real-time alerts in the PaperBridge notification bell.', checked: true },
             { label: 'Weekly summary', desc: 'A roll-up of all activity every Monday morning.', checked: false },
             { label: 'Reviewer reminders', desc: 'Gentle nudges as deadlines approach.', checked: true },
           ].map((row) => (
@@ -107,7 +107,7 @@ export default function Settings({ role = 'author' }) {
             <label className="field-label">Profile visibility</label>
             <select className="field-select" defaultValue="community">
               <option value="public">Public — anyone can see my profile</option>
-              <option value="community">Community — only JSRMS users</option>
+              <option value="community">Community — only PaperBridge users</option>
               <option value="private">Private — only editors and admins</option>
             </select>
           </div>
@@ -117,7 +117,7 @@ export default function Settings({ role = 'author' }) {
               <option value="anon">Yes — keep my reviews anonymous (recommended)</option>
               <option value="signed">No — sign my reviews with my name</option>
             </select>
-            <div className="field-hint">JSRMS uses double-blind review by default. Authors will not see your name regardless of this setting.</div>
+            <div className="field-hint">PaperBridge uses double-blind review by default. Authors will not see your name regardless of this setting.</div>
           </div>
         </div>
 

@@ -4,11 +4,11 @@ import Topbar from './Topbar.jsx';
 
 export default function AppShell({ role, children, searchPlaceholder, topbarActions }) {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
-    return window.localStorage.getItem('jsrms-sidebar-open') !== 'false';
+    return window.localStorage.getItem('paperbridge-sidebar-open') !== 'false';
   });
 
   useEffect(() => {
-    window.localStorage.setItem('jsrms-sidebar-open', String(sidebarOpen));
+    window.localStorage.setItem('paperbridge-sidebar-open', String(sidebarOpen));
   }, [sidebarOpen]);
 
   return (

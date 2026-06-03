@@ -4,7 +4,7 @@ const RESOURCES = [
   {
     title: 'Abstract Checklist',
     type: 'Writing Aid',
-    description: 'Problem, objective, method, result, and conclusion checklist for student manuscripts.',
+    description: 'Problem, objective, method, result, and conclusion checklist for research manuscripts.',
   },
   {
     title: 'Keyword Selection Guide',
@@ -25,10 +25,10 @@ const RESOURCES = [
 
 export default function StudentResources() {
   return (
-    <AppShell role="student" searchPlaceholder="Search templates, checklists, and guides...">
+    <AppShell role="user" searchPlaceholder="Search templates, checklists, and guides...">
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">Student Resources</span>
+          <span className="eyebrow">User Resources</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Templates and study aids.</h1>
           <p className="page-subtitle">Reference materials that support the training modules.</p>
         </div>

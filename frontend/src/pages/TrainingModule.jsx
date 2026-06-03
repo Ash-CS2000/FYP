@@ -80,7 +80,7 @@ const TRAINING_MODULES = [
         title: 'Write a useful abstract',
         duration: '8 min',
         content:
-          'A useful abstract states the problem, method, key result, and contribution. Students should write it last, then revise it so it matches the final paper exactly.',
+          'A useful abstract states the problem, method, key result, and contribution. Users should write it last, then revise it so it matches the final paper exactly.',
       },
       {
         id: 'method',
@@ -134,8 +134,8 @@ const TRAINING_MODULES = [
       },
     ],
     quiz: {
-      question: 'Which set of keywords is strongest for a paper about citation training for university students?',
-      options: ['Paper, student, thing', 'Academic citation, student learning, plagiarism prevention', 'Research, education, writing, system, module, university, article'],
+      question: 'Which set of keywords is strongest for a paper about citation training for university users?',
+      options: ['Paper, user, thing', 'Academic citation, user learning, plagiarism prevention', 'Research, education, writing, system, module, university, article'],
       correctOptionIndex: 1,
     },
   },
@@ -302,10 +302,10 @@ export default function TrainingModule() {
   }
 
   return (
-    <AppShell role="student" searchPlaceholder="Search lessons, citation styles, publishing topics...">
+    <AppShell role="user" searchPlaceholder="Search lessons, citation styles, publishing topics...">
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">Student Training</span>
+          <span className="eyebrow">Training Modules</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Learn to cite, write, and publish with confidence.</h1>
           <p className="page-subtitle">Frontend prototype using mock module, lesson, quiz, and progress data.</p>
         </div>

@@ -1,8 +1,6 @@
-# JSRMS
+# PaperBridge
 
-Journal Submission and Review Management System.
-
-JSRMS is a research portal prototype for managing manuscript submission, peer review, editorial decisions, and student learning materials. The current workspace contains a React frontend, a Django backend scaffold, and an ML service folder.
+PaperBridge is a research portal prototype for discovering papers, accessing training modules, and supporting manuscript submission, peer review, editorial decisions, and admin management.
 
 ## Project Structure
 
@@ -16,35 +14,27 @@ FYP/
 
 ## Current Frontend Roles
 
-The frontend currently supports these role areas:
+Everyone can sign up as a normal user. Some demo users also have extended workspace access.
 
 | Role | Main Route | Notes |
 |---|---|---|
-| Student | `/student/training` | Training modules for citation, publishing, abstracts, keywords, and reviewer skills |
-| Author | `/author/dashboard` | Paper submission and author workflow |
-| Reviewer | `/reviewer/dashboard` | Assigned reviews and review form |
-| Editor | `/editor/dashboard` | Editorial decisions; editors are appointed by admin |
-| Admin | `/admin/dashboard` | User and system management |
-
-Public signup is available for:
-
-- Student
-- Author
-- Reviewer applicant
-
-Editors and admins cannot self-register. Editor accounts are intended to be appointed by an admin.
+| User | `/user/papers` | Discover papers, access training modules, resources, and progress |
+| Author | `/author/dashboard` | Extended role for paper submission and author workflow |
+| Reviewer | `/reviewer/dashboard` | Extended role for assigned reviews |
+| Editor | `/editor/dashboard` | Hidden/internal role appointed by admin |
+| Admin | `/admin/dashboard` | Hidden/internal role for user and system management |
 
 ## Demo Credentials
 
-These are frontend-only demo credentials for navigation testing:
+| Account | Email | Password | Roles |
+|---|---|---|---|
+| Normal user | `user@utm.edu.my` | `User@123` | User |
+| Author demo | `author@utm.edu.my` | `Author@123` | User + Author |
+| Reviewer demo | `reviewer@um.edu.my` | `Reviewer@123` | User + Reviewer |
+| Editor demo | `editor@usm.my` | `Editor@123` | User + Editor |
+| Admin demo | `admin@paperbridge.edu.my` | `Admin@123` | User + Admin |
 
-| Role | Email | Password |
-|---|---|---|
-| Student | `student@utm.edu.my` | `Student@123` |
-| Author | `author@utm.edu.my` | `Author@123` |
-| Reviewer | `reviewer@um.edu.my` | `Reviewer@123` |
-| Editor | `editor@usm.my` | `Editor@123` |
-| Admin | `admin@jsrms.edu.my` | `Admin@123` |
+Users with extended roles can switch workspace from the sidebar.
 
 ## Frontend Setup
 
@@ -89,12 +79,6 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Set up environment variables:
-
-```bash
-cp .env.example .env
-```
-
 Run migrations:
 
 ```bash
@@ -111,32 +95,14 @@ The backend runs at:
 
 ```text
 http://127.0.0.1:8000
-
-http://127.0.0.1:8000/api/auth/login/
-
-```
-
-## Email Testing
-
-Mailpit can be used for local email testing.
-
-```bash
-brew install mailpit
-brew services start mailpit
-```
-
-Open:
-
-```text
-http://localhost:8025
 ```
 
 ## Training Module
 
-The student training module is frontend-only for now and lives at:
+The training module is frontend-only for now and lives at:
 
 ```text
-/student/training
+/user/training
 ```
 
 Current learning materials include:

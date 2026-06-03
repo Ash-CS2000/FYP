@@ -10,7 +10,7 @@ export default function Profile({ role = 'author' }) {
         <div>
           <span className="eyebrow">Account</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Your <em className="serif-italic">profile</em>.</h1>
-          <p className="page-subtitle">Update how you appear across JSRMS.</p>
+          <p className="page-subtitle">Update how you appear across PaperBridge.</p>
         </div>
         <button className="btn btn-primary btn-sm">Save Changes</button>
       </div>

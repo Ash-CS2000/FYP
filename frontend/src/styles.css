@@ -1,5 +1,5 @@
 /* ================================================
-   JSRMS — Journal Submission & Review Management
+   PaperBridge - Journal Submission & Review Management
    Shared stylesheet
 ================================================ */
 
@@ -403,10 +403,35 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .sidebar-user-info { min-width: 0; }
 .sidebar-user-name { color: var(--white); font-size: 13.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sidebar-user-role { color: var(--navy-300); font-size: 11px; }
+.sidebar-role-switcher {
+  margin-bottom: 14px;
+}
+.sidebar-role-label {
+  display: block;
+  font-family: var(--font-mono);
+  color: var(--navy-500);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 7px;
+}
+.sidebar-role-switcher select {
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.05);
+  color: var(--white);
+  outline: none;
+}
+.sidebar-role-switcher option {
+  color: var(--ink-900);
+}
 .sidebar-signout {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   margin-top: 14px;
   padding: 8px 12px;
   color: var(--navy-300);
@@ -440,7 +465,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .sidebar-collapsed .sidebar-section,
 .sidebar-collapsed .sidebar-link-label,
 .sidebar-collapsed .sidebar-user-info,
-.sidebar-collapsed .sidebar-badge {
+.sidebar-collapsed .sidebar-badge,
+.sidebar-collapsed .sidebar-role-switcher {
   display: none;
 }
 .sidebar-collapsed .sidebar-nav {
@@ -974,7 +1000,97 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .index-card-desc { font-size: 13px; color: var(--ink-600); }
 
 /* ================================================
-   Student training module
+   Paper discovery
+================================================ */
+.portal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.paper-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 18px;
+}
+
+.paper-card {
+  background: var(--white);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r-lg);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  min-height: 310px;
+  transition: all var(--t-base);
+}
+
+.paper-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--navy-300);
+}
+
+.paper-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.paper-card h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--navy-900);
+  line-height: 1.18;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.paper-abstract {
+  color: var(--ink-600);
+  font-size: 13.5px;
+  line-height: 1.65;
+  margin: 14px 0;
+}
+
+.paper-meta {
+  color: var(--ink-500);
+  font-size: 12.5px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.paper-keywords {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.paper-keywords span {
+  background: var(--ink-100);
+  color: var(--ink-700);
+  font-size: 11.5px;
+  padding: 4px 8px;
+  border-radius: var(--r-pill);
+}
+
+.paper-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 18px;
+  flex-wrap: wrap;
+}
+
+/* ================================================
+   User training module
 ================================================ */
 .training-layout {
   display: grid;

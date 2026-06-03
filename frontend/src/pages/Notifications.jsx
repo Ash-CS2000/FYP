@@ -1,7 +1,7 @@
 import AppShell from '../components/AppShell.jsx';
 
 const NOTIFS = {
-  student: [
+  user: [
     { icon: '01', title: 'Training progress saved', body: 'Your Citation Basics lesson progress has been updated.', time: '20 minutes ago', unread: true },
     { icon: '02', title: 'New learning material', body: 'Abstracts and Keywords is now available in your training path.', time: 'Today', unread: true },
     { icon: '03', title: 'Reviewer skills unlocked', body: 'Read Like a Reviewer has been added to help you practice constructive criticism.', time: 'Yesterday', unread: false },

@@ -11,10 +11,10 @@ const MODULE_PROGRESS = [
 
 export default function StudentProgress() {
   return (
-    <AppShell role="student" searchPlaceholder="Search progress, modules, quiz scores...">
+    <AppShell role="user" searchPlaceholder="Search progress, modules, quiz scores...">
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">Student Progress</span>
+          <span className="eyebrow">Training Progress</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Your learning progress.</h1>
           <p className="page-subtitle">Track completed lessons, module progress, and quiz readiness.</p>
         </div>
@@ -42,7 +42,7 @@ export default function StudentProgress() {
         <div className="card-header">
           <div>
             <div className="card-title">Module Progress</div>
-            <div className="card-meta">Frontend mock data matching student_training_progress.</div>
+            <div className="card-meta">Frontend mock data matching user training progress.</div>
           </div>
         </div>
         <table className="data-table">
