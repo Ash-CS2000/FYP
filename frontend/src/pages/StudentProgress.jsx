@@ -1,72 +1,92 @@
+import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import { TRAINING_UNITS } from '../data/trainingContent.js';
+import {
+  getProgress,
+  isUnitComplete,
+  isUnitUnlocked,
+  countCompletedUnits,
+  overallPercent,
+  allUnitsComplete,
+} from '../data/trainingProgress.js';
 
-const MODULE_PROGRESS = [
-  { title: 'Citation Basics', track: 'Citation', progress: 67, score: 'Not attempted' },
-  { title: 'Avoiding Plagiarism', track: 'Citation', progress: 0, score: 'Not attempted' },
-  { title: 'Research Paper Structure', track: 'Publishing', progress: 0, score: 'Not attempted' },
-  { title: 'Abstracts and Keywords', track: 'Research Literacy', progress: 0, score: 'Not attempted' },
-  { title: 'Read Like a Reviewer', track: 'Reviewing', progress: 0, score: 'Not attempted' },
-  { title: 'Publishing Your First Paper', track: 'Publishing', progress: 0, score: 'Not attempted' },
-];
+function unitStatus(unit, progress) {
+  if (isUnitComplete(unit, progress)) return { label: 'Complete', cls: 'pill pill-approved' };
+  if (isUnitUnlocked(unit, progress)) return { label: 'In progress', cls: 'pill pill-review' };
+  return { label: 'Locked', cls: 'pill pill-rejected' };
+}
 
 export default function StudentProgress() {
+  const progress = getProgress();
+  const completed = countCompletedUnits(progress);
+  const percent = overallPercent(progress);
+  const allDone = allUnitsComplete(progress);
+
   return (
-    <AppShell role="user" searchPlaceholder="Search progress, modules, quiz scores...">
+    <AppShell role="user" searchPlaceholder="Search progress, units, quiz scores...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Training Progress</span>
-          <h1 className="page-title" style={{ marginTop: 8 }}>Your learning progress.</h1>
-          <p className="page-subtitle">Track completed lessons, module progress, and quiz readiness.</p>
+          <h1 className="page-title" style={{ marginTop: 8 }}>Your learning <em className="serif-italic">progress</em>.</h1>
+          <p className="page-subtitle">Track your units, quiz scores, writing exercises, and certificate status.</p>
         </div>
+        {allDone && !progress.certificate && (
+          <Link to="/user/assessment" className="btn btn-primary">Take Final Assessment →</Link>
+        )}
+        {progress.certificate && (
+          <Link to="/user/certificate" className="btn btn-primary">View Certificate →</Link>
+        )}
       </div>
 
       <div className="stat-grid">
         <div className="stat fade-up delay-1" style={{ '--accent': 'var(--navy-700)' }}>
-          <div className="stat-label">Lessons Completed</div>
-          <div className="stat-value">2</div>
-          <div className="stat-trend">Out of 17 lessons</div>
+          <div className="stat-label">Overall Progress</div>
+          <div className="stat-value">{percent}%</div>
+          <div className="stat-trend">{completed} of {TRAINING_UNITS.length} units complete</div>
         </div>
         <div className="stat fade-up delay-2" style={{ '--accent': 'var(--amber-700)' }}>
-          <div className="stat-label">Active Module</div>
-          <div className="stat-value" style={{ fontSize: 30 }}>Citation</div>
-          <div className="stat-trend">Continue Citation Basics</div>
+          <div className="stat-label">Final Assessment</div>
+          <div className="stat-value" style={{ fontSize: 26 }}>
+            {progress.assessment.passed ? 'Passed' : allDone ? 'Ready' : 'Locked'}
+          </div>
+          <div className="stat-trend">
+            {progress.assessment.bestScore === null ? 'Not attempted yet' : `Best score ${progress.assessment.bestScore}%`}
+          </div>
         </div>
-        <div className="stat fade-up delay-3" style={{ '--accent': 'var(--teal-700)' }}>
-          <div className="stat-label">Quiz Average</div>
-          <div className="stat-value">--</div>
-          <div className="stat-trend">Complete a quiz to unlock scores</div>
+        <div className="stat fade-up delay-3" style={{ '--accent': progress.certificate ? 'var(--teal-700)' : 'var(--ink-300)' }}>
+          <div className="stat-label">Certificate</div>
+          <div className="stat-value" style={{ fontSize: 26 }}>{progress.certificate ? 'Earned' : 'Pending'}</div>
+          <div className="stat-trend">{progress.certificate ? progress.certificate.id : 'Pass the assessment to earn'}</div>
         </div>
       </div>
 
       <div className="card fade-up delay-2">
         <div className="card-header">
           <div>
-            <div className="card-title">Module Progress</div>
-            <div className="card-meta">Frontend mock data matching user training progress.</div>
+            <div className="card-title">Unit Progress</div>
+            <div className="card-meta">Each unit needs all lessons read, the quiz passed, and the writing exercise submitted.</div>
           </div>
         </div>
         <table className="data-table">
           <thead>
-            <tr><th>Module</th><th>Track</th><th>Progress</th><th>Quiz Score</th></tr>
+            <tr><th>Unit</th><th>Track</th><th>Lessons</th><th>Quiz</th><th>Writing</th><th>Status</th></tr>
           </thead>
           <tbody>
-            {MODULE_PROGRESS.map((module) => (
-              <tr key={module.title}>
-                <td>
-                  <div className="table-title">{module.title}</div>
-                </td>
-                <td><span className="muted">{module.track}</span></td>
-                <td>
-                  <div className="row" style={{ minWidth: 180 }}>
-                    <div className="progress" style={{ flex: 1, '--accent': module.progress > 0 ? 'var(--navy-700)' : 'var(--ink-300)' }}>
-                      <div className="progress-fill" style={{ width: `${module.progress}%` }}></div>
-                    </div>
-                    <span style={{ fontSize: 12.5, color: 'var(--ink-600)', width: 36 }}>{module.progress}%</span>
-                  </div>
-                </td>
-                <td><span className="muted">{module.score}</span></td>
-              </tr>
-            ))}
+            {TRAINING_UNITS.map((unit) => {
+              const p = progress.units[unit.id];
+              const lessonsRead = p.lessonsRead.filter((id) => unit.lessons.some((l) => l.id === id)).length;
+              const status = unitStatus(unit, progress);
+              return (
+                <tr key={unit.id}>
+                  <td><div className="table-title">{unit.order}. {unit.title}</div></td>
+                  <td><span className="muted">{unit.track}</span></td>
+                  <td><span className="muted">{lessonsRead}/{unit.lessons.length}</span></td>
+                  <td><span className="muted">{p.quizScore === null ? '--' : `${p.quizScore}%`}</span></td>
+                  <td><span className="muted">{p.exerciseSubmitted ? 'Done' : '--'}</span></td>
+                  <td><span className={status.cls}>{status.label}</span></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

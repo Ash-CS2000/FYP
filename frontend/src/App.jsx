@@ -20,6 +20,9 @@ import NotFound from './pages/NotFound.jsx';
 import StudentProgress from './pages/StudentProgress.jsx';
 import StudentResources from './pages/StudentResources.jsx';
 import UserPapers from './pages/UserPapers.jsx';
+import FinalAssessment from './pages/FinalAssessment.jsx';
+import Certificate from './pages/Certificate.jsx';
+import UserSubmit from './pages/UserSubmit.jsx';
 
 export default function App() {
   return (
@@ -44,6 +47,9 @@ export default function App() {
       <Route path="/user/dashboard" element={<Navigate to="/user/papers" replace />} />
       <Route path="/user/papers" element={<UserPapers />} />
       <Route path="/user/training" element={<TrainingModule />} />
+      <Route path="/user/assessment" element={<FinalAssessment />} />
+      <Route path="/user/certificate" element={<Certificate />} />
+      <Route path="/user/submit" element={<UserSubmit />} />
       <Route path="/user/progress" element={<StudentProgress />} />
       <Route path="/user/resources" element={<StudentResources />} />
       <Route path="/user/notifications" element={<Notifications role="user" />} />

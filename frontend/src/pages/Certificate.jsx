@@ -1,0 +1,96 @@
+import { Link } from 'react-router-dom';
+import AppShell from '../components/AppShell.jsx';
+import { getProgress } from '../data/trainingProgress.js';
+import { TRAINING_UNITS } from '../data/trainingContent.js';
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+}
+
+export default function Certificate() {
+  const progress = getProgress();
+  const cert = progress.certificate;
+
+  if (!cert) {
+    return (
+      <AppShell role="user" searchPlaceholder="Search...">
+        <div className="page-header fade-up">
+          <div>
+            <span className="eyebrow">Certificate</span>
+            <h1 className="page-title" style={{ marginTop: 8 }}>Your <em className="serif-italic">certificate</em>.</h1>
+            <p className="page-subtitle">Earn your certificate by completing the training and passing the final assessment.</p>
+          </div>
+        </div>
+        <div className="card fade-up delay-1 exam-locked">
+          <div className="unit-locked-icon">🎓</div>
+          <h2>No certificate yet</h2>
+          <p>Once you pass the final assessment, your certificate will appear here, ready to view and print.</p>
+          <Link to="/user/training" className="btn btn-primary">Go to Training →</Link>
+        </div>
+      </AppShell>
+    );
+  }
+
+  return (
+    <AppShell role="user" searchPlaceholder="Search...">
+      <div className="page-header fade-up">
+        <div>
+          <span className="eyebrow">Certificate</span>
+          <h1 className="page-title" style={{ marginTop: 8 }}>Your <em className="serif-italic">certificate</em>.</h1>
+          <p className="page-subtitle">You are now qualified to submit research for publication on JSRMS.</p>
+        </div>
+        <button className="btn btn-primary btn-sm" onClick={() => window.print()}>Print / Save as PDF</button>
+      </div>
+
+      <div className="certificate-wrap fade-up delay-1">
+        <div className="certificate">
+          <div className="certificate-border">
+            <div className="certificate-seal">JSRMS</div>
+            <div className="certificate-eyebrow">Journal Submission &amp; Review Management System</div>
+            <h2 className="certificate-title">Certificate of Completion</h2>
+            <p className="certificate-intro">This is to certify that</p>
+            <div className="certificate-name">{cert.name}</div>
+            <p className="certificate-body">
+              has successfully completed the JSRMS Student Research Publishing Training Programme,
+              covering academic publishing, research paper structure, academic writing standards,
+              and use of the JSRMS submission system, and has passed the final certification assessment.
+            </p>
+
+            <div className="certificate-units">
+              {TRAINING_UNITS.map((unit) => (
+                <span key={unit.id} className="certificate-unit-chip">{unit.title}</span>
+              ))}
+            </div>
+
+            <div className="certificate-footer">
+              <div className="certificate-sign">
+                <div className="certificate-sign-line">Training Coordinator</div>
+                <div className="certificate-sign-name">JSRMS Academic Office</div>
+              </div>
+              <div className="certificate-meta">
+                <div><span>Certificate ID</span>{cert.id}</div>
+                <div><span>Date Issued</span>{formatDate(cert.issuedAt)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card fade-up delay-2" style={{ marginTop: 22 }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">What you can do now</div>
+            <div className="card-meta">Your certificate unlocks full author features.</div>
+          </div>
+        </div>
+        <div className="row" style={{ gap: 12 }}>
+          <Link to="/user/submit" className="btn btn-primary">Submit Your First Paper →</Link>
+          <Link to="/user/papers" className="btn btn-ghost">Browse Published Papers</Link>
+        </div>
+      </div>
+    </AppShell>
+  );
+}

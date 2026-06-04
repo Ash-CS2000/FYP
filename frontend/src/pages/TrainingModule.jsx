@@ -1,367 +1,181 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import { TRAINING_UNITS, PASS_MARK } from '../data/trainingContent.js';
+import {
+  getProgress,
+  markLessonRead,
+  recordQuizScore,
+  submitExercise,
+  isUnitComplete,
+  isUnitUnlocked,
+  allUnitsComplete,
+  countCompletedUnits,
+  overallPercent,
+} from '../data/trainingProgress.js';
 
-const TRAINING_MODULES = [
-  {
-    id: 'citation-basics',
-    title: 'Citation Basics',
-    description: 'Learn why citations matter, where to cite, and how references protect academic integrity.',
-    track: 'Citation',
-    level: 'Beginner',
-    accent: 'var(--navy-700)',
-    lessons: [
-      {
-        id: 'why-cite',
-        title: 'Why citation matters',
-        duration: '6 min',
-        content:
-          'Citation shows where your ideas came from, gives credit to original authors, and helps readers verify your claims. A strong paper cites sources when using facts, definitions, methods, data, or another author\'s argument.',
-      },
-      {
-        id: 'in-text',
-        title: 'In-text citation essentials',
-        duration: '8 min',
-        content:
-          'In-text citations connect a sentence in your paper to a full source in the reference list. For example, APA commonly uses author and year, while IEEE uses numbered brackets that match the reference list.',
-      },
-      {
-        id: 'references',
-        title: 'Reference list anatomy',
-        duration: '9 min',
-        content:
-          'A complete reference usually includes author, year, title, publication venue, volume, issue, page range, and DOI or URL when available. Missing details make it harder for readers to find the source.',
-      },
-    ],
-    quiz: {
-      question: 'Which detail is most important when citing a journal article?',
-      options: ['The author\'s social media handle', 'The DOI or stable source link', 'The color of the journal cover'],
-      correctOptionIndex: 1,
-    },
-  },
-  {
-    id: 'avoid-plagiarism',
-    title: 'Avoiding Plagiarism',
-    description: 'Practice paraphrasing, quotation use, source notes, and responsible AI acknowledgement.',
-    track: 'Citation',
-    level: 'Beginner',
-    accent: 'var(--teal-700)',
-    lessons: [
-      {
-        id: 'paraphrase',
-        title: 'Paraphrase with control',
-        duration: '7 min',
-        content:
-          'Good paraphrasing changes structure and wording while preserving the original meaning. It still needs a citation because the idea came from another source.',
-      },
-      {
-        id: 'quote',
-        title: 'When to quote directly',
-        duration: '5 min',
-        content:
-          'Use direct quotes when the exact wording is important, such as definitions, legal text, or a memorable claim. Keep quotes brief and explain why they matter in your own analysis.',
-      },
-    ],
-    quiz: {
-      question: 'If you rewrite a source idea completely in your own words, what should you do?',
-      options: ['No citation is needed', 'Cite the source', 'Only cite it if it came from a book'],
-      correctOptionIndex: 1,
-    },
-  },
-  {
-    id: 'paper-structure',
-    title: 'Research Paper Structure',
-    description: 'Build a clear manuscript from abstract to conclusion using a journal-ready structure.',
-    track: 'Publishing',
-    level: 'Intermediate',
-    accent: 'var(--amber-700)',
-    lessons: [
-      {
-        id: 'abstract',
-        title: 'Write a useful abstract',
-        duration: '8 min',
-        content:
-          'A useful abstract states the problem, method, key result, and contribution. Users should write it last, then revise it so it matches the final paper exactly.',
-      },
-      {
-        id: 'method',
-        title: 'Explain your methodology',
-        duration: '10 min',
-        content:
-          'The methodology section should let another researcher understand how the study was conducted. Include data sources, tools, procedures, measures, and analysis approach.',
-      },
-      {
-        id: 'discussion',
-        title: 'Turn results into discussion',
-        duration: '9 min',
-        content:
-          'The discussion explains what the results mean, how they compare with previous work, and what limitations should be considered before applying the findings.',
-      },
-    ],
-    quiz: {
-      question: 'Which section usually explains how the study was conducted?',
-      options: ['Methodology', 'Acknowledgement', 'References'],
-      correctOptionIndex: 0,
-    },
-  },
-  {
-    id: 'abstract-keywords',
-    title: 'Abstracts and Keywords',
-    description: 'Understand how abstracts summarize a study and how keywords help readers discover the paper.',
-    track: 'Research Literacy',
-    level: 'Beginner',
-    accent: 'var(--green-700)',
-    lessons: [
-      {
-        id: 'abstract-purpose',
-        title: 'What an abstract does',
-        duration: '7 min',
-        content:
-          'An abstract is a short summary of a paper. It helps readers quickly understand the problem, purpose, method, key result, and conclusion before deciding whether to read the full manuscript.',
-      },
-      {
-        id: 'abstract-quality',
-        title: 'Judge abstract quality',
-        duration: '9 min',
-        content:
-          'A strong abstract is specific, accurate, and complete. A weak abstract is usually too vague, missing the method or result, or making claims that are not supported by the paper.',
-      },
-      {
-        id: 'keyword-selection',
-        title: 'Choose useful keywords',
-        duration: '6 min',
-        content:
-          'Keywords are search terms that describe the main topic, method, field, or population of a paper. Good keywords are specific enough to help discovery but broad enough that other researchers would search for them.',
-      },
-    ],
-    quiz: {
-      question: 'Which set of keywords is strongest for a paper about citation training for university users?',
-      options: ['Paper, user, thing', 'Academic citation, user learning, plagiarism prevention', 'Research, education, writing, system, module, university, article'],
-      correctOptionIndex: 1,
-    },
-  },
-  {
-    id: 'read-like-reviewer',
-    title: 'Read Like a Reviewer',
-    description: 'Learn how reviewers inspect abstracts, methods, results, limitations, and contribution.',
-    track: 'Reviewing',
-    level: 'Intermediate',
-    accent: 'var(--red-700)',
-    lessons: [
-      {
-        id: 'reviewer-first-pass',
-        title: 'First-pass reading',
-        duration: '8 min',
-        content:
-          'A reviewer first checks the title, abstract, keywords, introduction, and conclusion to understand the paper quickly. This pass helps identify the research problem, claimed contribution, and whether the paper fits the journal scope.',
-      },
-      {
-        id: 'quality-checks',
-        title: 'Check research quality',
-        duration: '10 min',
-        content:
-          'Reviewers look for a clear research problem, relevant literature, suitable methodology, valid results, honest limitations, correct citations, and a meaningful contribution to the field.',
-      },
-      {
-        id: 'constructive-comments',
-        title: 'Write constructive criticism',
-        duration: '9 min',
-        content:
-          'Good reviewer comments are specific, polite, and useful. They explain what the issue is, why it matters, and how the author can improve the manuscript.',
-      },
-    ],
-    quiz: {
-      question: 'Which reviewer comment is the most constructive?',
-      options: ['This paper is bad and confusing.', 'The methodology section should explain the dataset size and selection criteria so readers can judge validity.', 'Reject this because I do not like the topic.'],
-      correctOptionIndex: 1,
-    },
-  },
-  {
-    id: 'publish-first-paper',
-    title: 'Publishing Your First Paper',
-    description: 'Follow the path from choosing a venue to submitting, revising, and responding to reviewers.',
-    track: 'Publishing',
-    level: 'Intermediate',
-    accent: 'var(--purple-700)',
-    lessons: [
-      {
-        id: 'venue',
-        title: 'Choose the right journal or conference',
-        duration: '10 min',
-        content:
-          'A suitable venue matches your topic, scope, article type, quality level, and timeline. Always review author guidelines, indexing, publication fees, and recent articles before submitting.',
-      },
-      {
-        id: 'submission',
-        title: 'Prepare a submission checklist',
-        duration: '8 min',
-        content:
-          'Before submitting, check formatting, word count, references, figures, ethics statements, cover letter, author details, and supplementary files. Many desk rejections come from avoidable preparation issues.',
-      },
-      {
-        id: 'peer-review',
-        title: 'Respond to peer review',
-        duration: '11 min',
-        content:
-          'Reviewer responses should be polite, specific, and evidence-based. Create a response table, quote each reviewer concern briefly, explain your change, and point to the revised manuscript section.',
-      },
-    ],
-    quiz: {
-      question: 'What is a strong way to answer reviewer comments?',
-      options: ['Ignore comments you disagree with', 'Reply politely and explain changes clearly', 'Submit to another journal immediately'],
-      correctOptionIndex: 1,
-    },
-  },
-];
-
-function getInitialProgress() {
-  return {
-    'citation-basics': { completedLessons: ['why-cite', 'in-text'], quizScore: null, completed: false },
-    'avoid-plagiarism': { completedLessons: [], quizScore: null, completed: false },
-    'paper-structure': { completedLessons: [], quizScore: null, completed: false },
-    'abstract-keywords': { completedLessons: [], quizScore: null, completed: false },
-    'read-like-reviewer': { completedLessons: [], quizScore: null, completed: false },
-    'publish-first-paper': { completedLessons: [], quizScore: null, completed: false },
-  };
+function countWords(text) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
 export default function TrainingModule() {
-  const [selectedModuleId, setSelectedModuleId] = useState(TRAINING_MODULES[0].id);
-  const [selectedLessonId, setSelectedLessonId] = useState(TRAINING_MODULES[0].lessons[0].id);
-  const [selectedAnswer, setSelectedAnswer] = useState(null);
-  const [progress, setProgress] = useState(getInitialProgress);
+  const [progress, setProgress] = useState(getProgress);
+  const [selectedUnitId, setSelectedUnitId] = useState(TRAINING_UNITS[0].id);
+  const [selectedLessonId, setSelectedLessonId] = useState(TRAINING_UNITS[0].lessons[0].id);
 
-  const selectedModule = TRAINING_MODULES.find((module) => module.id === selectedModuleId);
-  const moduleProgress = progress[selectedModule.id];
-  const selectedLesson = selectedModule.lessons.find((lesson) => lesson.id === selectedLessonId) || selectedModule.lessons[0];
+  // quiz state (per view)
+  const [answers, setAnswers] = useState({});
+  const [quizResult, setQuizResult] = useState(null);
 
-  const overall = useMemo(() => {
-    const totalLessons = TRAINING_MODULES.reduce((total, module) => total + module.lessons.length, 0);
-    const completedLessons = Object.values(progress).reduce((total, item) => total + item.completedLessons.length, 0);
-    const completedModules = Object.values(progress).filter((item) => item.completed).length;
+  // exercise state
+  const [exerciseDraft, setExerciseDraft] = useState('');
+  const [showSample, setShowSample] = useState(false);
 
-    return {
-      completedLessons,
-      totalLessons,
-      completedModules,
-      percent: Math.round((completedLessons / totalLessons) * 100),
-    };
-  }, [progress]);
+  const selectedUnit = TRAINING_UNITS.find((u) => u.id === selectedUnitId);
+  const unitProgress = progress.units[selectedUnit.id];
+  const unlocked = isUnitUnlocked(selectedUnit, progress);
+  const selectedLesson =
+    selectedUnit.lessons.find((l) => l.id === selectedLessonId) || selectedUnit.lessons[0];
 
-  const modulePercent = Math.round((moduleProgress.completedLessons.length / selectedModule.lessons.length) * 100);
-  const quizAnswered = moduleProgress.quizScore !== null;
-  const selectedLessonIndex = selectedModule.lessons.findIndex((lesson) => lesson.id === selectedLesson.id);
-  const nextLesson = selectedModule.lessons[selectedLessonIndex + 1];
+  const overall = useMemo(
+    () => ({
+      percent: overallPercent(progress),
+      completedUnits: countCompletedUnits(progress),
+      allDone: allUnitsComplete(progress),
+    }),
+    [progress],
+  );
 
-  function selectModule(module) {
-    setSelectedModuleId(module.id);
-    setSelectedLessonId(module.lessons[0].id);
-    setSelectedAnswer(null);
+  const lessonsReadCount = unitProgress.lessonsRead.filter((id) =>
+    selectedUnit.lessons.some((l) => l.id === id),
+  ).length;
+  const unitPercent = Math.round((lessonsReadCount / selectedUnit.lessons.length) * 100);
+
+  const selectedLessonIndex = selectedUnit.lessons.findIndex((l) => l.id === selectedLesson.id);
+  const nextLesson = selectedUnit.lessons[selectedLessonIndex + 1];
+  const lessonRead = unitProgress.lessonsRead.includes(selectedLesson.id);
+
+  function selectUnit(unit) {
+    if (!isUnitUnlocked(unit, progress)) return;
+    setSelectedUnitId(unit.id);
+    setSelectedLessonId(unit.lessons[0].id);
+    setAnswers({});
+    setQuizResult(null);
+    setExerciseDraft(progress.units[unit.id].exerciseText || '');
+    setShowSample(false);
   }
 
-  function markLessonComplete() {
-    setProgress((current) => {
-      const currentModule = current[selectedModule.id];
-      const completedLessons = currentModule.completedLessons.includes(selectedLesson.id)
-        ? currentModule.completedLessons
-        : [...currentModule.completedLessons, selectedLesson.id];
-      const completed = completedLessons.length === selectedModule.lessons.length && currentModule.quizScore !== null;
-
-      return {
-        ...current,
-        [selectedModule.id]: {
-          ...currentModule,
-          completedLessons,
-          completed,
-        },
-      };
-    });
+  function handleMarkRead() {
+    setProgress(markLessonRead(selectedUnit.id, selectedLesson.id));
   }
 
-  function goToNextLesson() {
-    if (!nextLesson) return;
-    setSelectedLessonId(nextLesson.id);
+  function handleNextLesson() {
+    // mark the current lesson read as the student moves on
+    const updated = markLessonRead(selectedUnit.id, selectedLesson.id);
+    setProgress(updated);
+    if (nextLesson) setSelectedLessonId(nextLesson.id);
   }
 
-  function submitQuiz() {
-    if (selectedAnswer === null) return;
-
-    setProgress((current) => {
-      const currentModule = current[selectedModule.id];
-      const quizScore = selectedAnswer === selectedModule.quiz.correctOptionIndex ? 100 : 0;
-      const completed = currentModule.completedLessons.length === selectedModule.lessons.length;
-
-      return {
-        ...current,
-        [selectedModule.id]: {
-          ...currentModule,
-          quizScore,
-          completed,
-        },
-      };
-    });
+  function selectAnswer(questionId, optionIndex) {
+    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   }
+
+  function handleSubmitQuiz() {
+    const total = selectedUnit.quiz.length;
+    let correct = 0;
+    for (const q of selectedUnit.quiz) {
+      if (answers[q.id] === q.correctIndex) correct += 1;
+    }
+    const score = Math.round((correct / total) * 100);
+    setQuizResult({ correct, total, score });
+    setProgress(recordQuizScore(selectedUnit.id, score));
+  }
+
+  function handleSubmitExercise() {
+    setProgress(submitExercise(selectedUnit.id, exerciseDraft));
+    setShowSample(true);
+  }
+
+  const allQuizAnswered = selectedUnit.quiz.every((q) => answers[q.id] !== undefined);
+  const exerciseWordCount = countWords(exerciseDraft);
+  const exerciseLongEnough = exerciseWordCount >= selectedUnit.exercise.minWords;
+  const unitDone = isUnitComplete(selectedUnit, progress);
 
   return (
-    <AppShell role="user" searchPlaceholder="Search lessons, citation styles, publishing topics...">
+    <AppShell role="user" searchPlaceholder="Search lessons, units, quiz topics...">
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">Training Modules</span>
-          <h1 className="page-title" style={{ marginTop: 8 }}>Learn to cite, write, and publish with confidence.</h1>
-          <p className="page-subtitle">Frontend prototype using mock module, lesson, quiz, and progress data.</p>
+          <span className="eyebrow">Student Training</span>
+          <h1 className="page-title" style={{ marginTop: 8 }}>
+            Qualify to <em className="serif-italic">publish</em> your research.
+          </h1>
+          <p className="page-subtitle">
+            Complete all four units, then pass the final assessment to earn your certificate.
+          </p>
         </div>
-        <button className="btn btn-primary">Continue Learning</button>
+        {overall.allDone ? (
+          <Link to="/user/assessment" className="btn btn-primary">Go to Final Assessment →</Link>
+        ) : (
+          <span className="pill pill-review">Final assessment locks until all units are done</span>
+        )}
       </div>
 
       <div className="stat-grid">
         <div className="stat fade-up delay-1" style={{ '--accent': 'var(--navy-700)' }}>
           <div className="stat-label">Overall Progress</div>
           <div className="stat-value">{overall.percent}%</div>
-          <div className="stat-trend">{overall.completedLessons} of {overall.totalLessons} lessons completed</div>
+          <div className="stat-trend">{overall.completedUnits} of {TRAINING_UNITS.length} units complete</div>
         </div>
         <div className="stat fade-up delay-2" style={{ '--accent': 'var(--teal-700)' }}>
-          <div className="stat-label">Modules Completed</div>
-          <div className="stat-value">{overall.completedModules}</div>
-          <div className="stat-trend">Out of {TRAINING_MODULES.length} guided modules</div>
+          <div className="stat-label">Current Unit</div>
+          <div className="stat-value" style={{ fontSize: 28 }}>{selectedUnit.track}</div>
+          <div className="stat-trend">Unit {selectedUnit.order} of {TRAINING_UNITS.length}</div>
         </div>
-        <div className="stat fade-up delay-3" style={{ '--accent': 'var(--amber-700)' }}>
-          <div className="stat-label">Current Focus</div>
-          <div className="stat-value" style={{ fontSize: 30 }}>{selectedModule.track}</div>
-          <div className="stat-trend">{selectedModule.level} learning path</div>
+        <div className="stat fade-up delay-3" style={{ '--accent': overall.allDone ? 'var(--teal-700)' : 'var(--amber-700)' }}>
+          <div className="stat-label">Certificate Status</div>
+          <div className="stat-value" style={{ fontSize: 28 }}>
+            {progress.certificate ? 'Earned' : overall.allDone ? 'Ready' : 'Locked'}
+          </div>
+          <div className="stat-trend">
+            {progress.certificate ? 'View it on your profile' : 'Finish training to unlock'}
+          </div>
         </div>
       </div>
 
       <div className="training-layout">
         <aside className="training-path fade-up delay-2">
           <div className="training-path-header">
-            <div className="label">Modules</div>
-            <div className="training-path-count">{TRAINING_MODULES.length}</div>
+            <div className="label">Units</div>
+            <div className="training-path-count">{TRAINING_UNITS.length}</div>
           </div>
 
           <div className="training-module-list">
-            {TRAINING_MODULES.map((module, index) => {
-              const itemProgress = progress[module.id];
-              const percent = Math.round((itemProgress.completedLessons.length / module.lessons.length) * 100);
-              const isActive = module.id === selectedModule.id;
+            {TRAINING_UNITS.map((unit) => {
+              const done = isUnitComplete(unit, progress);
+              const open = isUnitUnlocked(unit, progress);
+              const isActive = unit.id === selectedUnit.id;
 
               return (
                 <button
-                  className={`training-module-card ${isActive ? 'active' : ''}`}
-                  key={module.id}
+                  className={`training-module-card ${isActive ? 'active' : ''} ${open ? '' : 'locked'}`}
+                  key={unit.id}
                   type="button"
-                  onClick={() => selectModule(module)}
+                  onClick={() => selectUnit(unit)}
+                  disabled={!open}
                 >
-                  <div className="training-module-index" style={{ '--accent': module.accent }}>
-                    {itemProgress.completed ? 'OK' : String(index + 1).padStart(2, '0')}
+                  <div className="training-module-index" style={{ '--accent': unit.accent }}>
+                    {done ? '✓' : open ? String(unit.order).padStart(2, '0') : '🔒'}
                   </div>
                   <div className="training-module-summary">
-                    <div className="training-module-title">{module.title}</div>
-                    <div className="training-module-meta">{module.track} · {module.lessons.length} lessons</div>
-                    <div className="progress" style={{ '--accent': module.accent }}>
-                      <div className="progress-fill" style={{ width: `${percent}%` }}></div>
+                    <div className="training-module-title">{unit.title}</div>
+                    <div className="training-module-meta">
+                      {unit.track} · {unit.lessons.length} lessons
                     </div>
-                  </div>
-                  <div className="training-module-percent">
-                    {percent}%
+                    <div className="unit-checklist">
+                      <span className={done || unitChecklistLessons(unit, progress) ? 'tick on' : 'tick'}>Lessons</span>
+                      <span className={progress.units[unit.id].quizPassed ? 'tick on' : 'tick'}>Quiz</span>
+                      <span className={progress.units[unit.id].exerciseSubmitted ? 'tick on' : 'tick'}>Writing</span>
+                    </div>
                   </div>
                 </button>
               );
@@ -370,102 +184,228 @@ export default function TrainingModule() {
         </aside>
 
         <section className="training-workspace fade-up delay-3">
-          <div className="training-workspace-header">
-            <div>
-              <span className="eyebrow">{selectedModule.track}</span>
-              <h2>{selectedModule.title}</h2>
-              <p>{selectedModule.description}</p>
+          {!unlocked ? (
+            <div className="unit-locked-panel">
+              <div className="unit-locked-icon">🔒</div>
+              <h2>This unit is locked</h2>
+              <p>Finish the previous unit — read all lessons, pass the quiz, and submit the writing exercise — to unlock this one.</p>
             </div>
-            <div className="training-progress-ring" style={{ '--accent': selectedModule.accent }}>
-              <strong>{modulePercent}%</strong>
-              <span>module</span>
-            </div>
-          </div>
-
-          <div className="training-lesson-grid">
-            <div className="training-lessons">
-              {selectedModule.lessons.map((lesson) => {
-                const completed = moduleProgress.completedLessons.includes(lesson.id);
-                const active = lesson.id === selectedLesson.id;
-
-                return (
-                  <button
-                    type="button"
-                    className={`training-lesson-item ${active ? 'active' : ''}`}
-                    key={lesson.id}
-                    onClick={() => setSelectedLessonId(lesson.id)}
-                  >
-                    <span className={completed ? 'lesson-check done' : 'lesson-check'}>{completed ? 'OK' : ''}</span>
-                    <span>
-                      <strong>{lesson.title}</strong>
-                      <small>{lesson.duration}</small>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <article className="training-lesson-panel">
-              <div className="training-lesson-heading">
+          ) : (
+            <>
+              <div className="training-workspace-header">
                 <div>
-                  <span className="label">Lesson Content</span>
-                  <h3>{selectedLesson.title}</h3>
+                  <span className="eyebrow">Unit {selectedUnit.order} · {selectedUnit.track}</span>
+                  <h2>{selectedUnit.title}</h2>
+                  <p>{selectedUnit.summary}</p>
                 </div>
-                <span className="pill pill-pending">{selectedLesson.duration}</span>
-              </div>
-              <p>{selectedLesson.content}</p>
-
-              <div className="training-example">
-                <div className="feedback-label">Practice prompt</div>
-                <div className="feedback-text">
-                  Write one sentence from your own research topic that would need a citation, then identify which source detail you still need to collect.
+                <div className="training-progress-ring" style={{ '--accent': selectedUnit.accent }}>
+                  <strong>{unitPercent}%</strong>
+                  <span>lessons</span>
                 </div>
               </div>
 
-              <div className="training-lesson-actions">
-                <button className="btn btn-success" type="button" onClick={markLessonComplete}>
-                  Mark Lesson Complete
-                </button>
-                <button className="btn btn-ghost" type="button" onClick={goToNextLesson} disabled={!nextLesson}>
-                  Next Lesson
-                </button>
-              </div>
-            </article>
-          </div>
-
-          <div className="training-quiz">
-            <div className="training-quiz-header">
-              <div>
-                <span className="label">Module Quiz</span>
-                <h3>Check your understanding</h3>
-              </div>
-              {quizAnswered && (
-                <span className={moduleProgress.quizScore === 100 ? 'pill pill-approved' : 'pill pill-rejected'}>
-                  Score {moduleProgress.quizScore}%
-                </span>
+              {unitDone ? (
+                <div className="unit-complete-banner">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" width="18" height="18"><polyline points="20 6 9 17 4 12" /></svg>
+                  Unit complete — well done. {selectedUnit.order < TRAINING_UNITS.length ? 'The next unit is now unlocked.' : 'You can now take the final assessment.'}
+                </div>
+              ) : (
+                <div className="unit-todo-banner">
+                  <strong>To finish this unit:</strong>
+                  <span className={lessonsReadCount === selectedUnit.lessons.length ? 'todo done' : 'todo'}>
+                    Read all {selectedUnit.lessons.length} lessons ({lessonsReadCount}/{selectedUnit.lessons.length})
+                  </span>
+                  <span className={unitProgress.quizPassed ? 'todo done' : 'todo'}>
+                    Pass the quiz ({PASS_MARK}%+)
+                  </span>
+                  <span className={unitProgress.exerciseSubmitted ? 'todo done' : 'todo'}>
+                    Submit the writing exercise
+                  </span>
+                </div>
               )}
-            </div>
 
-            <p>{selectedModule.quiz.question}</p>
-            <div className="quiz-options">
-              {selectedModule.quiz.options.map((option, index) => (
-                <button
-                  type="button"
-                  className={`quiz-option ${selectedAnswer === index ? 'selected' : ''}`}
-                  key={option}
-                  onClick={() => setSelectedAnswer(index)}
-                >
-                  <span>{String.fromCharCode(65 + index)}</span>
-                  {option}
-                </button>
-              ))}
-            </div>
-            <button className="btn btn-primary btn-sm" type="button" onClick={submitQuiz} disabled={selectedAnswer === null}>
-              Submit Answer
-            </button>
-          </div>
+              {/* Lessons */}
+              <div className="training-lesson-grid">
+                <div className="training-lessons">
+                  {selectedUnit.lessons.map((lesson) => {
+                    const read = unitProgress.lessonsRead.includes(lesson.id);
+                    const active = lesson.id === selectedLesson.id;
+                    return (
+                      <button
+                        type="button"
+                        className={`training-lesson-item ${active ? 'active' : ''}`}
+                        key={lesson.id}
+                        onClick={() => setSelectedLessonId(lesson.id)}
+                      >
+                        <span className={read ? 'lesson-check done' : 'lesson-check'}>{read ? '✓' : ''}</span>
+                        <span>
+                          <strong>{lesson.title}</strong>
+                          <small>{lesson.duration}</small>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <article className="training-lesson-panel">
+                  <div className="training-lesson-heading">
+                    <div>
+                      <span className="label">Lesson</span>
+                      <h3>{selectedLesson.title}</h3>
+                    </div>
+                    <span className="pill pill-pending">{selectedLesson.duration}</span>
+                  </div>
+                  <p>{selectedLesson.content}</p>
+
+                  <div className="training-example">
+                    <div className="feedback-label">Key takeaway</div>
+                    <div className="feedback-text">{selectedLesson.takeaway}</div>
+                  </div>
+
+                  <div className="training-lesson-actions">
+                    <button className="btn btn-success" type="button" onClick={handleMarkRead} disabled={lessonRead}>
+                      {lessonRead ? 'Lesson Read ✓' : 'Mark Lesson as Read'}
+                    </button>
+                    <button className="btn btn-ghost" type="button" onClick={handleNextLesson} disabled={!nextLesson}>
+                      Next Lesson →
+                    </button>
+                  </div>
+                </article>
+              </div>
+
+              {/* Quiz */}
+              <div className="training-quiz">
+                <div className="training-quiz-header">
+                  <div>
+                    <span className="label">Unit Quiz · {selectedUnit.quiz.length} questions</span>
+                    <h3>Check your understanding</h3>
+                  </div>
+                  {unitProgress.quizScore !== null && (
+                    <span className={unitProgress.quizPassed ? 'pill pill-approved' : 'pill pill-rejected'}>
+                      Best score {unitProgress.quizScore}%
+                    </span>
+                  )}
+                </div>
+
+                <p className="quiz-hint">You need {PASS_MARK}% or higher to pass this quiz. You can retake it.</p>
+
+                {selectedUnit.quiz.map((q, qIndex) => {
+                  const chosen = answers[q.id];
+                  const graded = quizResult !== null;
+                  return (
+                    <div className="quiz-block" key={q.id}>
+                      <div className="quiz-question">{qIndex + 1}. {q.question}</div>
+                      <div className="quiz-options">
+                        {q.options.map((option, index) => {
+                          let cls = 'quiz-option';
+                          if (chosen === index) cls += ' selected';
+                          if (graded && index === q.correctIndex) cls += ' correct';
+                          if (graded && chosen === index && index !== q.correctIndex) cls += ' wrong';
+                          return (
+                            <button
+                              type="button"
+                              className={cls}
+                              key={option}
+                              onClick={() => !graded && selectAnswer(q.id, index)}
+                            >
+                              <span>{String.fromCharCode(65 + index)}</span>
+                              {option}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {quizResult ? (
+                  <div className={`quiz-result ${quizResult.score >= PASS_MARK ? 'pass' : 'fail'}`}>
+                    <strong>
+                      You scored {quizResult.score}% ({quizResult.correct}/{quizResult.total}).
+                    </strong>{' '}
+                    {quizResult.score >= PASS_MARK
+                      ? 'You passed this quiz.'
+                      : `You need ${PASS_MARK}% to pass. Review the lessons and try again.`}
+                    <div style={{ marginTop: 10 }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        type="button"
+                        onClick={() => { setQuizResult(null); setAnswers({}); }}
+                      >
+                        Retake Quiz
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    type="button"
+                    onClick={handleSubmitQuiz}
+                    disabled={!allQuizAnswered}
+                  >
+                    Submit Quiz ({Object.keys(answers).length}/{selectedUnit.quiz.length} answered)
+                  </button>
+                )}
+              </div>
+
+              {/* Writing exercise */}
+              <div className="writing-exercise">
+                <div className="training-quiz-header">
+                  <div>
+                    <span className="label">Writing Exercise</span>
+                    <h3>Practise what you learned</h3>
+                  </div>
+                  {unitProgress.exerciseSubmitted && <span className="pill pill-approved">Submitted ✓</span>}
+                </div>
+
+                <div className="exercise-prompt">{selectedUnit.exercise.prompt}</div>
+
+                <textarea
+                  className="field-textarea"
+                  rows="7"
+                  placeholder="Write your answer here..."
+                  value={exerciseDraft}
+                  onChange={(e) => setExerciseDraft(e.target.value)}
+                />
+                <div className="exercise-meta">
+                  <span className={exerciseLongEnough ? 'words ok' : 'words'}>
+                    {exerciseWordCount} words (minimum {selectedUnit.exercise.minWords})
+                  </span>
+                  <div className="row">
+                    {(unitProgress.exerciseSubmitted || showSample) && (
+                      <button className="btn btn-ghost btn-sm" type="button" onClick={() => setShowSample((s) => !s)}>
+                        {showSample ? 'Hide sample answer' : 'Show sample answer'}
+                      </button>
+                    )}
+                    <button
+                      className="btn btn-success btn-sm"
+                      type="button"
+                      onClick={handleSubmitExercise}
+                      disabled={!exerciseLongEnough}
+                    >
+                      {unitProgress.exerciseSubmitted ? 'Update Answer' : 'Submit Exercise'}
+                    </button>
+                  </div>
+                </div>
+
+                {showSample && (
+                  <div className="exercise-sample">
+                    <div className="feedback-label">Sample answer (for comparison)</div>
+                    <p>{selectedUnit.exercise.sample}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </section>
       </div>
     </AppShell>
   );
+}
+
+// small helper to show the lessons tick on the unit card
+function unitChecklistLessons(unit, progress) {
+  const p = progress.units[unit.id];
+  if (!p) return false;
+  return unit.lessons.every((l) => p.lessonsRead.includes(l.id));
 }
