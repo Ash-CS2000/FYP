@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import HomePage from './pages/HomePage.jsx';
-import AuthPage from './pages/AuthPage.jsx';
+import AboutPage from './pages/AboutPage.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+import RegisterPage from './pages/RegisterPage.jsx';
 import AuthorDashboard from './pages/AuthorDashboard.jsx';
 import SubmitPaper from './pages/SubmitPaper.jsx';
 import MyPapers from './pages/MyPapers.jsx';
@@ -19,6 +21,7 @@ import Settings from './pages/Settings.jsx';
 import NotFound from './pages/NotFound.jsx';
 import StudentProgress from './pages/StudentProgress.jsx';
 import StudentResources from './pages/StudentResources.jsx';
+import ResourcesPage from './pages/ResourcesPage.jsx';
 import UserPapers from './pages/UserPapers.jsx';
 
 export default function App() {
@@ -26,8 +29,10 @@ export default function App() {
     <Routes>
       {/* Public */}
       <Route path="/" element={<HomePage />} />
-      <Route path="/login" element={<AuthPage initialTab="signin" />} />
-      <Route path="/register" element={<AuthPage initialTab="signup" />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/resources" element={<ResourcesPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
 
       {/* Author */}
       <Route path="/author" element={<Navigate to="/author/dashboard" replace />} />

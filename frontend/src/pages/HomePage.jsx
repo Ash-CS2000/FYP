@@ -255,8 +255,8 @@ export default function HomePage() {
           </Link>
           <div className="public-nav-links">
             <Link to="/" className="active">Papers</Link>
-            <Link to="/user/training">Training</Link>
-            <Link to="/user/resources">Resources</Link>
+            <Link to="/about">About</Link>
+            <Link to="/resources">Resources</Link>
           </div>
           <div className="public-nav-cta">
             <Link to="/login" className="btn btn-ghost btn-sm">Sign In</Link>
