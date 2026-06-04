@@ -2,37 +2,110 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { findDemoAccount, ROLE_HOME, saveDemoSession } from '../data/demoAccounts.js';
 
+
 export default function AuthPage({ initialTab = 'signin' }) {
+  const API_URL = 'http://localhost:8000';
+
   const [tab, setTab] = useState(initialTab);
-  const [email, setEmail] = useState('user@utm.edu.my');
-  const [password, setPassword] = useState('User@123');
+
+  // Form fields
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [institution, setInstitution] = useState('');
+
+  // UI state
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
 
-  function handleSubmit(e) {
-    e.preventDefault();
+  // ── Role → dashboard route ──────────────────────────────────────────
+  const ROLE_HOME = {
+    student:  '/student/dashboard',
+    author:   '/author/dashboard',
+    reviewer: '/reviewer/dashboard',
+    editor:   '/editor/dashboard',
+    admin:    '/admin/dashboard',
+  };
 
-    if (tab === 'signin') {
-      const account = findDemoAccount(email, password);
-      if (!account) {
-        setError('Invalid demo credentials.');
-        return;
-      }
+  // ── Handlers ────────────────────────────────────────────────────────
+  async function handleSignIn() {
+    const res = await fetch(`${API_URL}/api/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-      saveDemoSession(account, account.defaultRole);
-      navigate(ROLE_HOME[account.defaultRole]);
-      return;
+    const data = await res.json();
+
+    if (!res.ok) {
+      // Show error from backend
+      const msg =
+        data?.detail ||
+        data?.email?.[0] ||
+        data?.non_field_errors?.[0] ||
+        'Invalid email or password.';
+      throw new Error(msg);
     }
 
-    saveDemoSession({
-      email,
-      name: 'New PaperBridge User',
-      initials: 'PU',
-      roles: ['user'],
-      defaultRole: 'user',
-    }, 'user');
-    navigate('/user/papers');
+    // Save tokens
+    localStorage.setItem('access', data.access);
+    localStorage.setItem('refresh', data.refresh);
+    localStorage.setItem('user', JSON.stringify(data.user));
+
+    // Redirect to role dashboard
+    const role = data.user.role;
+    navigate(ROLE_HOME[role] || '/dashboard');
   }
+
+  async function handleSignUp() {
+    const res = await fetch(`${API_URL}/api/auth/register/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        full_name: fullName,
+        email,
+        password,
+        role: 'student',       // default role on signup
+        institution,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      const msg =
+        data?.email?.[0] ||
+        data?.password?.[0] ||
+        data?.full_name?.[0] ||
+        data?.non_field_errors?.[0] ||
+        'Registration failed. Please try again.';
+      throw new Error(msg);
+    }
+
+    // Save tokens (auto login after register)
+    localStorage.setItem('access', data.access);
+    localStorage.setItem('refresh', data.refresh);
+    localStorage.setItem('user', JSON.stringify(data.user));
+
+    navigate(ROLE_HOME[data.user.role] || '/dashboard');
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+
+  try {
+    if (tab === 'signin') {
+      await handleSignIn();
+    } else {
+      await handleSignUp();
+    }
+  } catch (err) {
+    setError(err.message);
+  }
+}
+   
 
   return (
     <div className="auth-page">
@@ -184,7 +257,7 @@ export default function AuthPage({ initialTab = 'signin' }) {
             {tab === 'signup' && (
               <div className="field">
                 <label className="field-label">Full name</label>
-                <input className="field-input" type="text" placeholder="Nur Aisyah" />
+                <input className="field-input" type="text"placeholder="Nur Aisyah" value={fullName} onChange={(e) => setFullName(e.target.value)}/>
               </div>
             )}
 
@@ -196,7 +269,7 @@ export default function AuthPage({ initialTab = 'signin' }) {
             {tab === 'signup' && (
               <div className="field">
                 <label className="field-label">Institution</label>
-                <input className="field-input" type="text" placeholder="Universiti Teknologi Malaysia" />
+                <input className="field-input" type="text" placeholder="Universiti Teknologi Malaysia" value={institution} onChange={(e) => setInstitution(e.target.value)}/>
               </div>
             )}
 
