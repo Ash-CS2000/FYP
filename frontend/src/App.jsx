@@ -23,15 +23,20 @@ import StudentProgress from './pages/StudentProgress.jsx';
 import StudentResources from './pages/StudentResources.jsx';
 import ResourcesPage from './pages/ResourcesPage.jsx';
 import UserPapers from './pages/UserPapers.jsx';
+<<<<<<< Updated upstream
 import FinalAssessment from './pages/FinalAssessment.jsx';
 import Certificate from './pages/Certificate.jsx';
 import UserSubmit from './pages/UserSubmit.jsx';
+=======
+import SearchResultsPage from './pages/SearchResultsPage.jsx';
+>>>>>>> Stashed changes
 
 export default function App() {
   return (
     <Routes>
       {/* Public */}
       <Route path="/" element={<HomePage />} />
+      <Route path="/search" element={<SearchResultsPage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/resources" element={<ResourcesPage />} />
       <Route path="/login" element={<LoginPage />} />

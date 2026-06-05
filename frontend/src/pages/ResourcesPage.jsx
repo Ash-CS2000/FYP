@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import PublicNav from '../components/PublicNav.jsx';
 
 const RESOURCES = [
   {
@@ -99,23 +100,7 @@ export default function ResourcesPage() {
         .res-cta-sub { color:var(--navy-200); font-size:14px; }
       `}</style>
 
-      <nav className="public-nav">
-        <div className="public-nav-inner">
-          <Link to="/" className="brand">
-            <span className="brand-mark">PaperBridge</span>
-            <span className="brand-sub">Research Portal</span>
-          </Link>
-          <div className="public-nav-links">
-            <Link to="/">Papers</Link>
-            <Link to="/about">About</Link>
-            <Link to="/resources" className="active">Resources</Link>
-          </div>
-          <div className="public-nav-cta">
-            <Link to="/login" className="btn btn-ghost btn-sm">Sign In</Link>
-            <Link to="/register" className="btn btn-primary btn-sm">Create Account</Link>
-          </div>
-        </div>
-      </nav>
+      <PublicNav />
 
       <section className="res-hero">
         <div className="res-inner">

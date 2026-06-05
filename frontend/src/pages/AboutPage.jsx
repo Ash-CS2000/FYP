@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import PublicNav from '../components/PublicNav.jsx';
 
 export default function AboutPage() {
   return (
@@ -30,23 +31,7 @@ export default function AboutPage() {
         @media(max-width:700px){ .about-grid{grid-template-columns:1fr;} .stat-row{grid-template-columns:1fr 1fr;} }
       `}</style>
 
-      <nav className="public-nav">
-        <div className="public-nav-inner">
-          <Link to="/" className="brand">
-            <span className="brand-mark">PaperBridge</span>
-            <span className="brand-sub">Research Portal</span>
-          </Link>
-          <div className="public-nav-links">
-            <Link to="/">Papers</Link>
-            <Link to="/about" className="active">About</Link>
-            <Link to="/resources">Resources</Link>
-          </div>
-          <div className="public-nav-cta">
-            <Link to="/login" className="btn btn-ghost btn-sm">Sign In</Link>
-            <Link to="/register" className="btn btn-primary btn-sm">Create Account</Link>
-          </div>
-        </div>
-      </nav>
+      <PublicNav />
 
       <section className="about-hero">
         <div className="about-inner">

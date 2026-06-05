@@ -269,6 +269,47 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   gap: 10px;
   align-items: center;
 }
+.nav-search-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ink-100);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r-pill);
+  padding: 6px 8px 6px 14px;
+  flex: 0 1 260px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.nav-search-mini:focus-within {
+  border-color: var(--navy-400, #60a5fa);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+  background: var(--white);
+}
+.nav-search-mini input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13.5px;
+  color: var(--ink-800);
+  min-width: 0;
+}
+.nav-search-mini input::placeholder { color: var(--ink-400); }
+.nav-search-mini button {
+  background: var(--navy-900);
+  color: var(--white);
+  border: none;
+  border-radius: var(--r-pill);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.nav-search-mini button:hover { background: var(--navy-700, #1e40af); }
 
 /* ================================================
    App layout (sidebar + main)

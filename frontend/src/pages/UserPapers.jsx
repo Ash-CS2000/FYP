@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
-import { CATEGORIES, PAPERS } from './HomePage.jsx';
+import { CATEGORIES, PAPERS } from './SearchResultsPage.jsx';
 
 export default function UserPapers() {
   const [query, setQuery] = useState('');
