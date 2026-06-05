@@ -34,13 +34,13 @@ export default function StudentProgress() {
           <p className="page-subtitle">Track your units, quiz scores, writing exercises, and certificate status.</p>
         </div>
         {allDone && !progress.assessment.passed && (
-          <Link to="/user/assessment" className="btn btn-primary">Take Final Assessment →</Link>
+          <Link to="/student/assessment" className="btn btn-primary">Take Final Assessment →</Link>
         )}
         {awaitingPublication && (
-          <Link to="/user/submit" className="btn btn-primary">Submit Your Paper →</Link>
+          <Link to="/student/submit" className="btn btn-primary">Submit Your Paper →</Link>
         )}
         {progress.certificate && (
-          <Link to="/user/certificate" className="btn btn-primary">View Certificate →</Link>
+          <Link to="/student/certificate" className="btn btn-primary">View Certificate →</Link>
         )}
       </div>
 
@@ -97,7 +97,7 @@ export default function StudentProgress() {
               </div>
             </div>
           </div>
-          <Link to="/user/submit" className="btn btn-primary btn-sm">Submit Your Paper →</Link>
+          <Link to="/student/submit" className="btn btn-primary btn-sm">Submit Your Paper →</Link>
         </div>
       )}
 

@@ -50,26 +50,26 @@ export const SIDEBAR_CONFIG = {
       {
         title: 'Learn',
         items: [
-          { id: 'training', label: 'Training Modules', to: '/user/training', icon: ICONS.book },
-          { id: 'progress', label: 'My Progress', to: '/user/progress', icon: ICONS.done },
-          { id: 'assessment', label: 'Final Assessment', to: '/user/assessment', icon: ICONS.exam },
-          { id: 'certificate', label: 'Certificate', to: '/user/certificate', icon: ICONS.award },
-          { id: 'resources', label: 'Resources', to: '/user/resources', icon: ICONS.list },
+          { id: 'training', label: 'Training Modules', to: '/student/training', icon: ICONS.book },
+          { id: 'progress', label: 'My Progress', to: '/student/progress', icon: ICONS.done },
+          { id: 'assessment', label: 'Final Assessment', to: '/student/assessment', icon: ICONS.exam },
+          { id: 'certificate', label: 'Certificate', to: '/student/certificate', icon: ICONS.award },
+          { id: 'resources', label: 'Resources', to: '/student/resources', icon: ICONS.list },
         ],
       },
       {
         title: 'Publish',
         items: [
-          { id: 'papers', label: 'Discover Papers', to: '/user/papers', icon: ICONS.papers },
-          { id: 'submit', label: 'Submit Paper', to: '/user/submit', icon: ICONS.plus },
+          { id: 'papers', label: 'Discover Papers', to: '/student/papers', icon: ICONS.papers },
+          { id: 'submit', label: 'Submit Paper', to: '/student/submit', icon: ICONS.plus },
         ],
       },
       {
         title: 'Account',
         items: [
-          { id: 'notifications', label: 'Notifications', to: '/user/notifications', icon: ICONS.bell, badge: 2 },
-          { id: 'profile', label: 'Profile', to: '/user/profile', icon: ICONS.user },
-          { id: 'settings', label: 'Settings', to: '/user/settings', icon: ICONS.settings },
+          { id: 'notifications', label: 'Notifications', to: '/student/notifications', icon: ICONS.bell, badge: 2 },
+          { id: 'profile', label: 'Profile', to: '/student/profile', icon: ICONS.user },
+          { id: 'settings', label: 'Settings', to: '/student/settings', icon: ICONS.settings },
         ],
       },
     ],

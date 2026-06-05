@@ -145,11 +145,11 @@ export default function TrainingModule() {
         </div>
         <div className="lms-toolbar-action">
           {progress.certificate ? (
-            <Link to="/user/certificate" className="btn btn-primary btn-sm">View Certificate →</Link>
+            <Link to="/student/certificate" className="btn btn-primary btn-sm">View Certificate →</Link>
           ) : progress.assessment.passed ? (
-            <Link to="/user/submit" className="btn btn-primary btn-sm">Submit Your Paper →</Link>
+            <Link to="/student/submit" className="btn btn-primary btn-sm">Submit Your Paper →</Link>
           ) : overall.allDone ? (
-            <Link to="/user/assessment" className="btn btn-primary btn-sm">Take Final Assessment →</Link>
+            <Link to="/student/assessment" className="btn btn-primary btn-sm">Take Final Assessment →</Link>
           ) : (
             <span className="lms-toolbar-hint">
               {TRAINING_UNITS.length - overall.completedUnits} module{TRAINING_UNITS.length - overall.completedUnits === 1 ? '' : 's'} to the assessment

@@ -40,14 +40,14 @@ export default function Profile({ role = 'author' }) {
                   <div className="profile-cert-badge-icon earned">🎓</div>
                   <div className="profile-cert-badge-title">Certified Author</div>
                   <div className="profile-cert-badge-meta">{cert.id}</div>
-                  <Link to="/user/certificate" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>View Certificate</Link>
+                  <Link to="/student/certificate" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>View Certificate</Link>
                 </>
               ) : (
                 <>
                   <div className="profile-cert-badge-icon">🔒</div>
                   <div className="profile-cert-badge-title">Not yet certified</div>
                   <div className="profile-cert-badge-meta">Complete training to earn your badge</div>
-                  <Link to="/user/training" className="btn btn-ghost btn-sm" style={{ marginTop: 12 }}>Go to Training</Link>
+                  <Link to="/student/training" className="btn btn-ghost btn-sm" style={{ marginTop: 12 }}>Go to Training</Link>
                 </>
               )}
             </div>

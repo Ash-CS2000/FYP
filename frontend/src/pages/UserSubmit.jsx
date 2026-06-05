@@ -63,8 +63,8 @@ export default function UserSubmit() {
           </div>
 
           <div className="row" style={{ marginTop: 18, gap: 12 }}>
-            <Link to="/user/training" className="btn btn-primary">Continue Training →</Link>
-            <Link to="/user/assessment" className="btn btn-ghost">Go to Final Assessment</Link>
+            <Link to="/student/training" className="btn btn-primary">Continue Training →</Link>
+            <Link to="/student/assessment" className="btn btn-ghost">Go to Final Assessment</Link>
           </div>
         </div>
       </AppShell>
@@ -83,11 +83,11 @@ export default function UserSubmit() {
         'Paper submitted — and that completes your certification! Your training ' +
           'certificate has been issued. Reviewers will follow up on the paper itself.',
       );
-      navigate('/user/certificate');
+      navigate('/student/certificate');
       return;
     }
     alert('Paper submitted successfully! Our reviewers will be in touch.');
-    navigate('/user/papers');
+    navigate('/student/papers');
   };
 
   return (

@@ -47,8 +47,8 @@ export default function Certificate() {
             </div>
 
             <div className="row" style={{ marginTop: 18, gap: 12 }}>
-              <Link to="/user/submit" className="btn btn-primary">Submit Your Paper →</Link>
-              <Link to="/user/progress" className="btn btn-ghost">View Progress</Link>
+              <Link to="/student/submit" className="btn btn-primary">Submit Your Paper →</Link>
+              <Link to="/student/progress" className="btn btn-ghost">View Progress</Link>
             </div>
           </div>
         </AppShell>
@@ -68,7 +68,7 @@ export default function Certificate() {
           <div className="unit-locked-icon">🎓</div>
           <h2>No certificate yet</h2>
           <p>Pass the final assessment and submit your research paper, and your certificate will appear here, ready to view and print.</p>
-          <Link to="/user/training" className="btn btn-primary">Go to Training →</Link>
+          <Link to="/student/training" className="btn btn-primary">Go to Training →</Link>
         </div>
       </AppShell>
     );
@@ -128,8 +128,8 @@ export default function Certificate() {
           </div>
         </div>
         <div className="row" style={{ gap: 12 }}>
-          <Link to="/user/submit" className="btn btn-primary">Submit Your First Paper →</Link>
-          <Link to="/user/papers" className="btn btn-ghost">Browse Published Papers</Link>
+          <Link to="/student/submit" className="btn btn-primary">Submit Your First Paper →</Link>
+          <Link to="/student/papers" className="btn btn-ghost">Browse Published Papers</Link>
         </div>
       </div>
     </AppShell>

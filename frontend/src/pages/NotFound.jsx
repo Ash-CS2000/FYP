@@ -67,7 +67,7 @@ export default function NotFound() {
           display: 'flex', gap: 24, justifyContent: 'center', flexWrap: 'wrap',
           fontSize: 13.5,
         }}>
-          <Link to="/user/training" style={{ color: 'var(--navy-700)', fontWeight: 500 }}>Training Modules</Link>
+          <Link to="/student/training" style={{ color: 'var(--navy-700)', fontWeight: 500 }}>Training Modules</Link>
           <Link to="/author/dashboard" style={{ color: 'var(--navy-700)', fontWeight: 500 }}>Author Dashboard</Link>
           <Link to="/reviewer/dashboard" style={{ color: 'var(--navy-700)', fontWeight: 500 }}>Reviewer Dashboard</Link>
           <Link to="/editor/dashboard" style={{ color: 'var(--navy-700)', fontWeight: 500 }}>Editor Dashboard</Link>

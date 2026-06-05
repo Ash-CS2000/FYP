@@ -15,7 +15,7 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
   function handleRoleChange(e) {
     const nextRole = e.target.value;
     window.localStorage.setItem('paperbridge-active-role', nextRole);
-    navigate(ROLE_HOME[nextRole] || '/user/papers');
+    navigate(ROLE_HOME[nextRole] || '/student/papers');
   }
 
   function handleSignOut() {

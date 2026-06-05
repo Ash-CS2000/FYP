@@ -124,7 +124,7 @@ export default function FinalAssessment() {
             The final assessment unlocks once you have finished every training unit — all lessons read,
             all quizzes passed, and all writing exercises submitted.
           </p>
-          <Link to="/user/training" className="btn btn-primary">Back to Training →</Link>
+          <Link to="/student/training" className="btn btn-primary">Back to Training →</Link>
         </div>
       </AppShell>
     );
@@ -169,8 +169,8 @@ export default function FinalAssessment() {
                   );
                 })()}
                 <div className="row" style={{ marginTop: 16 }}>
-                  <Link to="/user/submit" className="btn btn-primary">Submit Your Paper →</Link>
-                  <Link to="/user/certificate" className="btn btn-ghost">View Certificate Status</Link>
+                  <Link to="/student/submit" className="btn btn-primary">Submit Your Paper →</Link>
+                  <Link to="/student/certificate" className="btn btn-ghost">View Certificate Status</Link>
                 </div>
               </>
             ) : (
