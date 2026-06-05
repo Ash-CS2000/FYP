@@ -4,12 +4,12 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 const API_URL = 'http://localhost:8000';
 
 const ROLE_ROUTES = {
-  student: '/user/papers',
-  user:     '/user/papers',
-  author:   '/author/dashboard',
-  reviewer: '/reviewer/dashboard',
-  editor:   '/editor/dashboard',
-  admin:    '/admin/dashboard',
+  student:  '/',
+  user:     '/',
+  author:   '/',
+  reviewer: '/',
+  editor:   '/',
+  admin:    '/',
 };
 
 const EyeOpen = () => (

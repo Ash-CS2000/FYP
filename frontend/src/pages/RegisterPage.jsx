@@ -4,10 +4,10 @@ import { Link, useNavigate } from 'react-router-dom';
 const API_URL = 'http://localhost:8000';
 
 const ROLE_ROUTES = {
-  user: '/',
-  student: '/student/papers',
-  author:  '/author/dashboard',
-  reviewer: '/reviewer/dashboard',
+  user:     '/',
+  student:  '/',
+  author:   '/',
+  reviewer: '/',
 };
 
 // ── Shared icons ──────────────────────────────────────────────────────────────
