@@ -26,12 +26,14 @@ import UserPapers from './pages/UserPapers.jsx';
 import FinalAssessment from './pages/FinalAssessment.jsx';
 import Certificate from './pages/Certificate.jsx';
 import UserSubmit from './pages/UserSubmit.jsx';
+import SearchResultsPage from './pages/SearchResultsPage.jsx';
 
 export default function App() {
   return (
     <Routes>
       {/* Public */}
       <Route path="/" element={<HomePage />} />
+      <Route path="/search" element={<SearchResultsPage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/resources" element={<ResourcesPage />} />
       <Route path="/login" element={<LoginPage />} />
@@ -67,7 +69,6 @@ export default function App() {
       {/* Reviewer */}
       <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />
       <Route path="/reviewer/dashboard" element={<ReviewerDashboard />} />
-      <Route path="/reviewer/assigned" element={<ReviewerDashboard />} />
       <Route path="/reviewer/review" element={<ReviewForm />} />
       <Route path="/reviewer/completed" element={<ReviewerCompleted />} />
       <Route path="/reviewer/notifications" element={<Notifications role="reviewer" />} />
@@ -77,7 +78,6 @@ export default function App() {
       <Route path="/editor" element={<Navigate to="/editor/dashboard" replace />} />
       <Route path="/editor/dashboard" element={<EditorDashboard />} />
       <Route path="/editor/submissions" element={<EditorSubmissions />} />
-      <Route path="/editor/pending" element={<EditorDashboard />} />
       <Route path="/editor/notifications" element={<Notifications role="editor" />} />
       <Route path="/editor/settings" element={<Settings role="editor" />} />
 
