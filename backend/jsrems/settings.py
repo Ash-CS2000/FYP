@@ -110,7 +110,6 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '30/minute',        # unknown users
         'user': '100/minute',       # logged in users
-        'auth': '5/minute',         # login & register
         'orcid': '10/minute',       # orcid login
         'password_reset': '3/hour', # password reset
     },

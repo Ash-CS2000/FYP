@@ -1,16 +1,16 @@
+# apps/users/throttles.py
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+from .progressive_throttle import ProgressiveAuthThrottle
 
 
-class AuthRateThrottle(AnonRateThrottle):
-    """5 requests/minute for login & register."""
-    scope = 'auth'
+class AuthRateThrottle(ProgressiveAuthThrottle):
+    """Progressive throttle for login & register."""
+    pass
 
 
 class OrcidRateThrottle(AnonRateThrottle):
-    """10 requests/minute for ORCID endpoints."""
     scope = 'orcid'
 
 
 class PasswordResetThrottle(AnonRateThrottle):
-    """3 requests/hour for password reset."""
     scope = 'password_reset'

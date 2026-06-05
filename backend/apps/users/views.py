@@ -23,13 +23,19 @@ class RegisterView(generics.CreateAPIView):
 
 
 class EmailTokenObtainPairView(TokenObtainPairView):
-    """
-    POST /api/auth/login/
-    Body: { email, password }
-    Returns: { access, refresh, user }
-    """
     serializer_class = EmailTokenObtainPairSerializer
-    throttle_classes = [AuthRateThrottle]  # 5/minute
+    throttle_classes = [AuthRateThrottle]
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+
+        # Reset throttle count on successful login
+        if response.status_code == 200:
+            for throttle in self.get_throttles():
+                if hasattr(throttle, 'on_success'):
+                    throttle.on_success(request)
+
+        return response
 
 
 class MeView(APIView):
