@@ -6,14 +6,18 @@ import {
   ASSESSMENT_PASS_MARK,
   ASSESSMENT_QUESTION_COUNT,
   MAX_ASSESSMENT_ATTEMPTS,
+  PUBLICATION_WINDOW_DAYS,
 } from '../data/trainingContent.js';
 import {
   getProgress,
   allUnitsComplete,
   recordAssessment,
-  issueCertificate,
+  publicationState,
 } from '../data/trainingProgress.js';
-import { getDemoSession } from '../data/demoAccounts.js';
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
 
 const EXAM_MINUTES = 20;
 
@@ -44,7 +48,6 @@ export default function FinalAssessment() {
   const timerRef = useRef(null);
 
   const attemptsLeft = MAX_ASSESSMENT_ATTEMPTS - progress.assessment.attempts;
-  const session = getDemoSession();
 
   const answeredCount = Object.keys(answers).length;
   const progressPercent = useMemo(
@@ -93,10 +96,9 @@ export default function FinalAssessment() {
     const score = Math.round((correct / questions.length) * 100);
     const passed = score >= ASSESSMENT_PASS_MARK;
 
-    let updated = recordAssessment(score);
-    if (passed) {
-      updated = issueCertificate(session?.name || 'JSRMS Student');
-    }
+    // Passing records the result and starts the mandatory publication
+    // requirement; the certificate is only issued once a paper is published.
+    const updated = recordAssessment(score);
     setProgress(updated);
     setResult({ correct, total: questions.length, score, passed, auto });
     setStarted(false);
@@ -150,12 +152,25 @@ export default function FinalAssessment() {
               <>
                 <h2>Congratulations — you passed!</h2>
                 <p>
-                  You scored {result.score}%, above the {ASSESSMENT_PASS_MARK}% pass mark. Your certificate
-                  has been issued and you can now submit your own research for publication.
+                  You scored {result.score}%, above the {ASSESSMENT_PASS_MARK}% pass mark. One final step
+                  completes your certification: <strong>submit one research paper through JSRMS</strong>.
+                  Your certificate is issued as soon as you submit.
                 </p>
+                {(() => {
+                  const pub = publicationState(progress);
+                  return (
+                    <div className="unit-todo-banner" style={{ marginTop: 16 }}>
+                      <strong>Final step — submit your research paper</strong>
+                      <span className="todo">Submit one research paper through JSRMS to earn your certificate</span>
+                      {pub.deadline && (
+                        <span className="todo">Recommended by {formatDate(pub.deadline)} (~{PUBLICATION_WINDOW_DAYS} days) — no hard deadline</span>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="row" style={{ marginTop: 16 }}>
-                  <Link to="/user/certificate" className="btn btn-primary">View Certificate →</Link>
-                  <Link to="/user/submit" className="btn btn-accent">Submit a Paper</Link>
+                  <Link to="/user/submit" className="btn btn-primary">Submit Your Paper →</Link>
+                  <Link to="/user/certificate" className="btn btn-ghost">View Certificate Status</Link>
                 </div>
               </>
             ) : (

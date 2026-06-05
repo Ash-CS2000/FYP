@@ -8,6 +8,7 @@ import {
   countCompletedUnits,
   overallPercent,
   allUnitsComplete,
+  publicationState,
 } from '../data/trainingProgress.js';
 
 function unitStatus(unit, progress) {
@@ -21,6 +22,8 @@ export default function StudentProgress() {
   const completed = countCompletedUnits(progress);
   const percent = overallPercent(progress);
   const allDone = allUnitsComplete(progress);
+  const pub = publicationState(progress);
+  const awaitingPublication = progress.assessment.passed && !progress.certificate;
 
   return (
     <AppShell role="user" searchPlaceholder="Search progress, units, quiz scores...">
@@ -30,8 +33,11 @@ export default function StudentProgress() {
           <h1 className="page-title" style={{ marginTop: 8 }}>Your learning <em className="serif-italic">progress</em>.</h1>
           <p className="page-subtitle">Track your units, quiz scores, writing exercises, and certificate status.</p>
         </div>
-        {allDone && !progress.certificate && (
+        {allDone && !progress.assessment.passed && (
           <Link to="/user/assessment" className="btn btn-primary">Take Final Assessment →</Link>
+        )}
+        {awaitingPublication && (
+          <Link to="/user/submit" className="btn btn-primary">Submit Your Paper →</Link>
         )}
         {progress.certificate && (
           <Link to="/user/certificate" className="btn btn-primary">View Certificate →</Link>
@@ -53,12 +59,47 @@ export default function StudentProgress() {
             {progress.assessment.bestScore === null ? 'Not attempted yet' : `Best score ${progress.assessment.bestScore}%`}
           </div>
         </div>
-        <div className="stat fade-up delay-3" style={{ '--accent': progress.certificate ? 'var(--teal-700)' : 'var(--ink-300)' }}>
+        <div className="stat fade-up delay-3" style={{ '--accent': progress.certificate ? 'var(--teal-700)' : awaitingPublication ? 'var(--amber-700)' : 'var(--ink-300)' }}>
           <div className="stat-label">Certificate</div>
-          <div className="stat-value" style={{ fontSize: 26 }}>{progress.certificate ? 'Earned' : 'Pending'}</div>
-          <div className="stat-trend">{progress.certificate ? progress.certificate.id : 'Pass the assessment to earn'}</div>
+          <div className="stat-value" style={{ fontSize: 26 }}>
+            {progress.certificate ? 'Earned' : awaitingPublication ? 'Submit paper' : 'Pending'}
+          </div>
+          <div className="stat-trend">
+            {progress.certificate
+              ? progress.certificate.id
+              : awaitingPublication
+                ? 'Submit 1 paper to unlock'
+                : 'Pass the assessment to earn'}
+          </div>
         </div>
       </div>
+
+      {awaitingPublication && (
+        <div className="card fade-up delay-2" style={{ borderColor: 'var(--amber-700)' }}>
+          <div className="card-header">
+            <div>
+              <div className="card-title">Final step — submit your research paper</div>
+              <div className="card-meta">You passed the assessment. Submit one research paper through JSRMS to receive your certificate.</div>
+            </div>
+            <span className="pill pill-pending">Not submitted</span>
+          </div>
+          <div className="row" style={{ gap: 24, flexWrap: 'wrap', marginBottom: 16 }}>
+            <div>
+              <div className="label">Certificate</div>
+              <div style={{ fontWeight: 600 }}>Issued as soon as you submit</div>
+            </div>
+            <div>
+              <div className="label">Recommended by</div>
+              <div style={{ fontWeight: 600 }}>
+                {pub.deadline
+                  ? `${new Date(pub.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · no hard deadline`
+                  : '—'}
+              </div>
+            </div>
+          </div>
+          <Link to="/user/submit" className="btn btn-primary btn-sm">Submit Your Paper →</Link>
+        </div>
+      )}
 
       <div className="card fade-up delay-2">
         <div className="card-header">

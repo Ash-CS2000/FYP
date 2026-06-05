@@ -1,19 +1,36 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-import { getProgress, countCompletedUnits } from '../data/trainingProgress.js';
-import { TRAINING_UNITS } from '../data/trainingContent.js';
+import {
+  getProgress,
+  countCompletedUnits,
+  publicationState,
+  submitPublication,
+} from '../data/trainingProgress.js';
+import { getDemoSession } from '../data/demoAccounts.js';
+import { TRAINING_UNITS, PUBLICATION_WINDOW_DAYS } from '../data/trainingContent.js';
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export default function UserSubmit() {
   const navigate = useNavigate();
   const progress = getProgress();
-  const certified = !!progress.certificate;
+  // Submission unlocks once the final assessment is passed — students need it
+  // open to submit the paper that earns their certificate.
+  const canSubmit = progress.assessment.passed;
+  const pub = publicationState(progress);
+  // The required paper is still outstanding until it has been submitted.
+  const fulfillingRequirement = progress.assessment.passed && pub.status === 'pending';
   const completedUnits = countCompletedUnits(progress);
 
   const [step, setStep] = useState(1);
+  const [title, setTitle] = useState('');
 
-  // ---- Gated (not certified) ----------------------------------------------
-  if (!certified) {
+  // ---- Gated (assessment not passed) --------------------------------------
+  if (!canSubmit) {
     const unitsPercent = Math.round((completedUnits / TRAINING_UNITS.length) * 100);
     return (
       <AppShell role="user" searchPlaceholder="Search...">
@@ -23,7 +40,7 @@ export default function UserSubmit() {
             <h1 className="page-title" style={{ marginTop: 8 }}>
               Submit a <em className="serif-italic">paper</em>.
             </h1>
-            <p className="page-subtitle">Paper submission unlocks after you earn your training certificate.</p>
+            <p className="page-subtitle">Paper submission unlocks after you pass the final assessment.</p>
           </div>
         </div>
 
@@ -54,13 +71,23 @@ export default function UserSubmit() {
     );
   }
 
-  // ---- Certified: submission form -----------------------------------------
+  // ---- Passed: submission form --------------------------------------------
   const handleNext = () => {
-    if (step < 3) setStep(step + 1);
-    else {
-      alert('Paper submitted successfully! Our reviewers will be in touch.');
-      navigate('/user/papers');
+    if (step < 3) {
+      setStep(step + 1);
+      return;
     }
+    if (fulfillingRequirement) {
+      submitPublication(title, getDemoSession()?.name || 'JSRMS Student');
+      alert(
+        'Paper submitted — and that completes your certification! Your training ' +
+          'certificate has been issued. Reviewers will follow up on the paper itself.',
+      );
+      navigate('/user/certificate');
+      return;
+    }
+    alert('Paper submitted successfully! Our reviewers will be in touch.');
+    navigate('/user/papers');
   };
 
   return (
@@ -69,10 +96,26 @@ export default function UserSubmit() {
         <div>
           <span className="eyebrow">New Submission</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Submit a <em className="serif-italic">new paper</em>.</h1>
-          <p className="page-subtitle">You are certified — tell us about your research and our AI will help classify it.</p>
+          <p className="page-subtitle">Tell us about your research and our AI will help classify it.</p>
         </div>
-        <span className="pill pill-approved">Certified ✓</span>
+        {progress.certificate ? (
+          <span className="pill pill-approved">Certified ✓</span>
+        ) : (
+          <span className="pill pill-review">Certification paper</span>
+        )}
       </div>
+
+      {fulfillingRequirement && (
+        <div className="unit-todo-banner fade-up" style={{ marginBottom: 18 }}>
+          <strong>Submitting this paper completes your certification.</strong>
+          <span className="todo">Your training certificate is issued as soon as you submit</span>
+          {pub.deadline && (
+            <span className="todo">
+              Recommended by {formatDate(pub.deadline)} (~{PUBLICATION_WINDOW_DAYS} days) — no hard deadline
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="steps fade-up delay-1">
         {[
@@ -103,7 +146,13 @@ export default function UserSubmit() {
             <>
               <div className="field">
                 <label className="field-label">Paper title <span className="req">*</span></label>
-                <input className="field-input" type="text" placeholder="Enter your paper title" />
+                <input
+                  className="field-input"
+                  type="text"
+                  placeholder="Enter your paper title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
                 <div className="field-hint">Use the final title you would like to appear in publication.</div>
               </div>
               <div className="field">

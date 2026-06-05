@@ -5,9 +5,22 @@ import {
   TRAINING_UNITS,
   PASS_MARK,
   ASSESSMENT_PASS_MARK,
+  PUBLICATION_WINDOW_DAYS,
 } from './trainingContent.js';
 
 const STORAGE_KEY = 'paperbridge-training-progress';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function emptyPublication() {
+  return {
+    status: 'none', // none | pending | submitted | published
+    startedAt: null,
+    deadline: null,
+    paperTitle: null,
+    submittedAt: null,
+    publishedAt: null,
+  };
+}
 
 function emptyProgress() {
   const units = {};
@@ -23,6 +36,8 @@ function emptyProgress() {
   return {
     units,
     assessment: { attempts: 0, bestScore: null, passed: false, lastAttemptAt: null },
+    // Mandatory paper publication that gates the certificate.
+    publication: emptyPublication(),
     certificate: null, // { id, name, issuedAt }
   };
 }
@@ -39,6 +54,7 @@ export function getProgress() {
       ...parsed,
       units: { ...base.units, ...(parsed.units || {}) },
       assessment: { ...base.assessment, ...(parsed.assessment || {}) },
+      publication: { ...base.publication, ...(parsed.publication || {}) },
     };
   } catch {
     return emptyProgress();
@@ -133,20 +149,57 @@ export function recordAssessment(scorePercent) {
   a.attempts += 1;
   a.lastAttemptAt = new Date().toISOString();
   a.bestScore = a.bestScore === null ? scorePercent : Math.max(a.bestScore, scorePercent);
-  if (scorePercent >= ASSESSMENT_PASS_MARK) a.passed = true;
+  if (scorePercent >= ASSESSMENT_PASS_MARK) {
+    a.passed = true;
+    // Passing starts the mandatory publication requirement (once).
+    if (progress.publication.status === 'none') {
+      const now = new Date();
+      progress.publication = {
+        ...emptyPublication(),
+        status: 'pending',
+        startedAt: now.toISOString(),
+        deadline: new Date(now.getTime() + PUBLICATION_WINDOW_DAYS * DAY_MS).toISOString(),
+      };
+    }
+  }
   saveProgress(progress);
   return progress;
 }
 
-export function issueCertificate(name) {
+// ---- Mandatory publication -------------------------------------------------
+
+// Computed view of the publication requirement (adds daysLeft / overdue).
+export function publicationState(progress) {
+  const p = (progress && progress.publication) || emptyPublication();
+  const deadline = p.deadline ? new Date(p.deadline).getTime() : null;
+  const now = Date.now();
+  const daysLeft =
+    deadline === null ? null : Math.ceil((deadline - now) / DAY_MS);
+  const overdue =
+    (p.status === 'pending' || p.status === 'submitted') &&
+    deadline !== null &&
+    now > deadline;
+  return { ...p, daysLeft, overdue };
+}
+
+// Student submits their required paper through JSRMS. Submitting is what the
+// student controls, so this is what completes certification: the certificate is
+// issued on submission (actual publication is tracked separately, no deadline).
+export function submitPublication(title, name) {
   const progress = getProgress();
-  if (!progress.assessment.passed) return progress;
-  if (!progress.certificate) {
-    progress.certificate = {
-      id: generateCertificateId(),
-      name: name || 'JSRMS Student',
-      issuedAt: new Date().toISOString(),
-    };
+  const p = progress.publication;
+  if (p.status === 'pending' || p.status === 'submitted') {
+    const now = new Date().toISOString();
+    p.paperTitle = title || p.paperTitle || 'Untitled research paper';
+    p.submittedAt = now;
+    p.status = 'submitted';
+    if (progress.assessment.passed && !progress.certificate) {
+      progress.certificate = {
+        id: generateCertificateId(),
+        name: name || 'JSRMS Student',
+        issuedAt: now,
+      };
+    }
     saveProgress(progress);
   }
   return progress;
@@ -154,6 +207,39 @@ export function issueCertificate(name) {
 
 export function isCertified() {
   return !!getProgress().certificate;
+}
+
+// ---- Developer / showcase helpers ------------------------------------------
+// Used by the in-app "Showcase tools" panel to jump between demo states.
+
+export function devReset() {
+  resetProgress();
+  return emptyProgress();
+}
+
+export function devCompleteAllUnits() {
+  const progress = getProgress();
+  for (const unit of TRAINING_UNITS) {
+    const p = progress.units[unit.id];
+    p.lessonsRead = unit.lessons.map((l) => l.id);
+    p.quizScore = 100;
+    p.quizPassed = true;
+    p.exerciseSubmitted = true;
+    if (!p.exerciseText) p.exerciseText = '[Auto-filled for showcase]';
+  }
+  saveProgress(progress);
+  return progress;
+}
+
+export function devPassAssessment() {
+  devCompleteAllUnits();
+  return recordAssessment(100); // also starts the publication requirement
+}
+
+// Submit the required paper (issues the certificate) — used by the dev panel.
+export function devSubmitPaper(name) {
+  if (getProgress().publication.status === 'none') devPassAssessment();
+  return submitPublication('Showcase Research Paper', name);
 }
 
 function generateCertificateId() {

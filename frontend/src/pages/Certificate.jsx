@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-import { getProgress } from '../data/trainingProgress.js';
-import { TRAINING_UNITS } from '../data/trainingContent.js';
+import { getProgress, publicationState } from '../data/trainingProgress.js';
+import { TRAINING_UNITS, PUBLICATION_WINDOW_DAYS } from '../data/trainingContent.js';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -15,19 +15,59 @@ export default function Certificate() {
   const cert = progress.certificate;
 
   if (!cert) {
+    const pub = publicationState(progress);
+
+    // Passed the assessment but has not yet submitted the required paper.
+    if (progress.assessment.passed && pub.status === 'pending') {
+      return (
+        <AppShell role="user" searchPlaceholder="Search...">
+          <div className="page-header fade-up">
+            <div>
+              <span className="eyebrow">Certificate</span>
+              <h1 className="page-title" style={{ marginTop: 8 }}>One step <em className="serif-italic">away</em>.</h1>
+              <p className="page-subtitle">Your certificate is reserved — submit your research paper to unlock it.</p>
+            </div>
+          </div>
+          <div className="card fade-up delay-1 exam-locked">
+            <div className="unit-locked-icon">📄</div>
+            <h2>Submit your research paper</h2>
+            <p>
+              You passed the final assessment. To complete your certification, submit one research
+              paper through JSRMS — your certificate is issued as soon as you submit.
+            </p>
+
+            <div className="unit-todo-banner" style={{ marginTop: 4 }}>
+              <strong>What&apos;s left</strong>
+              <span className="todo">Submit one research paper through JSRMS</span>
+              {pub.deadline && (
+                <span className="todo">
+                  Recommended by {formatDate(pub.deadline)} (~{PUBLICATION_WINDOW_DAYS} days) — no hard deadline
+                </span>
+              )}
+            </div>
+
+            <div className="row" style={{ marginTop: 18, gap: 12 }}>
+              <Link to="/user/submit" className="btn btn-primary">Submit Your Paper →</Link>
+              <Link to="/user/progress" className="btn btn-ghost">View Progress</Link>
+            </div>
+          </div>
+        </AppShell>
+      );
+    }
+
     return (
       <AppShell role="user" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Certificate</span>
             <h1 className="page-title" style={{ marginTop: 8 }}>Your <em className="serif-italic">certificate</em>.</h1>
-            <p className="page-subtitle">Earn your certificate by completing the training and passing the final assessment.</p>
+            <p className="page-subtitle">Earn your certificate by completing the training, passing the final assessment, and submitting one research paper.</p>
           </div>
         </div>
         <div className="card fade-up delay-1 exam-locked">
           <div className="unit-locked-icon">🎓</div>
           <h2>No certificate yet</h2>
-          <p>Once you pass the final assessment, your certificate will appear here, ready to view and print.</p>
+          <p>Pass the final assessment and submit your research paper, and your certificate will appear here, ready to view and print.</p>
           <Link to="/user/training" className="btn btn-primary">Go to Training →</Link>
         </div>
       </AppShell>
@@ -56,7 +96,8 @@ export default function Certificate() {
             <p className="certificate-body">
               has successfully completed the JSRMS Student Research Publishing Training Programme,
               covering academic publishing, research paper structure, academic writing standards,
-              and use of the JSRMS submission system, and has passed the final certification assessment.
+              and use of the JSRMS submission system, has passed the final certification assessment,
+              and has submitted an original research paper through JSRMS.
             </p>
 
             <div className="certificate-units">
