@@ -47,22 +47,20 @@ export default function App() {
       <Route path="/author/profile" element={<Profile role="author" />} />
       <Route path="/author/settings" element={<Settings role="author" />} />
 
-      {/* User */}
-      <Route path="/user" element={<Navigate to="/user/papers" replace />} />
-      <Route path="/user/dashboard" element={<Navigate to="/user/papers" replace />} />
-      <Route path="/user/papers" element={<UserPapers />} />
-      <Route path="/user/training" element={<TrainingModule />} />
-      <Route path="/user/assessment" element={<FinalAssessment />} />
-      <Route path="/user/certificate" element={<Certificate />} />
-      <Route path="/user/submit" element={<UserSubmit />} />
-      <Route path="/user/progress" element={<StudentProgress />} />
-      <Route path="/user/resources" element={<StudentResources />} />
-      <Route path="/user/notifications" element={<Notifications role="user" />} />
-      <Route path="/user/profile" element={<Profile role="user" />} />
-      <Route path="/user/settings" element={<Settings role="user" />} />
+      {/* Student system */}
+      <Route path="/student" element={<Navigate to="/student/papers" replace />} />
+      <Route path="/student/dashboard" element={<Navigate to="/student/papers" replace />} />
 
-      {/* Backward-compatible student links */}
-      <Route path="/student/*" element={<Navigate to="/user/training" replace />} />
+      <Route path="/student/papers" element={<UserPapers />} />
+      <Route path="/student/training" element={<TrainingModule />} />
+      <Route path="/student/assessment" element={<FinalAssessment />} />
+      <Route path="/student/certificate" element={<Certificate />} />
+      <Route path="/student/submit" element={<UserSubmit />} />
+      <Route path="/student/progress" element={<StudentProgress />} />
+      <Route path="/student/resources" element={<StudentResources />} />
+      <Route path="/student/notifications" element={<Notifications role="student" />} />
+      <Route path="/student/profile" element={<Profile role="student" />} />
+      <Route path="/student/settings" element={<Settings role="student" />} />
 
       {/* Reviewer */}
       <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />

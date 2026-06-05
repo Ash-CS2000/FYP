@@ -4,8 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 const API_URL = 'http://localhost:8000';
 
 const ROLE_ROUTES = {
-  user: '/user/papers',
-  student: '/user/papers',
+  user: '/',
+  student: '/student/papers',
   author:  '/author/dashboard',
   reviewer: '/reviewer/dashboard',
 };
@@ -462,6 +462,8 @@ export default function RegisterPage() {
             </>
           )}
 
+          // ... keep everything above exactly the same
+
           {/* ── View: User form ──────────────────────────────────────────────── */}
           {view === 'user' && (
             <>
@@ -471,38 +473,73 @@ export default function RegisterPage() {
                 </svg>
                 Back
               </button>
+
               <h1 className="auth-form-title">Create your <em>account</em>.</h1>
               <p className="auth-form-sub">Sign up to browse papers and access training modules.</p>
 
               {error && <div className="auth-error">{error}</div>}
 
-              <form onSubmit={e => handleSubmit(e, 'student')} noValidate>
+              <form onSubmit={e => handleSubmit(e, 'user')} noValidate>
                 <div className="field">
                   <label className="field-label">Full name</label>
-                  <input className="field-input" type="text" placeholder="Nur Aisyah" value={fullName}
-                    onChange={e => setFullName(e.target.value)} autoComplete="name" required />
+                  <input
+                    className="field-input"
+                    type="text"
+                    placeholder="Nur Aisyah"
+                    value={fullName}
+                    onChange={e => setFullName(e.target.value)}
+                    autoComplete="name"
+                    required
+                  />
                 </div>
+
                 <div className="field">
                   <label className="field-label">Email address</label>
-                  <input className="field-input" type="email" placeholder="you@university.edu" value={email}
-                    onChange={e => setEmail(e.target.value)} autoComplete="email" required />
+                  <input
+                    className="field-input"
+                    type="email"
+                    placeholder="you@university.edu"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    autoComplete="email"
+                    required
+                  />
                 </div>
+
                 <PasswordField
-                  label="Password" value={password} onChange={e => setPassword(e.target.value)}
-                  placeholder="At least 8 characters" show={showPw} onToggle={() => setShowPw(v => !v)} showStrength
+                  label="Password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  show={showPw}
+                  onToggle={() => setShowPw(v => !v)}
+                  showStrength
                 />
+
                 <PasswordField
-                  label="Confirm password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)}
-                  placeholder="Repeat your password" show={showConfirm} onToggle={() => setShowConfirm(v => !v)}
+                  label="Confirm password"
+                  value={confirmPw}
+                  onChange={e => setConfirmPw(e.target.value)}
+                  placeholder="Repeat your password"
+                  show={showConfirm}
+                  onToggle={() => setShowConfirm(v => !v)}
                 />
-                <button type="submit" className="btn btn-primary auth-submit" style={{ marginTop: 8 }} disabled={loading}>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary auth-submit"
+                  style={{ marginTop: 8 }}
+                  disabled={loading}
+                >
                   {loading ? 'Creating account…' : 'Create Account →'}
                 </button>
               </form>
 
               <p className="auth-switch">
                 Already have an account?{' '}
-                <Link to="/login" className="auth-anchor" style={{ fontWeight: 600 }}>Sign in →</Link>
+                <Link to="/login" className="auth-anchor" style={{ fontWeight: 600 }}>
+                  Sign in →
+                </Link>
               </p>
             </>
           )}
