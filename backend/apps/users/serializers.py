@@ -88,6 +88,7 @@ class RegisterSerializer(serializers.Serializer):
             UserProfile.Role.STUDENT,
             UserProfile.Role.AUTHOR,
             UserProfile.Role.REVIEWER,
+            UserProfile.Role.USER,
         }
         if value not in allowed:
             raise serializers.ValidationError('This role cannot self-register.')

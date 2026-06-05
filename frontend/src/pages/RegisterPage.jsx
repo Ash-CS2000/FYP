@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 const API_URL = 'http://localhost:8000';
 
 const ROLE_ROUTES = {
+  user: '/user/papers',
   student: '/user/papers',
   author:  '/author/dashboard',
   reviewer: '/reviewer/dashboard',
