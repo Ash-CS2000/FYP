@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { saveTokens } from '../api/auth';
+
 
 const API_URL = 'http://localhost:8000';
 
@@ -235,9 +237,8 @@ export default function RegisterPage() {
       });
       const loginData = await loginRes.json();
       if (loginRes.ok) {
-        localStorage.setItem('access',  loginData.access);
-        localStorage.setItem('refresh', loginData.refresh);
-        localStorage.setItem('user',    JSON.stringify(loginData.user));
+        saveTokens(data.access, data.refresh);
+        localStorage.setItem('user', JSON.stringify(data.user));
         navigate(ROLE_ROUTES[loginData.user?.role] || '/');
       } else {
         navigate('/login', { state: { registered: true } });

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { saveTokens } from '../api/auth';
 
 const API_URL = 'http://localhost:8000';
 
@@ -49,9 +50,8 @@ export default function LoginPage() {
       if (!res.ok) throw new Error(
         data?.detail || data?.email?.[0] || data?.non_field_errors?.[0] || 'Invalid email or password.'
       );
-      localStorage.setItem('access',  data.access);
-      localStorage.setItem('refresh', data.refresh);
-      localStorage.setItem('user',    JSON.stringify(data.user));
+      saveTokens(data.access, data.refresh);
+      localStorage.setItem('user', JSON.stringify(data.user));
       navigate(ROLE_ROUTES[data.user?.role] || '/');
     } catch (err) {
       setError(err.message);
