@@ -479,7 +479,7 @@ export default function RegisterPage() {
             </>
           )}
 
-          // ... keep everything above exactly the same
+
 
           {/* ── View: User form ──────────────────────────────────────────────── */}
           {view === 'user' && (

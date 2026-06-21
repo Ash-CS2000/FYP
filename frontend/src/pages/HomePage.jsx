@@ -1,19 +1,19 @@
 import { Link } from 'react-router-dom';
-import { PAPERS } from './SearchResultsPage.jsx';
+import { TOPICS } from '../data/papers.js';
 import PublicNav from '../components/PublicNav.jsx';
 
-const TRENDING = [...PAPERS].sort((a, b) => b.downloads - a.downloads).slice(0, 3);
+const TRENDING = [...TOPICS].sort((a, b) => b.rating - a.rating).slice(0, 3);
 
 const HOW_IT_WORKS = [
   {
     step: '01',
     title: 'Search & Discover',
-    desc: 'Find papers by title, author, keyword, or abstract. Filter by discipline to narrow your results.',
+    desc: 'Search research topics by keyword or discipline. See what areas are being studied and find inspiration for your own work.',
   },
   {
     step: '02',
-    title: 'Access Papers',
-    desc: 'Download open-access papers for free. Purchase paid publications securely with a registered account.',
+    title: 'Explore Topics',
+    desc: 'Read summaries of peer-reviewed research — institution, level, year, and rating — without access to full documents, to encourage original thinking.',
   },
   {
     step: '03',
@@ -366,8 +366,8 @@ export default function HomePage() {
             {/* Left — text */}
             <div className="portal-heading">
               <span className="eyebrow">Public Research Library</span>
-              <h1>Find papers, learn methods, and build your <em>research skills</em>.</h1>
-              <p>Browse published papers, preview abstracts, download open access papers, and purchase paid publications.</p>
+              <h1>Explore research topics, learn methods, and build your <em>research skills</em>.</h1>
+              <p>Discover what researchers are studying, read peer-reviewed summaries, and find inspiration to conduct your own original research.</p>
               <Link to="/register" className="btn btn-primary">Join Us</Link>
             </div>
 
@@ -447,21 +447,26 @@ export default function HomePage() {
       <section className="trending-section">
         <div className="portal-inner">
           <div className="trending-header">
-            <h2>Trending This Week</h2>
-            <span className="trending-badge">Hot</span>
+            <h2>Trending Research Topics</h2>
+            <span className="trending-badge">Top Rated</span>
           </div>
           <div className="trending-grid">
-            {TRENDING.map((paper, i) => (
-              <div className="trending-card" key={paper.id}>
+            {TRENDING.map((t, i) => (
+              <div className="trending-card" key={t.id}>
                 <span className={`trending-rank rank-${i + 1}`}>{String(i + 1).padStart(2, '0')}</span>
                 <div className="trending-info">
-                  <h3>{paper.title}</h3>
+                  <h3>{t.topic}</h3>
                   <div className="trending-meta">
-                    <span>{paper.author}</span>
-                    <span>{paper.category}</span>
+                    <span>{t.institution}</span>
+                    <span>{t.area}</span>
+                    <span>{t.level} · {t.year}</span>
                   </div>
-                  <div className="trending-downloads">
-                    ↓ {paper.downloads.toLocaleString()} downloads
+                  <div className="trending-downloads" style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }}>
+                    {[1,2,3,4,5].map(n => (
+                      <svg key={n} width="13" height="13" viewBox="0 0 20 20" style={{ color: n <= t.rating ? '#f59e0b' : 'var(--ink-200)', fill: 'currentColor' }} aria-hidden="true">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -503,7 +508,7 @@ export default function HomePage() {
 
             <div className="footer-col">
               <h4>Explore</h4>
-              <Link to="/search">Browse Papers</Link>
+              <Link to="/search">Browse Topics</Link>
               <Link to="/search?category=Computer+Science">Computer Science</Link>
               <Link to="/search?category=Engineering">Engineering</Link>
               <Link to="/search?category=Physics">Physics</Link>
