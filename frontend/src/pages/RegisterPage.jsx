@@ -182,7 +182,6 @@ export default function RegisterPage() {
   const [researchAreas, setResearchAreas]   = useState('');
   const [expertiseAreas, setExpertiseAreas] = useState('');
   const [studentId, setStudentId]           = useState('');
-  const [orcidPending, setOrcidPending]     = useState(false);
 
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -199,6 +198,23 @@ export default function RegisterPage() {
     if (password.length < 8)         return 'Password must be at least 8 characters.';
     if (password !== confirmPw)      return 'Passwords do not match.';
     return null;
+  }
+
+  async function handleOrcidClick() {
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/users/orcid/url/`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error('Failed to start ORCID authentication.');
+      }
+
+      sessionStorage.setItem('orcid_state', data.state);
+      window.location.href = data.auth_url;
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   async function handleSubmit(e, role) {
@@ -557,13 +573,10 @@ export default function RegisterPage() {
               <h1 className="auth-form-title">Register as an <em>author</em>.</h1>
               <p className="auth-form-sub">Provide your details to set up your author account.</p>
 
-              <button type="button" className="orcid-btn" onClick={() => setOrcidPending(v => !v)}>
+              <button type="button" className="orcid-btn" onClick={handleOrcidClick}>
                 <span className="orcid-badge">iD</span>
                 Continue with ORCID iD
               </button>
-              {orcidPending && (
-                <p className="orcid-note">ORCID authentication is not yet configured — please fill in the form below.</p>
-              )}
 
               <div className="divider">or fill in manually</div>
 
@@ -633,13 +646,10 @@ export default function RegisterPage() {
                 <span>Reviewer accounts require admin approval before activation. You'll be notified by email once your application is reviewed.</span>
               </div>
 
-              <button type="button" className="orcid-btn" onClick={() => setOrcidPending(v => !v)}>
+              <button type="button" className="orcid-btn" onClick={handleOrcidClick}>
                 <span className="orcid-badge">iD</span>
                 Continue with ORCID iD
               </button>
-              {orcidPending && (
-                <p className="orcid-note">ORCID authentication is not yet configured — please fill in the form below.</p>
-              )}
 
               <div className="divider">or fill in manually</div>
 

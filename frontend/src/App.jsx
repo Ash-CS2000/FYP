@@ -27,6 +27,7 @@ import FinalAssessment from './pages/FinalAssessment.jsx';
 import Certificate from './pages/Certificate.jsx';
 import UserSubmit from './pages/UserSubmit.jsx';
 import SearchResultsPage from './pages/SearchResultsPage.jsx';
+import OrcidCallback from './pages/OrcidCallback';
 
 export default function App() {
   return (
@@ -87,6 +88,8 @@ export default function App() {
       <Route path="/admin/users" element={<AdminUsers />} />
       <Route path="/admin/submissions" element={<EditorSubmissions role="admin" />} />
       <Route path="/admin/settings" element={<Settings role="admin" />} />
+
+      <Route path="/orcid/callback" element={<OrcidCallback />} />
 
       {/* Fallback */}
       <Route path="*" element={<NotFound />} />

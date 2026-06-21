@@ -139,3 +139,9 @@ DEFAULT_FROM_EMAIL = 'noreply@jsrems.local'
 
 JSREMS_MIN_REVIEWERS = 3
 JSREMS_MAX_REVIEWERS = 5
+
+
+ORCID_CLIENT_ID = os.getenv('ORCID_CLIENT_ID', '')
+ORCID_CLIENT_SECRET = os.getenv('ORCID_CLIENT_SECRET', '')
+ORCID_REDIRECT_URI = os.getenv('ORCID_REDIRECT_URI', '')
+ORCID_BASE_URL = os.getenv('ORCID_BASE_URL', 'https://orcid.org')
