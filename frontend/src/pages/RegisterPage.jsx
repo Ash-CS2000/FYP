@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { saveTokens } from '../api/auth';
 
 
-const API_URL = 'http://localhost:8000';
+const API_URL = 'https://fyp-production-6d7f.up.railway.app';
 
 const ROLE_ROUTES = {
   user:     '/',

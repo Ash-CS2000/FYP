@@ -4,7 +4,7 @@ import { findDemoAccount, ROLE_HOME, saveDemoSession } from '../data/demoAccount
 
 
 export default function AuthPage({ initialTab = 'signin' }) {
-  const API_URL = 'http://localhost:8000';
+  const API_URL = 'https://fyp-production-6d7f.up.railway.app';
 
   const [tab, setTab] = useState(initialTab);
 
