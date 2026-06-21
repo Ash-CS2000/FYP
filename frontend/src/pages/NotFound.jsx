@@ -22,7 +22,7 @@ export default function NotFound() {
 
       <div style={{ maxWidth: 640, textAlign: 'center', position: 'relative', zIndex: 1 }}>
         <Link to="/" className="brand" style={{ justifyContent: 'center', marginBottom: 48 }}>
-          <span className="brand-mark" style={{ color: 'var(--navy-900)' }}>JSRMS</span>
+          <span className="brand-mark" style={{ color: 'var(--navy-900)' }}>PaperBridge</span>
           <span className="brand-sub" style={{ color: 'var(--amber-700)' }}>Research Portal</span>
         </Link>
 
@@ -67,6 +67,7 @@ export default function NotFound() {
           display: 'flex', gap: 24, justifyContent: 'center', flexWrap: 'wrap',
           fontSize: 13.5,
         }}>
+          <Link to="/student/training" style={{ color: 'var(--navy-700)', fontWeight: 500 }}>Training Modules</Link>
           <Link to="/author/dashboard" style={{ color: 'var(--navy-700)', fontWeight: 500 }}>Author Dashboard</Link>
           <Link to="/reviewer/dashboard" style={{ color: 'var(--navy-700)', fontWeight: 500 }}>Reviewer Dashboard</Link>
           <Link to="/editor/dashboard" style={{ color: 'var(--navy-700)', fontWeight: 500 }}>Editor Dashboard</Link>

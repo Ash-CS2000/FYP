@@ -1,8 +1,12 @@
+import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { SIDEBAR_CONFIG } from '../data/sidebarConfig.jsx';
+import { getProgress } from '../data/trainingProgress.js';
 
 export default function Profile({ role = 'author' }) {
   const cfg = SIDEBAR_CONFIG[role];
+  const progress = role === 'user' ? getProgress() : null;
+  const cert = progress?.certificate;
 
   return (
     <AppShell role={role} searchPlaceholder="Search...">
@@ -10,7 +14,7 @@ export default function Profile({ role = 'author' }) {
         <div>
           <span className="eyebrow">Account</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Your <em className="serif-italic">profile</em>.</h1>
-          <p className="page-subtitle">Update how you appear across JSRMS.</p>
+          <p className="page-subtitle">Update how you appear across PaperBridge.</p>
         </div>
         <button className="btn btn-primary btn-sm">Save Changes</button>
       </div>
@@ -28,6 +32,26 @@ export default function Profile({ role = 'author' }) {
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--navy-900)' }}>{cfg.user.name}</div>
           <div style={{ fontSize: 13, color: 'var(--ink-600)', marginTop: 4 }}>{cfg.user.role}</div>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 16 }}>Change photo</button>
+
+          {role === 'user' && (
+            <div className="profile-cert-badge">
+              {cert ? (
+                <>
+                  <div className="profile-cert-badge-icon earned">🎓</div>
+                  <div className="profile-cert-badge-title">Certified Author</div>
+                  <div className="profile-cert-badge-meta">{cert.id}</div>
+                  <Link to="/student/certificate" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>View Certificate</Link>
+                </>
+              ) : (
+                <>
+                  <div className="profile-cert-badge-icon">🔒</div>
+                  <div className="profile-cert-badge-title">Not yet certified</div>
+                  <div className="profile-cert-badge-meta">Complete training to earn your badge</div>
+                  <Link to="/student/training" className="btn btn-ghost btn-sm" style={{ marginTop: 12 }}>Go to Training</Link>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="card">

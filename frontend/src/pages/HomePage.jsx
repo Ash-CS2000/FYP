@@ -1,293 +1,541 @@
 import { Link } from 'react-router-dom';
+import { PAPERS } from './SearchResultsPage.jsx';
+import PublicNav from '../components/PublicNav.jsx';
+
+const TRENDING = [...PAPERS].sort((a, b) => b.downloads - a.downloads).slice(0, 3);
+
+const HOW_IT_WORKS = [
+  {
+    step: '01',
+    title: 'Search & Discover',
+    desc: 'Find papers by title, author, keyword, or abstract. Filter by discipline to narrow your results.',
+  },
+  {
+    step: '02',
+    title: 'Access Papers',
+    desc: 'Download open-access papers for free. Purchase paid publications securely with a registered account.',
+  },
+  {
+    step: '03',
+    title: 'Learn & Grow',
+    desc: 'Enrol in training modules, build research skills, and track your progress from your dashboard.',
+  },
+];
 
 export default function HomePage() {
   return (
-    <div style={{ background: 'var(--white)' }}>
+    <div className="paper-portal">
       <style>{`
-        .hero {
-          position: relative;
-          background: linear-gradient(180deg, #FBFCFE 0%, #F1F4F8 100%);
-          padding: 80px 32px 100px;
-          overflow: hidden;
+        .paper-portal {
+          min-height: 100vh;
+          background: var(--ink-50);
         }
-        .hero::before {
-          content: ""; position: absolute; top: -200px; right: -200px;
-          width: 600px; height: 600px;
-          background: radial-gradient(circle, rgba(239,159,39,0.08) 0%, transparent 70%);
-          border-radius: 50%;
+        .portal-hero {
+          background: linear-gradient(145deg, #fffdf8 0%, #f5f8ff 55%, #eef2ff 100%);
+          border-bottom: 1px solid var(--ink-200);
+          padding: 64px 32px 72px;
         }
-        .hero::after {
-          content: ""; position: absolute; bottom: -300px; left: -200px;
-          width: 700px; height: 700px;
-          background: radial-gradient(circle, rgba(24,95,165,0.06) 0%, transparent 70%);
-          border-radius: 50%;
+        .portal-inner {
+          max-width: 1280px;
+          margin: 0 auto;
         }
-        .hero-inner {
-          max-width: 1280px; margin: 0 auto;
-          display: grid; grid-template-columns: 1.1fr 0.9fr;
-          gap: 80px; align-items: center;
-          position: relative; z-index: 1;
+        .portal-hero-inner {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 64px;
+          align-items: center;
         }
-        .hero h1 {
+        .portal-heading {
+          margin-bottom: 0;
+        }
+        .portal-heading h1 {
           font-family: var(--font-display);
-          font-size: clamp(40px, 6vw, 68px);
-          font-weight: 500; color: var(--navy-900);
-          line-height: 1; letter-spacing: -0.035em;
-          margin-bottom: 28px;
+          font-size: clamp(38px, 4.5vw, 56px);
+          font-weight: 500;
+          line-height: 1.04;
+          letter-spacing: -0.03em;
+          color: var(--navy-900);
+          margin: 8px 0 12px;
         }
-        .hero h1 em { font-style: italic; font-weight: 400; color: var(--amber-700); }
-        .hero-lead { font-size: 18px; color: var(--ink-700); line-height: 1.6; margin-bottom: 36px; max-width: 540px; }
-        .hero-eyebrow { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 28px; }
-        .hero-eyebrow .dot { width: 8px; height: 8px; background: var(--amber-500); border-radius: 50%; box-shadow: 0 0 0 4px rgba(239,159,39,0.18); }
-        .hero-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-        .hero-actions .btn { padding: 14px 26px; font-size: 14.5px; }
-        .hero-trust { margin-top: 48px; padding-top: 28px; border-top: 1px solid var(--ink-200); display: flex; gap: 36px; align-items: center; flex-wrap: wrap; }
-        .hero-trust-item .num { font-family: var(--font-display); font-size: 28px; font-weight: 500; color: var(--navy-900); line-height: 1; letter-spacing: -0.02em; }
-        .hero-trust-item .lbl { font-size: 12px; color: var(--ink-600); margin-top: 4px; }
-        .hero-visual { position: relative; height: 520px; }
-        .visual-card { position: absolute; background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-xl); padding: 22px; border: 1px solid var(--ink-200); }
-        .visual-card-1 { top: 0; left: 0; width: 320px; transform: rotate(-3deg); }
-        .visual-card-2 { top: 100px; right: 0; width: 290px; transform: rotate(2deg); z-index: 2; }
-        .visual-card-3 { bottom: 20px; left: 60px; width: 280px; transform: rotate(-1deg); }
-        .vc-title { font-weight: 600; color: var(--navy-900); font-size: 14px; margin-bottom: 10px; }
-        .vc-meta { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-600); margin-bottom: 14px; }
-        .vc-bar { height: 6px; background: var(--ink-100); border-radius: var(--r-pill); overflow: hidden; margin-bottom: 8px; }
-        .vc-bar > div { height: 100%; background: var(--accent, var(--navy-700)); border-radius: var(--r-pill); }
-        .vc-row { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-600); padding: 6px 0; border-bottom: 1px dashed var(--ink-100); }
-        .vc-row:last-child { border: none; }
-        .vc-row strong { color: var(--navy-900); font-weight: 600; }
-        .vc-ai-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--navy-100); color: var(--navy-800); padding: 4px 10px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600; }
+        .portal-heading h1 em {
+          color: var(--amber-700);
+          font-style: italic;
+          font-weight: 400;
+        }
+        .portal-heading p {
+          color: var(--ink-600);
+          max-width: 480px;
+          font-size: 16px;
+          line-height: 1.65;
+          margin-bottom: 24px;
+        }
 
-        section { padding: 100px 32px; }
-        .section-inner { max-width: 1280px; margin: 0 auto; }
-        .section-header { text-align: center; max-width: 720px; margin: 0 auto 56px; }
-        .section-header h2 {
+        /* Floating cards */
+        .hero-cards { position: relative; height: 460px; }
+        .hcard {
+          position: absolute; background: #fff; border-radius: 16px;
+          box-shadow: 0 8px 32px rgba(26,43,74,0.13), 0 1px 4px rgba(26,43,74,0.07);
+          padding: 18px 20px; font-size: 13px; color: #1a2b4a; line-height: 1.5;
+        }
+        .hcard-1 { width: 268px; top: 0; left: 16px; transform: rotate(-4deg); z-index: 1; }
+        .hcard-2 { width: 256px; top: 22px; left: 240px; transform: rotate(2.5deg); z-index: 3; }
+        .hcard-3 { width: 298px; bottom: 52px; left: 60px; transform: rotate(1deg); z-index: 2; }
+        .hcard-title { font-size: 13.5px; font-weight: 600; color: #1a2b4a; margin-bottom: 10px; line-height: 1.35; }
+        .hcard-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f1f3f5; }
+        .hcard-row:last-of-type { border-bottom: none; }
+        .hcard-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; border-radius: 99px; padding: 3px 9px; }
+        .hcard-pill-blue  { background: #dbeafe; color: #1d4ed8; }
+        .hcard-pill-amber { background: #fef3c7; color: #c8851a; }
+        .hcard-avatar { width: 26px; height: 26px; border-radius: 50%; background: #1a2b4a; color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .hcard-track { height: 5px; border-radius: 99px; background: #e9ecef; margin: 10px 0 6px; overflow: hidden; }
+        .hcard-fill  { height: 100%; border-radius: 99px; }
+        .hcard-label { font-size: 11px; color: #8493a6; margin-bottom: 2px; }
+        .hcard-cat-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #1a2b4a; font-weight: 500; padding: 3px 0; }
+        .hcard-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+        .hcard-icon-sq { width: 32px; height: 32px; border-radius: 8px; background: #fef3c7; color: #c8851a; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .hcard-caption { font-size: 11.5px; color: #8493a6; margin-top: 8px; }
+        .hcard-green { font-size: 11.5px; font-weight: 600; color: #2e8b57; }
+        .hcard-amber { font-size: 11.5px; font-weight: 600; color: #c8851a; }
+        .hcard-name  { font-size: 12px; color: #1a2b4a; }
+
+        @media (max-width: 960px) {
+          .portal-hero-inner { grid-template-columns: 1fr; }
+          .hero-cards { display: none; }
+        }
+
+        /* Trending */
+        .trending-section {
+          padding: 32px 32px 0;
+        }
+        .trending-header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+        .trending-header h2 {
           font-family: var(--font-display);
-          font-size: clamp(32px, 4vw, 44px);
-          font-weight: 500; color: var(--navy-900);
-          letter-spacing: -0.02em; line-height: 1.1;
-          margin: 14px 0 16px;
+          font-size: 20px;
+          font-weight: 500;
+          color: var(--navy-900);
+          letter-spacing: -0.01em;
         }
-        .section-header h2 em { font-style: italic; font-weight: 400; color: var(--amber-700); }
-        .section-header p { font-size: 16px; color: var(--ink-600); line-height: 1.6; }
+        .trending-badge {
+          background: var(--amber-700);
+          color: var(--white);
+          font-size: 11px;
+          font-weight: 600;
+          padding: 3px 8px;
+          border-radius: var(--r-pill);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .trending-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 14px;
+        }
+        .trending-card {
+          background: var(--white);
+          border: 1px solid var(--ink-200);
+          border-radius: var(--r-lg);
+          padding: 18px 20px;
+          display: flex;
+          gap: 14px;
+          align-items: flex-start;
+          transition: all var(--t-base);
+          cursor: default;
+        }
+        .trending-card:hover {
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-md);
+          border-color: var(--amber-300, #fcd34d);
+        }
+        .trending-rank {
+          font-family: var(--font-display);
+          font-size: 36px;
+          font-weight: 700;
+          color: var(--ink-200);
+          line-height: 1;
+          min-width: 40px;
+          letter-spacing: -0.04em;
+        }
+        .trending-rank.rank-1 { color: var(--amber-400, #f59e0b); }
+        .trending-rank.rank-2 { color: var(--ink-300); }
+        .trending-rank.rank-3 { color: var(--ink-200); }
+        .trending-info {
+          flex: 1;
+          min-width: 0;
+        }
+        .trending-info h3 {
+          font-family: var(--font-display);
+          font-size: 15px;
+          font-weight: 500;
+          color: var(--navy-900);
+          line-height: 1.3;
+          margin-bottom: 6px;
+          letter-spacing: -0.01em;
+        }
+        .trending-meta {
+          color: var(--ink-500);
+          font-size: 12px;
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-bottom: 8px;
+        }
+        .trending-downloads {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--amber-700);
+        }
 
-        .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
-        .feature { padding: 32px; background: var(--white); border: 1px solid var(--ink-200); border-radius: var(--r-lg); transition: all var(--t-base); }
-        .feature:hover { transform: translateY(-4px); border-color: var(--navy-700); box-shadow: var(--shadow-lg); }
-        .feature-icon { width: 52px; height: 52px; border-radius: var(--r-md); background: var(--navy-100); color: var(--navy-800); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; transition: all var(--t-base); }
-        .feature:hover .feature-icon { background: var(--amber-500); color: var(--navy-900); }
-        .feature-icon svg { width: 24px; height: 24px; }
-        .feature h3 { font-family: var(--font-display); font-weight: 500; font-size: 22px; color: var(--navy-900); letter-spacing: -0.01em; margin-bottom: 10px; }
-        .feature p { color: var(--ink-700); line-height: 1.6; font-size: 14.5px; }
+        /* How It Works */
+        .how-it-works {
+          background: var(--white);
+          border-top: 1px solid var(--ink-200);
+          padding: 56px 32px;
+          margin-top: 32px;
+        }
+        .how-inner {
+          max-width: 1280px;
+          margin: 0 auto;
+        }
+        .how-header {
+          text-align: center;
+          margin-bottom: 40px;
+        }
+        .how-header h2 {
+          font-family: var(--font-display);
+          font-size: 32px;
+          font-weight: 500;
+          color: var(--navy-900);
+          letter-spacing: -0.02em;
+          margin-bottom: 8px;
+        }
+        .how-header p {
+          color: var(--ink-500);
+          font-size: 15px;
+        }
+        .how-steps {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 24px;
+        }
+        .how-step {
+          background: var(--ink-50);
+          border: 1px solid var(--ink-200);
+          border-radius: var(--r-lg);
+          padding: 28px 24px;
+        }
+        .how-step-number {
+          font-family: var(--font-display);
+          font-size: 48px;
+          font-weight: 700;
+          color: var(--ink-200);
+          line-height: 1;
+          margin-bottom: 12px;
+          letter-spacing: -0.04em;
+        }
+        .how-step h3 {
+          font-family: var(--font-display);
+          font-size: 18px;
+          font-weight: 500;
+          color: var(--navy-900);
+          margin-bottom: 8px;
+        }
+        .how-step p {
+          color: var(--ink-600);
+          font-size: 14px;
+          line-height: 1.65;
+        }
 
-        .workflow { background: var(--navy-950); color: var(--navy-100); position: relative; overflow: hidden; }
-        .workflow::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 20% 30%, rgba(239,159,39,0.08), transparent 50%), radial-gradient(circle at 80% 70%, rgba(55,138,221,0.10), transparent 50%); }
-        .workflow .section-header h2 { color: var(--white); }
-        .workflow .section-header p { color: var(--navy-200); }
-        .workflow .eyebrow { color: var(--amber-500); }
-        .workflow-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; position: relative; z-index: 1; }
-        .wf-step { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--r-lg); padding: 28px; backdrop-filter: blur(10px); }
-        .wf-num { font-family: var(--font-display); font-size: 56px; font-weight: 500; color: var(--amber-500); line-height: 1; letter-spacing: -0.04em; margin-bottom: 16px; opacity: 0.9; }
-        .wf-step h3 { font-family: var(--font-display); font-weight: 500; font-size: 19px; color: var(--white); margin-bottom: 8px; letter-spacing: -0.01em; }
-        .wf-step p { color: var(--navy-200); font-size: 13.5px; line-height: 1.6; }
-
-        .cta { background: linear-gradient(135deg, var(--navy-900) 0%, var(--navy-800) 100%); color: var(--white); text-align: center; border-radius: var(--r-xl); padding: 72px 40px; margin: 0 32px; position: relative; overflow: hidden; }
-        .cta::before { content: ""; position: absolute; top: -100px; right: -100px; width: 400px; height: 400px; background: radial-gradient(circle, rgba(239,159,39,0.15), transparent 70%); border-radius: 50%; }
-        .cta-inner { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; }
-        .cta h2 { font-family: var(--font-display); font-size: clamp(32px, 4.5vw, 48px); font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; margin-bottom: 20px; }
-        .cta h2 em { font-style: italic; font-weight: 400; color: var(--amber-500); }
-        .cta p { font-size: 17px; color: var(--navy-200); margin-bottom: 36px; line-height: 1.6; }
-
-        footer.site-footer { padding: 60px 32px 40px; background: var(--navy-950); color: var(--navy-200); }
-        .footer-inner { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; margin-bottom: 40px; }
-        .footer-brand .brand-mark { color: var(--white); font-size: 24px; }
-        .footer-brand p { margin-top: 16px; font-size: 13.5px; color: var(--navy-300); line-height: 1.6; max-width: 320px; }
-        .footer-col h4 { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber-500); margin-bottom: 16px; font-weight: 500; }
-        .footer-col a { display: block; font-size: 13.5px; color: var(--navy-200); padding: 5px 0; transition: color var(--t-fast); }
+        /* Footer */
+        .site-footer {
+          background: var(--navy-900);
+          color: rgba(255,255,255,0.75);
+          padding: 56px 32px 0;
+          margin-top: 0;
+        }
+        .footer-inner {
+          max-width: 1280px;
+          margin: 0 auto;
+        }
+        .footer-top {
+          display: grid;
+          grid-template-columns: 2fr 1fr 1fr 1fr;
+          gap: 48px;
+          padding-bottom: 48px;
+          border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .footer-brand .brand-mark {
+          font-family: var(--font-display);
+          font-size: 20px;
+          font-weight: 600;
+          color: var(--white);
+          letter-spacing: -0.02em;
+          display: block;
+          margin-bottom: 4px;
+        }
+        .footer-brand .brand-sub {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: rgba(255,255,255,0.4);
+          display: block;
+          margin-bottom: 16px;
+        }
+        .footer-brand p {
+          font-size: 13.5px;
+          line-height: 1.7;
+          color: rgba(255,255,255,0.55);
+          max-width: 280px;
+          margin-bottom: 20px;
+        }
+        .footer-contact-item {
+          font-size: 12.5px;
+          color: rgba(255,255,255,0.5);
+          margin-bottom: 6px;
+          display: flex;
+          gap: 6px;
+          align-items: center;
+        }
+        .footer-col h4 {
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: rgba(255,255,255,0.4);
+          margin-bottom: 16px;
+        }
+        .footer-col a {
+          display: block;
+          font-size: 13.5px;
+          color: rgba(255,255,255,0.65);
+          text-decoration: none;
+          margin-bottom: 10px;
+          transition: color 0.15s;
+        }
         .footer-col a:hover { color: var(--white); }
-        .footer-bottom { max-width: 1280px; margin: 0 auto; padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--navy-300); }
+        .footer-bottom {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 20px 0;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+        .footer-copy {
+          font-size: 12.5px;
+          color: rgba(255,255,255,0.35);
+        }
+        .footer-legal {
+          display: flex;
+          gap: 20px;
+        }
+        .footer-legal a {
+          font-size: 12.5px;
+          color: rgba(255,255,255,0.35);
+          text-decoration: none;
+          transition: color 0.15s;
+        }
+        .footer-legal a:hover { color: rgba(255,255,255,0.7); }
 
         @media (max-width: 900px) {
-          .hero-inner { grid-template-columns: 1fr; gap: 40px; }
-          .hero-visual { height: 420px; }
-          .features-grid { grid-template-columns: 1fr; }
-          .workflow-grid { grid-template-columns: repeat(2, 1fr); }
-          .footer-inner { grid-template-columns: 1fr 1fr; gap: 32px; }
+          .footer-top { grid-template-columns: 1fr 1fr; gap: 32px; }
+        }
+        @media (max-width: 760px) {
+          .portal-heading { grid-template-columns: 1fr; }
+          .portal-actions { justify-content: flex-start; }
+
+          .trending-grid { grid-template-columns: 1fr; }
+          .footer-top { grid-template-columns: 1fr; gap: 28px; }
+          .footer-bottom { flex-direction: column; align-items: flex-start; }
         }
       `}</style>
 
-      <nav className="public-nav">
-        <div className="public-nav-inner">
-          <Link to="/" className="brand">
-            <span className="brand-mark">JSRMS</span>
-            <span className="brand-sub">Research Portal</span>
-          </Link>
-          <div className="public-nav-links">
-            <Link to="/" className="active">Home</Link>
-            <a href="#features">Features</a>
-            <a href="#workflow">Workflow</a>
-            <Link to="/author/dashboard">Author</Link>
-            <Link to="/reviewer/dashboard">Reviewer</Link>
-            <Link to="/editor/dashboard">Editor</Link>
-            <Link to="/admin/dashboard">Admin</Link>
-          </div>
-          <div className="public-nav-cta">
-            <Link to="/login" className="btn btn-ghost btn-sm">Sign In</Link>
-            <Link to="/register" className="btn btn-primary btn-sm">Get Started</Link>
-          </div>
-        </div>
-      </nav>
+      <PublicNav />
 
-      <section className="hero">
-        <div className="hero-inner">
-          <div>
-            <div className="hero-eyebrow">
-              <span className="dot"></span>
-              <span className="eyebrow">AI-Assisted Academic Publishing</span>
+      <section className="portal-hero">
+        <div className="portal-inner">
+          <div className="portal-hero-inner">
+
+            {/* Left — text */}
+            <div className="portal-heading">
+              <span className="eyebrow">Public Research Library</span>
+              <h1>Find papers, learn methods, and build your <em>research skills</em>.</h1>
+              <p>Browse published papers, preview abstracts, download open access papers, and purchase paid publications.</p>
+              <Link to="/register" className="btn btn-primary">Join Us</Link>
             </div>
-            <h1>Where research finds its <em>readers</em>—faster.</h1>
-            <p className="hero-lead">JSRMS streamlines the entire journal lifecycle: from manuscript submission and AI-assisted classification to peer review and editorial decisions—built for researchers, reviewers, and editors who value rigor and speed.</p>
-            <div className="hero-actions">
-              <Link to="/register" className="btn btn-accent">Submit a Paper →</Link>
-              <a href="#workflow" className="btn btn-ghost">See How It Works</a>
-            </div>
-            <div className="hero-trust">
-              <div className="hero-trust-item"><div className="num">500+</div><div className="lbl">Papers Published</div></div>
-              <div className="hero-trust-item"><div className="num">1,200+</div><div className="lbl">Active Authors</div></div>
-              <div className="hero-trust-item"><div className="num">14 days</div><div className="lbl">Avg. Review Time</div></div>
-              <div className="hero-trust-item"><div className="num">95%</div><div className="lbl">On-Time Reviews</div></div>
-            </div>
-          </div>
-          <div className="hero-visual">
-            <div className="visual-card visual-card-1" style={{ '--accent': 'var(--navy-700)' }}>
-              <div className="row" style={{ marginBottom: 14 }}>
-                <div className="vc-ai-badge">AI Classifier</div>
-              </div>
-              <div className="vc-title">Deep Learning Methods in Medical Imaging</div>
-              <div className="vc-meta">
-                <span className="avatar avatar-sm">AR</span>
-                <span>Ahmad Razif · 12 min ago</span>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--ink-600)', marginBottom: 6 }}>Category confidence</div>
-              <div className="vc-bar"><div style={{ width: '92%' }}></div></div>
-              <div className="vc-row"><span>Computer Science</span><strong>92%</strong></div>
-              <div className="vc-row"><span>Medicine</span><strong>78%</strong></div>
-            </div>
-            <div className="visual-card visual-card-2" style={{ '--accent': 'var(--teal-500)' }}>
-              <div className="vc-title row" style={{ justifyContent: 'space-between' }}>
-                <span>Review Progress</span>
-                <span className="pill pill-review">In Review</span>
-              </div>
-              <div style={{ marginTop: 14 }}>
-                <div className="vc-row"><span>Reviewer 1 · Dr. Lim</span><strong style={{ color: 'var(--teal-700)' }}>Approved</strong></div>
-                <div className="vc-row"><span>Reviewer 2 · Prof. Tan</span><strong style={{ color: 'var(--teal-700)' }}>Approved</strong></div>
-                <div className="vc-row"><span>Reviewer 3 · Dr. Chen</span><strong style={{ color: 'var(--amber-700)' }}>Pending</strong></div>
-              </div>
-              <div className="vc-bar" style={{ marginTop: 12 }}><div style={{ width: '67%' }}></div></div>
-              <div style={{ fontSize: 11.5, color: 'var(--ink-600)', marginTop: 6 }}>2 of 3 reviews completed</div>
-            </div>
-            <div className="visual-card visual-card-3" style={{ '--accent': 'var(--amber-500)' }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#FAEEDA', color: 'var(--amber-800)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+
+            {/* Right — floating cards */}
+            <div className="hero-cards">
+
+              {/* Card 1 — Manuscript */}
+              <div className="hcard hcard-1">
+                <div style={{ marginBottom: 10 }}>
+                  <span className="hcard-pill hcard-pill-blue">
+                    <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    AI Classifier
+                  </span>
                 </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--navy-900)' }}>Reminder sent</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-600)' }}>Auto-followup · 3 days</div>
+                <div className="hcard-title">Deep Learning Methods in Medical Imaging</div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+                  <div className="hcard-avatar">AR</div>
+                  <span style={{ fontSize:11.5, color:'#8493a6' }}>Ahmad Razif · 12 min ago</span>
+                </div>
+                <div className="hcard-label">Category confidence</div>
+                <div className="hcard-track">
+                  <div className="hcard-fill" style={{ width:'82%', background:'#3b82f6' }} />
+                </div>
+                <div className="hcard-cat-row"><span className="hcard-dot" style={{ background:'#3b82f6' }} />Computer Science</div>
+                <div className="hcard-cat-row"><span className="hcard-dot" style={{ background:'#8b5cf6' }} />Medicine</div>
+              </div>
+
+              {/* Card 2 — Review Progress */}
+              <div className="hcard hcard-2">
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                  <span style={{ fontSize:13.5, fontWeight:600, color:'#1a2b4a' }}>Review Progress</span>
+                  <span className="hcard-pill hcard-pill-amber">
+                    <span style={{ width:6, height:6, borderRadius:'50%', background:'#c8851a', display:'inline-block' }} />
+                    In Review
+                  </span>
+                </div>
+                {[
+                  { name:'Reviewer 1 · Dr. Lim',  status:'Approved', cls:'hcard-green' },
+                  { name:'Reviewer 2 · Prof. Tan', status:'Approved', cls:'hcard-green' },
+                  { name:'Reviewer 3 · Dr. Chen',  status:'Pending',  cls:'hcard-amber' },
+                ].map(r => (
+                  <div className="hcard-row" key={r.name}>
+                    <span className="hcard-name">{r.name}</span>
+                    <span className={r.cls}>{r.status}</span>
+                  </div>
+                ))}
+                <div className="hcard-track">
+                  <div className="hcard-fill" style={{ width:'66%', background:'#2e8b57' }} />
+                </div>
+                <div className="hcard-caption">2 of 3 reviews completed</div>
+              </div>
+
+              {/* Card 3 — Reminder */}
+              <div className="hcard hcard-3">
+                <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+                  <div className="hcard-icon-sq">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:6 }}>
+                      <span style={{ fontWeight:600, color:'#1a2b4a', fontSize:13.5 }}>Reminder sent</span>
+                      <span style={{ fontSize:11.5, color:'#8493a6' }}>Auto-followup · 3 days</span>
+                    </div>
+                    <p style={{ fontSize:12.5, color:'#5a6a80', lineHeight:1.6, margin:0 }}>
+                      Reviewer hasn't responded — replacement will be assigned in 24 hours if no action.
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-700)', lineHeight: 1.5 }}>Reviewer hasn't responded—replacement will be assigned in 24 hours if no action.</div>
+
             </div>
           </div>
         </div>
       </section>
 
-      <section id="features">
-        <div className="section-inner">
-          <div className="section-header">
-            <span className="eyebrow">Built for the publication lifecycle</span>
-            <h2>Every step, <em>handled</em>.</h2>
-            <p>From the moment a manuscript is submitted to the day it's published, JSRMS keeps work moving with intelligent automation and human oversight where it matters most.</p>
+      {/* Trending This Week */}
+      <section className="trending-section">
+        <div className="portal-inner">
+          <div className="trending-header">
+            <h2>Trending This Week</h2>
+            <span className="trending-badge">Hot</span>
           </div>
-          <div className="features-grid">
-            {[
-              { title: 'AI Classification', desc: 'Machine learning models analyze your abstract and automatically suggest the right research category—with confidence scores you can verify.', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 2L4 6v12l8 4 8-4V6l-8-4z"/><path d="M12 2v20M4 6l8 4 8-4"/></svg> },
-              { title: 'Smart Reviewer Matching', desc: 'Match papers with three qualified reviewers based on expertise, availability, and conflict-of-interest checks—automatically.', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><circle cx="17" cy="11" r="3"/><path d="M22 21v-1a3 3 0 00-3-3"/></svg> },
-              { title: 'Automated Reminders', desc: 'Nothing falls through the cracks. Reminder cycles, deadline tracking, and replacement-reviewer escalation work in the background.', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
-              { title: 'Editorial Oversight', desc: 'Chief editors get a clear view of every review and the tools to make confident final decisions—with full audit trails.', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg> },
-              { title: 'Threaded Discussions', desc: 'Authors, reviewers, and editors stay in sync through structured, threaded conversations attached to every submission.', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> },
-              { title: 'Student Track', desc: 'A dedicated submission flow for student research from schools and universities, with mentorship-friendly review guidelines.', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg> },
-            ].map((f) => (
-              <div className="feature" key={f.title}>
-                <div className="feature-icon">{f.icon}</div>
-                <h3>{f.title}</h3>
-                <p>{f.desc}</p>
+          <div className="trending-grid">
+            {TRENDING.map((paper, i) => (
+              <div className="trending-card" key={paper.id}>
+                <span className={`trending-rank rank-${i + 1}`}>{String(i + 1).padStart(2, '0')}</span>
+                <div className="trending-info">
+                  <h3>{paper.title}</h3>
+                  <div className="trending-meta">
+                    <span>{paper.author}</span>
+                    <span>{paper.category}</span>
+                  </div>
+                  <div className="trending-downloads">
+                    ↓ {paper.downloads.toLocaleString()} downloads
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="workflow" className="workflow">
-        <div className="section-inner">
-          <div className="section-header">
-            <span className="eyebrow">The four-stage pipeline</span>
-            <h2>From submission to <em>publication</em>.</h2>
-            <p>A transparent workflow with checkpoints at every stage—so authors always know where their paper stands.</p>
+      {/* How It Works */}
+      <section className="how-it-works">
+        <div className="how-inner">
+          <div className="how-header">
+            <h2>How It Works</h2>
+            <p>Get started with PaperBridge in three simple steps.</p>
           </div>
-          <div className="workflow-grid">
-            <div className="wf-step"><div className="wf-num">01</div><h3>Submit</h3><p>Author uploads the manuscript. AI suggests the research category and confirms compliance with submission rules.</p></div>
-            <div className="wf-step"><div className="wf-num">02</div><h3>Review</h3><p>Three reviewers are matched and assigned. The system tracks deadlines and sends reminders without manual chasing.</p></div>
-            <div className="wf-step"><div className="wf-num">03</div><h3>Decide</h3><p>If reviewers agree, the decision is automatic. If they disagree, the chief editor steps in with full context.</p></div>
-            <div className="wf-step"><div className="wf-num">04</div><h3>Publish</h3><p>Approved papers move into the publication archive—indexed, searchable, and accessible to the community.</p></div>
-          </div>
-        </div>
-      </section>
-
-      <section style={{ paddingTop: 60 }}>
-        <div className="cta">
-          <div className="cta-inner">
-            <h2>Ready to publish your <em>research</em>?</h2>
-            <p>Join over a thousand authors and reviewers who use JSRMS to move their work forward—without the email back-and-forth.</p>
-            <div className="hero-actions" style={{ justifyContent: 'center' }}>
-              <Link to="/register" className="btn btn-accent">Create an Account</Link>
-              <Link to="/login" className="btn btn-outline-light">Sign In</Link>
-            </div>
+          <div className="how-steps">
+            {HOW_IT_WORKS.map((step) => (
+              <div className="how-step" key={step.step}>
+                <div className="how-step-number">{step.step}</div>
+                <h3>{step.title}</h3>
+                <p>{step.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
+      {/* Footer */}
       <footer className="site-footer">
         <div className="footer-inner">
-          <div className="footer-brand">
-            <div className="brand-mark">JSRMS</div>
-            <p>An AI-assisted journal submission and review management platform for academic institutions and independent journals.</p>
+          <div className="footer-top">
+            <div className="footer-brand">
+              <span className="brand-mark">PaperBridge</span>
+              <span className="brand-sub">Research Portal</span>
+              <p>A centralised platform for discovering, accessing, and publishing academic research. Built for researchers, students, and institutions.</p>
+              <div className="footer-contact-item">✉ support@paperbridge.edu.my</div>
+              <div className="footer-contact-item">📍 Kuala Lumpur, Malaysia</div>
+            </div>
+
+            <div className="footer-col">
+              <h4>Explore</h4>
+              <Link to="/search">Browse Papers</Link>
+              <Link to="/search?category=Computer+Science">Computer Science</Link>
+              <Link to="/search?category=Engineering">Engineering</Link>
+              <Link to="/search?category=Physics">Physics</Link>
+              <Link to="/search?category=Linguistics">Linguistics</Link>
+            </div>
+
+            <div className="footer-col">
+              <h4>Platform</h4>
+              <Link to="/about">About Us</Link>
+              <Link to="/resources">Resources</Link>
+              <Link to="/register">Create Account</Link>
+              <Link to="/login">Sign In</Link>
+              <Link to="/student/training">Training Modules</Link>
+            </div>
+
+            <div className="footer-col">
+              <h4>For Researchers</h4>
+              <Link to="/register">Submit a Paper</Link>
+              <Link to="/author/dashboard">Author Dashboard</Link>
+              <Link to="/reviewer/dashboard">Reviewer Portal</Link>
+              <Link to="/about">Editorial Board</Link>
+            </div>
           </div>
-          <div className="footer-col">
-            <h4>Platform</h4>
-            <Link to="/author/submit">Submit Paper</Link>
-            <Link to="/reviewer/dashboard">For Reviewers</Link>
-            <Link to="/editor/dashboard">Editorial Team</Link>
-            <Link to="/admin/dashboard">Administration</Link>
+
+          <div className="footer-bottom">
+            <span className="footer-copy">© {new Date().getFullYear()} PaperBridge Research Portal. All rights reserved.</span>
+            <div className="footer-legal">
+              <Link to="/privacy">Privacy Policy</Link>
+              <Link to="/terms">Terms of Use</Link>
+              <Link to="/contact">Contact</Link>
+            </div>
           </div>
-          <div className="footer-col">
-            <h4>Resources</h4>
-            <a href="#">Author Guidelines</a>
-            <a href="#">Review Standards</a>
-            <a href="#">FAQ</a>
-            <a href="#">Support</a>
-          </div>
-          <div className="footer-col">
-            <h4>Institution</h4>
-            <a href="#">About JSRMS</a>
-            <a href="#">Privacy Policy</a>
-            <a href="#">Terms of Service</a>
-            <a href="#">Contact</a>
-          </div>
-        </div>
-        <div className="footer-bottom">
-          <span>© 2026 JSRMS Research Portal. All rights reserved.</span>
-          <span>Built for academic excellence.</span>
         </div>
       </footer>
     </div>

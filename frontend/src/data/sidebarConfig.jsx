@@ -15,6 +15,8 @@ const ICONS = {
   book: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>,
   list: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
   log: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+  award: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>,
+  exam: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,
 };
 
 export const SIDEBAR_CONFIG = {
@@ -37,6 +39,37 @@ export const SIDEBAR_CONFIG = {
           { id: 'notifications', label: 'Notifications', to: '/author/notifications', icon: ICONS.bell, badge: 3 },
           { id: 'profile', label: 'Profile', to: '/author/profile', icon: ICONS.user },
           { id: 'settings', label: 'Settings', to: '/author/settings', icon: ICONS.settings },
+        ],
+      },
+    ],
+  },
+  user: {
+    role: 'User',
+    user: { name: 'Nur Aisyah', initials: 'NA', role: 'Research Portal User - UTM' },
+    sections: [
+      {
+        title: 'Learn',
+        items: [
+          { id: 'training', label: 'Training Modules', to: '/student/training', icon: ICONS.book },
+          { id: 'progress', label: 'My Progress', to: '/student/progress', icon: ICONS.done },
+          { id: 'assessment', label: 'Final Assessment', to: '/student/assessment', icon: ICONS.exam },
+          { id: 'certificate', label: 'Certificate', to: '/student/certificate', icon: ICONS.award },
+          { id: 'resources', label: 'Resources', to: '/student/resources', icon: ICONS.list },
+        ],
+      },
+      {
+        title: 'Publish',
+        items: [
+          { id: 'papers', label: 'Discover Papers', to: '/student/papers', icon: ICONS.papers },
+          { id: 'submit', label: 'Submit Paper', to: '/student/submit', icon: ICONS.plus },
+        ],
+      },
+      {
+        title: 'Account',
+        items: [
+          { id: 'notifications', label: 'Notifications', to: '/student/notifications', icon: ICONS.bell, badge: 2 },
+          { id: 'profile', label: 'Profile', to: '/student/profile', icon: ICONS.user },
+          { id: 'settings', label: 'Settings', to: '/student/settings', icon: ICONS.settings },
         ],
       },
     ],

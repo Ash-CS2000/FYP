@@ -1,17 +1,21 @@
 import os
-from dotenv import load_dotenv
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-@d)&x@#3_$ujtb7=c7k@b+xd+k-yutc#488h+c^q8=v4d2i(#d'
+SECRET_KEY = os.getenv(
+    'SECRET_KEY',
+    'django-insecure-@d)&x@#3_$ujtb7=c7k@b+xd+k-yutc#488h+c^q8=v4d2i(#d',
+)
 
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -20,11 +24,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # Third party
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
-    # Our apps
     'apps.users',
     'apps.manuscripts',
     'apps.reviews',
@@ -64,6 +67,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'jsrems.wsgi.application'
 
+DB_SCHEMA = os.getenv('DB_SCHEMA', 'public')
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -72,6 +77,9 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
+        'OPTIONS': {
+            'options': f'-c search_path={DB_SCHEMA}',
+        },
     }
 }
 
@@ -89,7 +97,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# JWT
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -97,6 +104,16 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '30/minute',        # unknown users
+        'user': '100/minute',       # logged in users
+        'orcid': '10/minute',       # orcid login
+        'password_reset': '3/hour', # password reset
+    },
 }
 
 SIMPLE_JWT = {
@@ -106,19 +123,25 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS - allow React frontend
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-# Email - Mailhog for local testing
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'localhost'
-EMAIL_PORT = 1025
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '1025'))
 EMAIL_USE_TLS = False
 DEFAULT_FROM_EMAIL = 'noreply@jsrems.local'
 
-# JSREMS rules
 JSREMS_MIN_REVIEWERS = 3
 JSREMS_MAX_REVIEWERS = 5
+
+
+ORCID_CLIENT_ID = os.getenv('ORCID_CLIENT_ID', '')
+ORCID_CLIENT_SECRET = os.getenv('ORCID_CLIENT_SECRET', '')
+ORCID_REDIRECT_URI = os.getenv('ORCID_REDIRECT_URI', '')
+ORCID_BASE_URL = os.getenv('ORCID_BASE_URL', 'https://orcid.org')

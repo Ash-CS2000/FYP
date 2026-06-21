@@ -1,6 +1,7 @@
-import { Link } from 'react-router-dom';
-
-export default function Topbar({ searchPlaceholder = 'Search...', actions }) {
+export default function Topbar({
+  searchPlaceholder = 'Search...',
+  actions,
+}) {
   return (
     <header className="topbar">
       <div className="topbar-search">

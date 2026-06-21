@@ -1,38 +1,115 @@
-# JSREMS - Journal Submission, Review and Editorial Management System
+# PaperBridge
+
+PaperBridge is a research portal prototype for discovering papers, accessing training modules, and supporting manuscript submission, peer review, editorial decisions, and admin management.
+
+## Project Structure
+
+```text
+FYP/
+|-- frontend/     # Vite + React frontend
+|-- backend/      # Django backend scaffold
+|-- ml_service/   # ML service workspace
+`-- README.md
+```
+
+## Current Frontend Roles
+
+Everyone can sign up as a normal user. Some demo users also have extended workspace access.
+
+| Role | Main Route | Notes |
+|---|---|---|
+| User | `/user/papers` | Discover papers, access training modules, resources, and progress |
+| Author | `/author/dashboard` | Extended role for paper submission and author workflow |
+| Reviewer | `/reviewer/dashboard` | Extended role for assigned reviews |
+| Editor | `/editor/dashboard` | Hidden/internal role appointed by admin |
+| Admin | `/admin/dashboard` | Hidden/internal role for user and system management |
+
+## Demo Credentials
+
+| Account | Email | Password | Roles |
+|---|---|---|---|
+| Normal user | `user@utm.edu.my` | `User@123` | User |
+| Author demo | `author@utm.edu.my` | `Author@123` | User + Author |
+| Reviewer demo | `reviewer@um.edu.my` | `Reviewer@123` | User + Reviewer |
+| Editor demo | `editor@usm.my` | `Editor@123` | User + Editor |
+| Admin demo | `admin@paperbridge.edu.my` | `Admin@123` | User + Admin |
+
+Users with extended roles can switch workspace from the sidebar.
+
+## Frontend Setup
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend runs at:
+
+```text
+http://127.0.0.1:5173
+```
+
+To create a production build:
+
+```bash
+npm run build
+```
 
 ## Backend Setup
 
-1. Clone the repo
-   git clone https://github.com/Ash-CS2000/FYP.git
-   cd FYP/backend
+```bash
+cd backend
+python -m venv venv
+```
 
-2. Create virtual environment
-   python -m venv venv
-   source venv/bin/activate
-   
+Activate the virtual environment:
 
-3. Install dependencies
-   pip install -r requirements.txt
+```bash
+# Windows PowerShell
+.\venv\Scripts\Activate.ps1
 
-4. Set up .env file
-   - Copy .env.example to .env
-     cp .env.example .env
-   - password is already there
+# macOS/Linux
+source venv/bin/activate
+```
 
-5. Run migrations
-   python manage.py migrate
+Install dependencies:
 
-6. Start server
-   python manage.py runserver
+```bash
+pip install -r requirements.txt
+```
 
-Server runs at http://127.0.0.1:8000
+Run migrations:
 
-## Email Testing (Mailpit)
+```bash
+python manage.py migrate
+```
 
-7. Install Mailpit
-   brew install mailpit
+Start the backend server:
 
-8. Start Mailpit
-   brew services start mailpit
+```bash
+python manage.py runserver
+```
 
-9. Open http://localhost:8025 to see emails
+The backend runs at:
+
+```text
+http://127.0.0.1:8000
+```
+
+## Training Module
+
+The training module is frontend-only for now and lives at:
+
+```text
+/user/training
+```
+
+Current learning materials include:
+
+- Citation Basics
+- Avoiding Plagiarism
+- Research Paper Structure
+- Abstracts and Keywords
+- Read Like a Reviewer
+- Publishing Your First Paper
