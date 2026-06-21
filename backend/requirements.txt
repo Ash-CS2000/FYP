@@ -1,18 +1,18 @@
 asgiref==3.11.1
 blinker==1.9.0
-boltons @ file:///home/conda/feedstock_root/build_artifacts/boltons_1677499911949/work
+boltons==23.0.0
 boto3==1.43.1
 botocore==1.43.1
-Brotli @ file:///opt/miniconda3/conda-bld/brotli-split_1762371510525/work
-certifi @ file:///Users/ec2-user/croot/certifi_1767659246487/work/certifi
-cffi @ file:///opt/miniconda3/conda-bld/cffi_1761832774705/work
-charset-normalizer @ file:///home/conda/feedstock_root/build_artifacts/charset-normalizer_1688813409104/work
+Brotli==1.2.0
+certifi==2026.1.4
+cffi==2.0.0
+charset-normalizer==3.2.0
 click==8.4.1
-colorama @ file:///home/conda/feedstock_root/build_artifacts/colorama_1666700638685/work
-conda @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_47t5xq9oq5/croot/conda_1694544078292/work
-conda-package-handling @ file:///home/conda/feedstock_root/build_artifacts/conda-package-handling_1669907009957/work
-conda_package_streaming @ file:///home/conda/feedstock_root/build_artifacts/conda-package-streaming_1685101166527/work
-cryptography @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_b1p0q5vizk/croot/cryptography_1702070293829/work
+colorama==0.4.6
+conda==23.7.4
+conda-package-handling==2.0.2
+conda_package_streaming==0.8.0
+cryptography==41.0.7
 Django==5.2.13
 django-cors-headers==4.9.0
 djangorestframework==3.17.1
@@ -21,13 +21,13 @@ filelock==3.29.4
 Flask==3.1.3
 fsspec==2026.6.0
 gunicorn==26.0.0
-idna @ file:///home/conda/feedstock_root/build_artifacts/idna_1663625384323/work
+idna==3.4
 iniconfig==2.3.0
 itsdangerous==2.2.0
 Jinja2==3.1.6
 jmespath==1.1.0
 joblib==1.5.3
-jsonpatch @ file:///home/conda/feedstock_root/build_artifacts/jsonpatch_1632759296524/work
+jsonpatch==1.32
 jsonpointer==2.0
 MarkupSafe==3.0.3
 mpmath==1.3.0
@@ -38,34 +38,37 @@ numpy==2.4.6
 packaging==26.2
 panda==0.3.1
 pandas==3.0.3
+pip==23.2.1
 pluggy==1.6.0
 psycopg2-binary==2.9.12
-pycosat @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_61k1o_oje7/croot/pycosat_1736868429741/work
-pycparser @ file:///home/conda/feedstock_root/build_artifacts/pycparser_1636257122734/work
+pycosat==0.6.6
+pycparser==2.21
 pygame==2.6.1
 Pygments==2.20.0
 PyJWT==2.12.1
-pyOpenSSL @ file:///home/conda/feedstock_root/build_artifacts/pyopenssl_1685514481738/work
-PySocks @ file:///home/conda/feedstock_root/build_artifacts/pysocks_1661604839144/work
+pyOpenSSL==23.2.0
+PySocks==1.7.1
 pytest==9.0.3
 pytest-django==4.12.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 pytz==2026.2
-requests @ file:///Users/ec2-user/croot/requests_1775066191803/work
-ruamel.yaml @ file:///Users/cbousseau/work/recipes/ci_py311/ruamel.yaml_1677934845850/work
+requests==2.33.1
+ruamel.yaml==0.17.21
 s3transfer==0.17.0
 scikit-learn==1.9.0
 scipy==1.17.1
+setuptools==68.0.0
 six==1.17.0
 sqlparse==0.5.5
 sympy==1.14.0
 threadpoolctl==3.6.0
-toolz @ file:///home/conda/feedstock_root/build_artifacts/toolz_1657485559105/work
+toolz==0.12.0
 torch==2.12.0
-tqdm @ file:///home/conda/feedstock_root/build_artifacts/tqdm_1677948868469/work
+tqdm==4.65.0
 typing_extensions==4.15.0
 urllib3==2.6.3
 Werkzeug==3.1.8
+wheel==0.41.0
 xlrd==2.0.2
-zstandard @ file:///Users/cbousseau/work/recipes/ci_py311_2/zstandard_1678996192313/work
+zstandard==0.19.0
