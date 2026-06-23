@@ -19,6 +19,27 @@ const ICONS = {
   exam: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,
 };
 
+export function getMergedSidebar(roles = []) {
+  if (roles.length <= 1) {
+    return SIDEBAR_CONFIG[roles[0]] || SIDEBAR_CONFIG.author;
+  }
+  const base = { ...SIDEBAR_CONFIG[roles[0]] };
+  const mergedSections = [...base.sections];
+  for (const r of roles.slice(1)) {
+    const cfg = SIDEBAR_CONFIG[r];
+    if (!cfg) continue;
+    for (const section of cfg.sections) {
+      const existing = mergedSections.find(s => s.title === section.title);
+      if (existing) {
+        existing.items = [...existing.items, ...section.items];
+      } else {
+        mergedSections.push(section);
+      }
+    }
+  }
+  return { ...base, sections: mergedSections };
+}
+
 export const SIDEBAR_CONFIG = {
   author: {
     role: 'Author',

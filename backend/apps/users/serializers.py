@@ -16,6 +16,9 @@ class UserSerializer(serializers.ModelSerializer):
         source='profile.institution', required=False, allow_blank=True
     )
 
+    roles           = serializers.JSONField(source='profile.roles', read_only=True)
+    reviewer_status = serializers.CharField(source='profile.reviewer_status', read_only=True)
+
     class Meta:
         model = User
         fields = (
@@ -27,8 +30,10 @@ class UserSerializer(serializers.ModelSerializer):
             'role',
             'status',
             'institution',
+            'roles',
+            'reviewer_status',
         )
-        read_only_fields = ('id', 'email', 'role', 'status')
+        read_only_fields = ('id', 'email', 'role', 'status', 'roles', 'reviewer_status')
 
     def get_name(self, obj):
         return obj.get_full_name() or obj.email
@@ -134,16 +139,12 @@ class RegisterSerializer(serializers.Serializer):
             password=password,
         )
 
-        status = (
-            UserProfile.Status.PENDING
-            if role == UserProfile.Role.REVIEWER
-            else UserProfile.Status.ACTIVE
-        )
+        reviewer_status = UserProfile.Status.PENDING if role == UserProfile.Role.REVIEWER else ''
         UserProfile.objects.update_or_create(
             user=user,
             defaults={
                 'role':              role,
-                'status':            status,
+                'status':            UserProfile.Status.ACTIVE,
                 'institution':       institution,
                 'affiliation_type':  affiliation_type,
                 'student_level':     student_level,
@@ -152,6 +153,8 @@ class RegisterSerializer(serializers.Serializer):
                 'research_areas':    research_areas,
                 'state':             state,
                 'date_of_birth':     date_of_birth,
+                'roles':             [role],
+                'reviewer_status':   reviewer_status,
             },
         )
         return user
@@ -196,7 +199,9 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     def get_token(cls, user):
         token = super().get_token(user)
         profile = getattr(user, 'profile', None)
-        token['email'] = user.email
-        token['role'] = profile.role if profile else ''
-        token['status'] = profile.status if profile else ''
+        token['email']           = user.email
+        token['role']            = profile.role            if profile else ''
+        token['status']          = profile.status          if profile else ''
+        token['roles']           = profile.roles           if profile else []
+        token['reviewer_status'] = profile.reviewer_status if profile else ''
         return token

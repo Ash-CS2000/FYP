@@ -6,12 +6,18 @@ from .views import (
     LogoutView,
     OrcidAuthUrlView,
     OrcidCallbackView,
+    ApplyReviewerView,
+    ReviewerApprovalView,
 )
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('me/', MeView.as_view(), name='me'),
     path('logout/', LogoutView.as_view(), name='logout'),
+
+    # Reviewer application
+    path('apply-reviewer/', ApplyReviewerView.as_view(), name='apply-reviewer'),
+    path('<int:pk>/reviewer-status/', ReviewerApprovalView.as_view(), name='reviewer-status'),
 
     # ORCID
     path('orcid/url/', OrcidAuthUrlView.as_view(), name='orcid-url'),

@@ -45,6 +45,15 @@ export const DEMO_ACCOUNTS = [
     roles: ['admin'],
     defaultRole: 'admin',
   },
+  {
+    email: 'dual@utm.edu.my',
+    password: 'Dual@123',
+    name: 'Prof. James Tan',
+    initials: 'JT',
+    roles: ['author', 'reviewer'],
+    defaultRole: 'author',
+    reviewer_status: 'active',
+  },
 ];
 
 export function findDemoAccount(email, password) {

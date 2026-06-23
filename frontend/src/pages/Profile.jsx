@@ -1,8 +1,44 @@
+import { useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import { SIDEBAR_CONFIG } from '../data/sidebarConfig.jsx';
 
+const API_URL = 'https://fyp-production-6d7f.up.railway.app';
+
 export default function Profile({ role = 'author' }) {
   const cfg = SIDEBAR_CONFIG[role];
+
+  const storedUser = (() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } })();
+  const userRoles        = storedUser?.roles || [role];
+  const reviewerStatus   = storedUser?.reviewer_status || '';
+  const isAuthor         = userRoles.includes('author');
+  const isAlreadyReviewer = userRoles.includes('reviewer');
+
+  const [applyLoading, setApplyLoading]   = useState(false);
+  const [applyError, setApplyError]       = useState('');
+  const [applySuccess, setApplySuccess]   = useState(false);
+  const [expertiseInput, setExpertiseInput] = useState(storedUser?.expertise_areas || '');
+
+  async function handleApplyReviewer(e) {
+    e.preventDefault();
+    setApplyError('');
+    setApplyLoading(true);
+    try {
+      const access = localStorage.getItem('access');
+      const res = await fetch(`${API_URL}/api/users/apply-reviewer/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${access}` },
+        body: JSON.stringify({ expertise_areas: expertiseInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || 'Failed to submit application.');
+      localStorage.setItem('user', JSON.stringify(data));
+      setApplySuccess(true);
+    } catch (err) {
+      setApplyError(err.message);
+    } finally {
+      setApplyLoading(false);
+    }
+  }
 
   return (
     <AppShell role={role} searchPlaceholder="Search...">
@@ -60,6 +96,62 @@ export default function Profile({ role = 'author' }) {
           </div>
         </div>
       </div>
+
+      {isAuthor && (
+        <div className="card fade-up delay-2" style={{ marginTop: 0 }}>
+          <div className="card-header">
+            <div className="card-title">Become a Reviewer</div>
+          </div>
+
+          {isAlreadyReviewer && reviewerStatus === 'active' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--teal-50)', border: '1px solid #a8dcc8', borderRadius: 'var(--r-md)', fontSize: 13.5, color: 'var(--teal-800)' }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              You are an active reviewer on this platform.
+            </div>
+          )}
+
+          {reviewerStatus === 'pending' && !applySuccess && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#fffbeb', border: '1px solid #f0d58c', borderRadius: 'var(--r-md)', fontSize: 13.5, color: '#92600a' }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              Your reviewer application is under review by an admin.
+            </div>
+          )}
+
+          {reviewerStatus === 'rejected' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--red-50)', border: '1px solid #f5c6c6', borderRadius: 'var(--r-md)', fontSize: 13.5, color: 'var(--red-700)' }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              Your previous reviewer application was not approved. You may reapply below.
+            </div>
+          )}
+
+          {applySuccess && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--teal-50)', border: '1px solid #a8dcc8', borderRadius: 'var(--r-md)', fontSize: 13.5, color: 'var(--teal-800)' }}>
+              Application submitted — an admin will review it shortly.
+            </div>
+          )}
+
+          {!isAlreadyReviewer && reviewerStatus !== 'pending' && !applySuccess && (
+            <form onSubmit={handleApplyReviewer} style={{ marginTop: 16 }}>
+              <p style={{ fontSize: 13.5, color: 'var(--ink-600)', marginBottom: 14, lineHeight: 1.6 }}>
+                As an author on PaperBridge, you can also contribute as a peer reviewer. Your application will be reviewed by an admin before the reviewer role is activated.
+              </p>
+              <div className="field">
+                <label className="field-label">Expertise areas</label>
+                <input className="field-input" type="text" placeholder="e.g. Machine Learning, Biomedical Engineering"
+                  value={expertiseInput} onChange={e => setExpertiseInput(e.target.value)} />
+                <div className="field-hint">Help us match you with relevant manuscripts.</div>
+              </div>
+              {applyError && (
+                <div style={{ padding: '10px 14px', background: 'var(--red-50)', border: '1px solid #f5c6c6', borderRadius: 'var(--r-md)', fontSize: 13, color: 'var(--red-700)', marginBottom: 12 }}>{applyError}</div>
+              )}
+              <button type="submit" className="btn btn-primary btn-sm" disabled={applyLoading}>
+                {applyLoading ? 'Submitting…' : 'Apply as Reviewer →'}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
     </AppShell>
   );
 }

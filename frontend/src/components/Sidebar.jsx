@@ -1,10 +1,13 @@
 import { NavLink, Link, useNavigate } from 'react-router-dom';
-import { SIDEBAR_CONFIG } from '../data/sidebarConfig.jsx';
+import { getMergedSidebar } from '../data/sidebarConfig.jsx';
 import { clearDemoSession, getDemoSession, ROLE_HOME, ROLE_LABELS } from '../data/demoAccounts.js';
 
 export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
   const navigate = useNavigate();
-  const cfg = SIDEBAR_CONFIG[role];
+
+  const storedUser = (() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } })();
+  const roles = storedUser?.roles?.length ? storedUser.roles : [role];
+  const cfg = getMergedSidebar(roles);
   if (!cfg) return null;
 
   const session = getDemoSession();

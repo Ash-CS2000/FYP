@@ -102,6 +102,83 @@ class MeView(APIView):
         return Response(serializer.data)
 
 
+# ── Reviewer application ──────────────────────────────────────────────────────
+
+class ApplyReviewerView(APIView):
+    """
+    POST /api/users/apply-reviewer/
+    Lets an authenticated author apply to also become a reviewer.
+    Body (optional): { expertise_areas, qualifications }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def post(self, request):
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+        if 'reviewer' in (profile.roles or []):
+            return Response(
+                {'detail': 'You already hold the reviewer role.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if profile.reviewer_status == UserProfile.Status.PENDING:
+            return Response(
+                {'detail': 'Your reviewer application is already pending review.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        expertise = request.data.get('expertise_areas', '').strip()
+        if expertise:
+            profile.expertise_areas = expertise
+
+        roles = list(profile.roles or [])
+        if 'reviewer' not in roles:
+            roles.append('reviewer')
+        profile.roles = roles
+        profile.reviewer_status = UserProfile.Status.PENDING
+        profile.save()
+
+        return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
+
+
+class ReviewerApprovalView(APIView):
+    """
+    PATCH /api/users/<pk>/reviewer-status/
+    Admin only. Body: { "action": "approve" | "reject" }
+    """
+    permission_classes = [permissions.IsAdminUser]
+    throttle_classes = [UserRateThrottle]
+
+    def patch(self, request, pk):
+        action = request.data.get('action')
+        if action not in ('approve', 'reject'):
+            return Response(
+                {'detail': 'action must be "approve" or "reject".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        roles = list(profile.roles or [])
+
+        if action == 'approve':
+            profile.reviewer_status = UserProfile.Status.ACTIVE
+            if 'reviewer' not in roles:
+                roles.append('reviewer')
+        else:
+            profile.reviewer_status = UserProfile.Status.REJECTED
+            roles = [r for r in roles if r != 'reviewer']
+
+        profile.roles = roles
+        profile.save()
+
+        return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+
 # ── ORCID ─────────────────────────────────────────────────────────────────────
 
 class OrcidAuthUrlView(APIView):
@@ -252,9 +329,11 @@ class OrcidCallbackView(APIView):
         UserProfile.objects.update_or_create(
             user=user,
             defaults={
-                'role': UserProfile.Role.AUTHOR,
-                'status': UserProfile.Status.ACTIVE,
-                'orcid_id': orcid_id,
+                'role':            UserProfile.Role.AUTHOR,
+                'status':          UserProfile.Status.ACTIVE,
+                'orcid_id':        orcid_id,
+                'roles':           [UserProfile.Role.AUTHOR],
+                'reviewer_status': '',
             },
         )
         return user, True

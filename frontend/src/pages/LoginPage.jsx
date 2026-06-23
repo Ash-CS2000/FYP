@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { saveTokens } from '../api/auth';
+import { findDemoAccount, saveDemoSession, ROLE_HOME } from '../data/demoAccounts.js';
 
 const API_URL = 'https://fyp-production-6d7f.up.railway.app';
 
@@ -53,6 +54,22 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    const demo = findDemoAccount(email, password);
+    if (demo) {
+      saveDemoSession(demo, demo.defaultRole);
+      localStorage.setItem('user', JSON.stringify({
+        name: demo.name,
+        email: demo.email,
+        role: demo.defaultRole,
+        roles: demo.roles,
+        reviewer_status: demo.reviewer_status || '',
+      }));
+      setLoading(false);
+      navigate(ROLE_HOME[demo.defaultRole] || '/');
+      return;
+    }
+
     try {
       const res  = await fetch(`${API_URL}/api/auth/login/`, {
         method:  'POST',
