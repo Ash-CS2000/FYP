@@ -171,9 +171,6 @@ export default function RegisterPage() {
   const [expertiseAreas, setExpertiseAreas]   = useState('');
   const [studentId, setStudentId]             = useState('');
   const [affiliationType, setAffiliationType] = useState('student');
-  const [studentLevel, setStudentLevel]       = useState('');
-  const [professionalType, setProfessionalType] = useState('');
-  const [programme, setProgramme]             = useState('');
   const [myState, setMyState]                 = useState('');
   const [dateOfBirth, setDateOfBirth]         = useState('');
 
@@ -227,9 +224,6 @@ export default function RegisterPage() {
       };
       if (role === 'author') {
         body.affiliation_type  = affiliationType;
-        body.student_level     = affiliationType === 'student'      ? studentLevel     : '';
-        body.professional_type = affiliationType === 'professional' ? professionalType : '';
-        body.programme         = programme;
         body.research_areas    = researchAreas;
         body.state             = myState;
         if (dateOfBirth) body.date_of_birth = dateOfBirth;
@@ -521,7 +515,7 @@ export default function RegisterPage() {
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => { setAffiliationType(opt.value); setStudentLevel(''); setProfessionalType(''); }}
+                        onClick={() => setAffiliationType(opt.value)}
                         style={{
                           flex: 1, padding: '9px 0', borderRadius: 'var(--r-md)', fontSize: 13.5,
                           fontWeight: 600, cursor: 'pointer', transition: 'all var(--t-fast)',
@@ -534,47 +528,10 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                {affiliationType === 'student' && (
-                  <div className="field">
-                    <label className="field-label">Study level <span className="req">*</span></label>
-                    <select className="field-select" value={studentLevel} onChange={e => setStudentLevel(e.target.value)} required>
-                      <option value="">Select level…</option>
-                      <option value="secondary">Secondary School (SPM / Form 4–5)</option>
-                      <option value="preuniversity">Pre-University (STPM / Foundation / Matriculation / Diploma)</option>
-                      <option value="undergraduate">Undergraduate (Bachelor's Degree)</option>
-                      <option value="postgraduate">Postgraduate (Master's / PhD)</option>
-                    </select>
-                  </div>
-                )}
-
-                {affiliationType === 'professional' && (
-                  <div className="field">
-                    <label className="field-label">Profession <span className="req">*</span></label>
-                    <select className="field-select" value={professionalType} onChange={e => setProfessionalType(e.target.value)} required>
-                      <option value="">Select profession…</option>
-                      <option value="educator">Educator (School Teacher / Lecturer)</option>
-                      <option value="researcher">Researcher (University / Research Institution)</option>
-                      <option value="industry">Industry Professional (Engineer / Scientist / Consultant)</option>
-                      <option value="government">Government Officer</option>
-                      <option value="healthcare">Healthcare Professional</option>
-                      <option value="independent">Independent Researcher</option>
-                    </select>
-                  </div>
-                )}
-
                 <div className="field">
                   <label className="field-label">Institution / Organisation</label>
                   <input className="field-input" type="text" placeholder="Universiti Teknologi Malaysia"
                     value={institution} onChange={e => setInstitution(e.target.value)} />
-                </div>
-
-                <div className="field">
-                  <label className="field-label">
-                    {affiliationType === 'professional' ? 'Job title / Designation' : 'Programme / Field of study'}
-                  </label>
-                  <input className="field-input" type="text"
-                    placeholder={affiliationType === 'professional' ? 'e.g. Senior Lecturer, Research Officer' : 'e.g. Computer Science, Medicine'}
-                    value={programme} onChange={e => setProgramme(e.target.value)} />
                 </div>
 
                 <div className="field">
