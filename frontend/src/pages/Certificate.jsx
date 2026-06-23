@@ -20,7 +20,7 @@ export default function Certificate() {
     // Passed the assessment but has not yet submitted the required paper.
     if (progress.assessment.passed && pub.status === 'pending') {
       return (
-        <AppShell role="user" searchPlaceholder="Search...">
+        <AppShell role="student" searchPlaceholder="Search...">
           <div className="page-header fade-up">
             <div>
               <span className="eyebrow">Certificate</span>
@@ -56,7 +56,7 @@ export default function Certificate() {
     }
 
     return (
-      <AppShell role="user" searchPlaceholder="Search...">
+      <AppShell role="student" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Certificate</span>
@@ -75,7 +75,7 @@ export default function Certificate() {
   }
 
   return (
-    <AppShell role="user" searchPlaceholder="Search...">
+    <AppShell role="student" searchPlaceholder="Search...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Certificate</span>

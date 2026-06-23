@@ -107,7 +107,7 @@ export default function FinalAssessment() {
   // ---- Locked state --------------------------------------------------------
   if (!unlocked) {
     return (
-      <AppShell role="user" searchPlaceholder="Search...">
+      <AppShell role="student" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Final Assessment</span>
@@ -133,7 +133,7 @@ export default function FinalAssessment() {
   // ---- Result state --------------------------------------------------------
   if (result) {
     return (
-      <AppShell role="user" searchPlaceholder="Search...">
+      <AppShell role="student" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Final Assessment</span>
@@ -198,7 +198,7 @@ export default function FinalAssessment() {
   // ---- Intro state ---------------------------------------------------------
   if (!started) {
     return (
-      <AppShell role="user" searchPlaceholder="Search...">
+      <AppShell role="student" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Final Assessment</span>
@@ -245,7 +245,7 @@ export default function FinalAssessment() {
 
   // ---- Active exam state ---------------------------------------------------
   return (
-    <AppShell role="user" searchPlaceholder="Search...">
+    <AppShell role="student" searchPlaceholder="Search...">
       <div className="exam-bar fade-up">
         <div>
           <span className="eyebrow">Final Assessment in progress</span>

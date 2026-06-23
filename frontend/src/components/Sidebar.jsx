@@ -28,7 +28,7 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
       <div className="sidebar-brand">
         <Link to="/" className="brand sidebar-logo" title="PaperBridge home">
           <span className="brand-mark">PaperBridge</span>
-          {role !== 'user' && <span className="brand-sub">{cfg.role}</span>}
+          <span className="brand-sub">{cfg.role}</span>
         </Link>
         <button className="sidebar-toggle" type="button" title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'} onClick={onToggleSidebar}>
           <svg className="sidebar-toggle-icon sidebar-toggle-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

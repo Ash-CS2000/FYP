@@ -33,7 +33,7 @@ export default function UserSubmit() {
   if (!canSubmit) {
     const unitsPercent = Math.round((completedUnits / TRAINING_UNITS.length) * 100);
     return (
-      <AppShell role="user" searchPlaceholder="Search...">
+      <AppShell role="student" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Submit Research</span>
@@ -91,7 +91,7 @@ export default function UserSubmit() {
   };
 
   return (
-    <AppShell role="user" searchPlaceholder="Search...">
+    <AppShell role="student" searchPlaceholder="Search...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">New Submission</span>

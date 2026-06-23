@@ -1,5 +1,4 @@
 export const ROLE_HOME = {
-  user: '/student/papers',
   author: '/author/dashboard',
   reviewer: '/reviewer/dashboard',
   editor: '/editor/dashboard',
@@ -7,7 +6,6 @@ export const ROLE_HOME = {
 };
 
 export const ROLE_LABELS = {
-  user: 'User',
   author: 'Author',
   reviewer: 'Reviewer',
   editor: 'Editor',
@@ -16,19 +14,11 @@ export const ROLE_LABELS = {
 
 export const DEMO_ACCOUNTS = [
   {
-    email: 'user@utm.edu.my',
-    password: 'User@123',
-    name: 'Nur Aisyah',
-    initials: 'NA',
-    roles: ['user'],
-    defaultRole: 'user',
-  },
-  {
     email: 'author@utm.edu.my',
     password: 'Author@123',
     name: 'Ahmad Razif',
     initials: 'AR',
-    roles: ['user', 'author'],
+    roles: ['author'],
     defaultRole: 'author',
   },
   {
@@ -36,7 +26,7 @@ export const DEMO_ACCOUNTS = [
     password: 'Reviewer@123',
     name: 'Dr. Lim Wei Ping',
     initials: 'LW',
-    roles: ['user', 'reviewer'],
+    roles: ['reviewer'],
     defaultRole: 'reviewer',
   },
   {
@@ -44,7 +34,7 @@ export const DEMO_ACCOUNTS = [
     password: 'Editor@123',
     name: 'Prof. Hassan Ibrahim',
     initials: 'HI',
-    roles: ['user', 'editor'],
+    roles: ['editor'],
     defaultRole: 'editor',
   },
   {
@@ -52,7 +42,7 @@ export const DEMO_ACCOUNTS = [
     password: 'Admin@123',
     name: 'System Admin',
     initials: 'SA',
-    roles: ['user', 'admin'],
+    roles: ['admin'],
     defaultRole: 'admin',
   },
 ];

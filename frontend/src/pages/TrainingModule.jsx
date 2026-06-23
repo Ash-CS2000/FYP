@@ -130,7 +130,7 @@ export default function TrainingModule() {
   const unitDone = isUnitComplete(selectedUnit, progress);
 
   return (
-    <AppShell role="user" searchPlaceholder="Search lessons, units, quiz topics...">
+    <AppShell role="student" searchPlaceholder="Search lessons, units, quiz topics...">
       <div className="lms-toolbar fade-up">
         <div className="lms-toolbar-id">
           <span className="lms-toolbar-eyebrow">Student Training</span>

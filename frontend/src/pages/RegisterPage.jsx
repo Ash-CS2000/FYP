@@ -394,17 +394,6 @@ export default function RegisterPage() {
                 ))}
               </div>
 
-              <div className="divider">or</div>
-
-              <button type="button" className="user-option" onClick={() => selectView('user')}>
-                <div>
-                  <div className="user-option-label">Continue as a normal user</div>
-                  <div className="user-option-desc">Browse papers and access training — no extended permissions.</div>
-                </div>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--ink-400)" strokeWidth="2" style={{ flexShrink: 0 }}>
-                  <path d="M9 18l6-6-6-6"/>
-                </svg>
-              </button>
 
               <p className="auth-switch" style={{ marginTop: 24 }}>
                 Already have an account?{' '}
@@ -480,86 +469,6 @@ export default function RegisterPage() {
           )}
 
 
-
-          {/* ── View: User form ──────────────────────────────────────────────── */}
-          {view === 'user' && (
-            <>
-              <button type="button" className="auth-back-link" onClick={() => selectView('roles')}>
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M19 12H5M12 19l-7-7 7-7"/>
-                </svg>
-                Back
-              </button>
-
-              <h1 className="auth-form-title">Create your <em>account</em>.</h1>
-              <p className="auth-form-sub">Sign up to browse papers and access training modules.</p>
-
-              {error && <div className="auth-error">{error}</div>}
-
-              <form onSubmit={e => handleSubmit(e, 'user')} noValidate>
-                <div className="field">
-                  <label className="field-label">Full name</label>
-                  <input
-                    className="field-input"
-                    type="text"
-                    placeholder="Nur Aisyah"
-                    value={fullName}
-                    onChange={e => setFullName(e.target.value)}
-                    autoComplete="name"
-                    required
-                  />
-                </div>
-
-                <div className="field">
-                  <label className="field-label">Email address</label>
-                  <input
-                    className="field-input"
-                    type="email"
-                    placeholder="you@university.edu"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    autoComplete="email"
-                    required
-                  />
-                </div>
-
-                <PasswordField
-                  label="Password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                  show={showPw}
-                  onToggle={() => setShowPw(v => !v)}
-                  showStrength
-                />
-
-                <PasswordField
-                  label="Confirm password"
-                  value={confirmPw}
-                  onChange={e => setConfirmPw(e.target.value)}
-                  placeholder="Repeat your password"
-                  show={showConfirm}
-                  onToggle={() => setShowConfirm(v => !v)}
-                />
-
-                <button
-                  type="submit"
-                  className="btn btn-primary auth-submit"
-                  style={{ marginTop: 8 }}
-                  disabled={loading}
-                >
-                  {loading ? 'Creating account…' : 'Create Account →'}
-                </button>
-              </form>
-
-              <p className="auth-switch">
-                Already have an account?{' '}
-                <Link to="/login" className="auth-anchor" style={{ fontWeight: 600 }}>
-                  Sign in →
-                </Link>
-              </p>
-            </>
-          )}
 
           {/* ── View: Author form ────────────────────────────────────────────── */}
           {view === 'author' && (

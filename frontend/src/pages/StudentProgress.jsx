@@ -26,7 +26,7 @@ export default function StudentProgress() {
   const awaitingPublication = progress.assessment.passed && !progress.certificate;
 
   return (
-    <AppShell role="user" searchPlaceholder="Search progress, units, quiz scores...">
+    <AppShell role="student" searchPlaceholder="Search progress, units, quiz scores...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Training Progress</span>

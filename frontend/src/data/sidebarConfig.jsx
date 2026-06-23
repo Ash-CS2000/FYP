@@ -43,37 +43,6 @@ export const SIDEBAR_CONFIG = {
       },
     ],
   },
-  user: {
-    role: 'User',
-    user: { name: 'Nur Aisyah', initials: 'NA', role: 'Research Portal User - UTM' },
-    sections: [
-      {
-        title: 'Learn',
-        items: [
-          { id: 'training', label: 'Training Modules', to: '/student/training', icon: ICONS.book },
-          { id: 'progress', label: 'My Progress', to: '/student/progress', icon: ICONS.done },
-          { id: 'assessment', label: 'Final Assessment', to: '/student/assessment', icon: ICONS.exam },
-          { id: 'certificate', label: 'Certificate', to: '/student/certificate', icon: ICONS.award },
-          { id: 'resources', label: 'Resources', to: '/student/resources', icon: ICONS.list },
-        ],
-      },
-      {
-        title: 'Publish',
-        items: [
-          { id: 'papers', label: 'Discover Papers', to: '/student/papers', icon: ICONS.papers },
-          { id: 'submit', label: 'Submit Paper', to: '/student/submit', icon: ICONS.plus },
-        ],
-      },
-      {
-        title: 'Account',
-        items: [
-          { id: 'notifications', label: 'Notifications', to: '/student/notifications', icon: ICONS.bell, badge: 2 },
-          { id: 'profile', label: 'Profile', to: '/student/profile', icon: ICONS.user },
-          { id: 'settings', label: 'Settings', to: '/student/settings', icon: ICONS.settings },
-        ],
-      },
-    ],
-  },
   reviewer: {
     role: 'Reviewer',
     user: { name: 'Dr. Lim Wei Ping', initials: 'LW', role: 'Senior Reviewer · UM' },
