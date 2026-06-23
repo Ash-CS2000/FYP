@@ -26,7 +26,7 @@ export default function StudentProgress() {
   const awaitingPublication = progress.assessment.passed && !progress.certificate;
 
   return (
-    <AppShell role="student" searchPlaceholder="Search progress, units, quiz scores...">
+    <AppShell role="author" searchPlaceholder="Search progress, units, quiz scores...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Training Progress</span>
@@ -34,13 +34,13 @@ export default function StudentProgress() {
           <p className="page-subtitle">Track your units, quiz scores, writing exercises, and certificate status.</p>
         </div>
         {allDone && !progress.assessment.passed && (
-          <Link to="/student/assessment" className="btn btn-primary">Take Final Assessment →</Link>
+          <Link to="/author/assessment" className="btn btn-primary">Take Final Assessment →</Link>
         )}
         {awaitingPublication && (
-          <Link to="/student/submit" className="btn btn-primary">Submit Your Paper →</Link>
+          <Link to="/author/submit" className="btn btn-primary">Submit Your Paper →</Link>
         )}
         {progress.certificate && (
-          <Link to="/student/certificate" className="btn btn-primary">View Certificate →</Link>
+          <Link to="/author/certificate" className="btn btn-primary">View Certificate →</Link>
         )}
       </div>
 
@@ -97,7 +97,7 @@ export default function StudentProgress() {
               </div>
             </div>
           </div>
-          <Link to="/student/submit" className="btn btn-primary btn-sm">Submit Your Paper →</Link>
+          <Link to="/author/submit" className="btn btn-primary btn-sm">Submit Your Paper →</Link>
         </div>
       )}
 

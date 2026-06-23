@@ -1,5 +1,5 @@
 export const ROLE_HOME = {
-  author: '/author/dashboard',
+  author: '/author/training',
   reviewer: '/reviewer/dashboard',
   editor: '/editor/dashboard',
   admin: '/admin/dashboard',

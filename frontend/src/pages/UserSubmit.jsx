@@ -33,7 +33,7 @@ export default function UserSubmit() {
   if (!canSubmit) {
     const unitsPercent = Math.round((completedUnits / TRAINING_UNITS.length) * 100);
     return (
-      <AppShell role="student" searchPlaceholder="Search...">
+      <AppShell role="author" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Submit Research</span>
@@ -63,8 +63,8 @@ export default function UserSubmit() {
           </div>
 
           <div className="row" style={{ marginTop: 18, gap: 12 }}>
-            <Link to="/student/training" className="btn btn-primary">Continue Training →</Link>
-            <Link to="/student/assessment" className="btn btn-ghost">Go to Final Assessment</Link>
+            <Link to="/author/training" className="btn btn-primary">Continue Training →</Link>
+            <Link to="/author/assessment" className="btn btn-ghost">Go to Final Assessment</Link>
           </div>
         </div>
       </AppShell>
@@ -83,15 +83,15 @@ export default function UserSubmit() {
         'Paper submitted — and that completes your certification! Your training ' +
           'certificate has been issued. Reviewers will follow up on the paper itself.',
       );
-      navigate('/student/certificate');
+      navigate('/author/certificate');
       return;
     }
     alert('Paper submitted successfully! Our reviewers will be in touch.');
-    navigate('/student/papers');
+    navigate('/author/papers');
   };
 
   return (
-    <AppShell role="student" searchPlaceholder="Search...">
+    <AppShell role="author" searchPlaceholder="Search...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">New Submission</span>

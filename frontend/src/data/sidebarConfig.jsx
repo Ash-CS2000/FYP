@@ -25,20 +25,30 @@ export const SIDEBAR_CONFIG = {
     user: { name: 'Ahmad Razif', initials: 'AR', role: 'Computer Science · UTM' },
     sections: [
       {
+        title: 'Training',
+        items: [
+          { id: 'training',    label: 'Training Modules',  to: '/author/training',    icon: ICONS.book },
+          { id: 'progress',    label: 'My Progress',       to: '/author/progress',    icon: ICONS.done },
+          { id: 'assessment',  label: 'Final Assessment',  to: '/author/assessment',  icon: ICONS.exam },
+          { id: 'certificate', label: 'Certificate',       to: '/author/certificate', icon: ICONS.award },
+          { id: 'resources',   label: 'Resources',         to: '/author/resources',   icon: ICONS.list },
+        ],
+      },
+      {
         title: 'Workspace',
         items: [
-          { id: 'dashboard', label: 'Dashboard', to: '/author/dashboard', icon: ICONS.dashboard },
-          { id: 'papers', label: 'My Papers', to: '/author/papers', icon: ICONS.papers },
-          { id: 'submit', label: 'Submit Paper', to: '/author/submit', icon: ICONS.plus },
-          { id: 'revision', label: 'Revisions', to: '/author/revision', icon: ICONS.refresh, badge: 1 },
+          { id: 'dashboard', label: 'Dashboard',   to: '/author/dashboard', icon: ICONS.dashboard },
+          { id: 'papers',    label: 'My Papers',   to: '/author/papers',    icon: ICONS.papers },
+          { id: 'submit',    label: 'Submit Paper', to: '/author/submit',    icon: ICONS.plus },
+          { id: 'revision',  label: 'Revisions',   to: '/author/revision',  icon: ICONS.refresh, badge: 1 },
         ],
       },
       {
         title: 'Account',
         items: [
           { id: 'notifications', label: 'Notifications', to: '/author/notifications', icon: ICONS.bell, badge: 3 },
-          { id: 'profile', label: 'Profile', to: '/author/profile', icon: ICONS.user },
-          { id: 'settings', label: 'Settings', to: '/author/settings', icon: ICONS.settings },
+          { id: 'profile',       label: 'Profile',       to: '/author/profile',       icon: ICONS.user },
+          { id: 'settings',      label: 'Settings',      to: '/author/settings',      icon: ICONS.settings },
         ],
       },
     ],

@@ -102,18 +102,6 @@ const EXTENDED_ROLES = [
       </svg>
     ),
   },
-  {
-    id:        'student',
-    label:     'Student',
-    desc:      'Verify your student status to access institution-specific resources and training.',
-    note:      'Instant access',
-    noteColor: 'var(--teal-700)',
-    icon: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
-      </svg>
-    ),
-  },
 ];
 
 // ── Password strength helper ──────────────────────────────────────────────────

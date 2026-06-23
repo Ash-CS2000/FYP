@@ -20,7 +20,7 @@ export default function Certificate() {
     // Passed the assessment but has not yet submitted the required paper.
     if (progress.assessment.passed && pub.status === 'pending') {
       return (
-        <AppShell role="student" searchPlaceholder="Search...">
+        <AppShell role="author" searchPlaceholder="Search...">
           <div className="page-header fade-up">
             <div>
               <span className="eyebrow">Certificate</span>
@@ -47,8 +47,8 @@ export default function Certificate() {
             </div>
 
             <div className="row" style={{ marginTop: 18, gap: 12 }}>
-              <Link to="/student/submit" className="btn btn-primary">Submit Your Paper →</Link>
-              <Link to="/student/progress" className="btn btn-ghost">View Progress</Link>
+              <Link to="/author/submit" className="btn btn-primary">Submit Your Paper →</Link>
+              <Link to="/author/progress" className="btn btn-ghost">View Progress</Link>
             </div>
           </div>
         </AppShell>
@@ -56,7 +56,7 @@ export default function Certificate() {
     }
 
     return (
-      <AppShell role="student" searchPlaceholder="Search...">
+      <AppShell role="author" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Certificate</span>
@@ -68,14 +68,14 @@ export default function Certificate() {
           <div className="unit-locked-icon">🎓</div>
           <h2>No certificate yet</h2>
           <p>Pass the final assessment and submit your research paper, and your certificate will appear here, ready to view and print.</p>
-          <Link to="/student/training" className="btn btn-primary">Go to Training →</Link>
+          <Link to="/author/training" className="btn btn-primary">Go to Training →</Link>
         </div>
       </AppShell>
     );
   }
 
   return (
-    <AppShell role="student" searchPlaceholder="Search...">
+    <AppShell role="author" searchPlaceholder="Search...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Certificate</span>
@@ -128,8 +128,8 @@ export default function Certificate() {
           </div>
         </div>
         <div className="row" style={{ gap: 12 }}>
-          <Link to="/student/submit" className="btn btn-primary">Submit Your First Paper →</Link>
-          <Link to="/student/papers" className="btn btn-ghost">Browse Published Papers</Link>
+          <Link to="/author/submit" className="btn btn-primary">Submit Your First Paper →</Link>
+          <Link to="/author/papers" className="btn btn-ghost">Browse Published Papers</Link>
         </div>
       </div>
     </AppShell>

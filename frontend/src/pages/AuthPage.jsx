@@ -22,8 +22,7 @@ export default function AuthPage({ initialTab = 'signin' }) {
 
   // ── Role → dashboard route ──────────────────────────────────────────
   const ROLE_HOME = {
-    student:  '/student/dashboard',
-    author:   '/author/dashboard',
+    author:   '/author/training',
     reviewer: '/reviewer/dashboard',
     editor:   '/editor/dashboard',
     admin:    '/admin/dashboard',

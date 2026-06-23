@@ -37,7 +37,7 @@ export default function UserPapers() {
   }, [query, area]);
 
   return (
-    <AppShell role="student" searchPlaceholder="Search research topics...">
+    <AppShell role="author" searchPlaceholder="Search research topics...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Research Discovery</span>

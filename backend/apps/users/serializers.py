@@ -50,7 +50,7 @@ class RegisterSerializer(serializers.Serializer):
       - full_name    (required)
       - email        (required)
       - password     (required, min 8 chars)
-      - role         (required: student | author | reviewer)
+      - role         (required: author | reviewer)
       - institution  (optional)
     """
     full_name = serializers.CharField(required=True, max_length=150)
@@ -60,7 +60,7 @@ class RegisterSerializer(serializers.Serializer):
     )
     role = serializers.ChoiceField(
         choices=UserProfile.Role.choices,
-        default=UserProfile.Role.STUDENT,
+        default=UserProfile.Role.AUTHOR,
     )
     institution = serializers.CharField(required=False, allow_blank=True, max_length=255)
 
@@ -85,7 +85,6 @@ class RegisterSerializer(serializers.Serializer):
     def validate_role(self, value):
         # Editor and Admin cannot self-register
         allowed = {
-            UserProfile.Role.STUDENT,
             UserProfile.Role.AUTHOR,
             UserProfile.Role.REVIEWER,
         }

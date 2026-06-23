@@ -130,7 +130,7 @@ export default function TrainingModule() {
   const unitDone = isUnitComplete(selectedUnit, progress);
 
   return (
-    <AppShell role="student" searchPlaceholder="Search lessons, units, quiz topics...">
+    <AppShell role="author" searchPlaceholder="Search lessons, units, quiz topics...">
       <div className="lms-toolbar fade-up">
         <div className="lms-toolbar-id">
           <span className="lms-toolbar-eyebrow">Student Training</span>
@@ -145,11 +145,11 @@ export default function TrainingModule() {
         </div>
         <div className="lms-toolbar-action">
           {progress.certificate ? (
-            <Link to="/student/certificate" className="btn btn-primary btn-sm">View Certificate →</Link>
+            <Link to="/author/certificate" className="btn btn-primary btn-sm">View Certificate →</Link>
           ) : progress.assessment.passed ? (
-            <Link to="/student/submit" className="btn btn-primary btn-sm">Submit Your Paper →</Link>
+            <Link to="/author/submit" className="btn btn-primary btn-sm">Submit Your Paper →</Link>
           ) : overall.allDone ? (
-            <Link to="/student/assessment" className="btn btn-primary btn-sm">Take Final Assessment →</Link>
+            <Link to="/author/assessment" className="btn btn-primary btn-sm">Take Final Assessment →</Link>
           ) : (
             <span className="lms-toolbar-hint">
               {TRAINING_UNITS.length - overall.completedUnits} module{TRAINING_UNITS.length - overall.completedUnits === 1 ? '' : 's'} to the assessment

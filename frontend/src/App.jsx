@@ -4,7 +4,6 @@ import AboutPage from './pages/AboutPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import AuthorDashboard from './pages/AuthorDashboard.jsx';
-import SubmitPaper from './pages/SubmitPaper.jsx';
 import MyPapers from './pages/MyPapers.jsx';
 import Revision from './pages/Revision.jsx';
 import TrainingModule from './pages/TrainingModule.jsx';
@@ -41,31 +40,29 @@ export default function App() {
       <Route path="/register" element={<RegisterPage />} />
 
       {/* Author */}
-      <Route path="/author" element={<Navigate to="/author/dashboard" replace />} />
+      <Route path="/author" element={<Navigate to="/author/training" replace />} />
       <Route path="/author/dashboard" element={<AuthorDashboard />} />
-      <Route path="/author/papers" element={<MyPapers />} />
-      <Route path="/author/submit" element={<SubmitPaper />} />
+      <Route path="/author/papers" element={<UserPapers />} />
+      <Route path="/author/submit" element={<UserSubmit />} />
       <Route path="/author/revision" element={<Revision />} />
+      <Route path="/author/training" element={<TrainingModule />} />
+      <Route path="/author/progress" element={<StudentProgress />} />
+      <Route path="/author/assessment" element={<FinalAssessment />} />
+      <Route path="/author/certificate" element={<Certificate />} />
+      <Route path="/author/resources" element={<StudentResources />} />
       <Route path="/author/notifications" element={<Notifications role="author" />} />
       <Route path="/author/profile" element={<Profile role="author" />} />
       <Route path="/author/settings" element={<Settings role="author" />} />
 
-      {/* Student system */}
-      <Route path="/student" element={<Navigate to="/student/papers" replace />} />
-      <Route path="/student/dashboard" element={<Navigate to="/student/papers" replace />} />
-
-      <Route path="/student/papers" element={<UserPapers />} />
-      <Route path="/student/training" element={<TrainingModule />} />
-      <Route path="/student/assessment" element={<FinalAssessment />} />
-      <Route path="/student/certificate" element={<Certificate />} />
-      <Route path="/student/submit" element={<UserSubmit />} />
-      <Route path="/student/progress" element={<StudentProgress />} />
-      <Route path="/student/resources" element={<StudentResources />} />
-      <Route path="/student/notifications" element={<Notifications role="student" />} />
-      <Route path="/student/profile" element={<Profile role="student" />} />
-      <Route path="/student/settings" element={<Settings role="student" />} />
-
-      <Route path="/student/*" element={<Navigate to="/student/papers" replace />} />
+      {/* Legacy student URLs → redirect to author equivalents */}
+      <Route path="/student/training" element={<Navigate to="/author/training" replace />} />
+      <Route path="/student/progress" element={<Navigate to="/author/progress" replace />} />
+      <Route path="/student/assessment" element={<Navigate to="/author/assessment" replace />} />
+      <Route path="/student/certificate" element={<Navigate to="/author/certificate" replace />} />
+      <Route path="/student/submit" element={<Navigate to="/author/submit" replace />} />
+      <Route path="/student/resources" element={<Navigate to="/author/resources" replace />} />
+      <Route path="/student/papers" element={<Navigate to="/author/papers" replace />} />
+      <Route path="/student/*" element={<Navigate to="/author/training" replace />} />
 
       {/* Reviewer */}
       <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />

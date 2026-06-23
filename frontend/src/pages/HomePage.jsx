@@ -521,7 +521,7 @@ export default function HomePage() {
               <Link to="/resources">Resources</Link>
               <Link to="/register">Create Account</Link>
               <Link to="/login">Sign In</Link>
-              <Link to="/student/training">Training Modules</Link>
+              <Link to="/author/training">Training Modules</Link>
             </div>
 
             <div className="footer-col">

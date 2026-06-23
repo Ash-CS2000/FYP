@@ -107,7 +107,7 @@ export default function FinalAssessment() {
   // ---- Locked state --------------------------------------------------------
   if (!unlocked) {
     return (
-      <AppShell role="student" searchPlaceholder="Search...">
+      <AppShell role="author" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Final Assessment</span>
@@ -124,7 +124,7 @@ export default function FinalAssessment() {
             The final assessment unlocks once you have finished every training unit — all lessons read,
             all quizzes passed, and all writing exercises submitted.
           </p>
-          <Link to="/student/training" className="btn btn-primary">Back to Training →</Link>
+          <Link to="/author/training" className="btn btn-primary">Back to Training →</Link>
         </div>
       </AppShell>
     );
@@ -133,7 +133,7 @@ export default function FinalAssessment() {
   // ---- Result state --------------------------------------------------------
   if (result) {
     return (
-      <AppShell role="student" searchPlaceholder="Search...">
+      <AppShell role="author" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Final Assessment</span>
@@ -169,8 +169,8 @@ export default function FinalAssessment() {
                   );
                 })()}
                 <div className="row" style={{ marginTop: 16 }}>
-                  <Link to="/student/submit" className="btn btn-primary">Submit Your Paper →</Link>
-                  <Link to="/student/certificate" className="btn btn-ghost">View Certificate Status</Link>
+                  <Link to="/author/submit" className="btn btn-primary">Submit Your Paper →</Link>
+                  <Link to="/author/certificate" className="btn btn-ghost">View Certificate Status</Link>
                 </div>
               </>
             ) : (
@@ -198,7 +198,7 @@ export default function FinalAssessment() {
   // ---- Intro state ---------------------------------------------------------
   if (!started) {
     return (
-      <AppShell role="student" searchPlaceholder="Search...">
+      <AppShell role="author" searchPlaceholder="Search...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Final Assessment</span>
@@ -245,7 +245,7 @@ export default function FinalAssessment() {
 
   // ---- Active exam state ---------------------------------------------------
   return (
-    <AppShell role="student" searchPlaceholder="Search...">
+    <AppShell role="author" searchPlaceholder="Search...">
       <div className="exam-bar fade-up">
         <div>
           <span className="eyebrow">Final Assessment in progress</span>

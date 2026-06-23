@@ -38,7 +38,7 @@ const RESOURCE_GROUPS = [
 
 export default function StudentResources() {
   return (
-    <AppShell role="student" searchPlaceholder="Search templates, checklists, and guides...">
+    <AppShell role="author" searchPlaceholder="Search templates, checklists, and guides...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Student Resources</span>

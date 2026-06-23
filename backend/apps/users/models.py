@@ -4,7 +4,6 @@ from django.db import models
 
 class UserProfile(models.Model):
     class Role(models.TextChoices):
-        STUDENT = 'student', 'Student'
         AUTHOR = 'author', 'Author'
         REVIEWER = 'reviewer', 'Reviewer'
         EDITOR = 'editor', 'Editor'
