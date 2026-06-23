@@ -33,6 +33,19 @@ export default function LoginPage() {
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const navigate  = useNavigate();
+
+  async function handleOrcidClick() {
+    setError('');
+    try {
+      const res  = await fetch(`${API_URL}/api/users/orcid/url/`);
+      const data = await res.json();
+      if (!res.ok) throw new Error('Could not initiate ORCID sign-in.');
+      sessionStorage.setItem('orcid_state', data.state);
+      window.location.href = data.auth_url;
+    } catch (err) {
+      setError(err.message);
+    }
+  }
   const location  = useLocation();
   const justRegistered = location.state?.registered;
 
@@ -97,6 +110,11 @@ export default function LoginPage() {
         .auth-switch { text-align:center; font-size:13.5px; color:var(--ink-600); margin-top:20px; }
         .auth-error   { background:var(--red-50); border:1px solid #f5c6c6; border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--red-700); }
         .auth-success { background:var(--teal-50); border:1px solid #a8dcc8; border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--teal-800); }
+        .divider { display:flex; align-items:center; gap:12px; margin:18px 0; color:var(--ink-400); font-size:12px; }
+        .divider::before, .divider::after { content:""; flex:1; height:1px; background:var(--ink-200); }
+        .orcid-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:12px; border:1.5px solid #a6ce39; border-radius:var(--r-md); background:#a6ce39; color:#1a1a1a; font-size:14px; font-weight:600; cursor:pointer; transition:all var(--t-fast); }
+        .orcid-btn:hover { background:#91b82e; border-color:#91b82e; transform:translateY(-1px); box-shadow:0 4px 12px rgba(166,206,57,0.35); }
+        .orcid-badge { width:24px; height:24px; border-radius:50%; background:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#a6ce39; flex-shrink:0; letter-spacing:-0.02em; }
         @media(max-width:900px){ .auth-page{grid-template-columns:1fr;} .auth-brand{display:none;} .auth-form-side{padding:40px 24px;} }
       `}</style>
 
@@ -187,6 +205,13 @@ export default function LoginPage() {
               {loading ? 'Signing in…' : 'Sign In →'}
             </button>
           </form>
+
+          <div className="divider">or</div>
+
+          <button type="button" className="orcid-btn" onClick={handleOrcidClick}>
+            <span className="orcid-badge">iD</span>
+            Sign in with ORCID iD
+          </button>
 
           <p className="auth-switch">
             Don't have an account?{' '}
