@@ -47,11 +47,18 @@ class UserSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.Serializer):
     """
     Fields frontend sends:
-      - full_name    (required)
-      - email        (required)
-      - password     (required, min 8 chars)
-      - role         (required: author | reviewer)
-      - institution  (optional)
+      - full_name         (required)
+      - email             (required)
+      - password          (required, min 8 chars)
+      - role              (required: author | reviewer)
+      - institution       (optional)
+      - affiliation_type  (optional: student | professional)
+      - student_level     (optional)
+      - professional_type (optional)
+      - programme         (optional)
+      - research_areas    (optional)
+      - state             (optional — Malaysian state)
+      - date_of_birth     (optional — YYYY-MM-DD)
     """
     full_name = serializers.CharField(required=True, max_length=150)
     email = serializers.EmailField(required=True)
@@ -62,7 +69,14 @@ class RegisterSerializer(serializers.Serializer):
         choices=UserProfile.Role.choices,
         default=UserProfile.Role.AUTHOR,
     )
-    institution = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    institution       = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    affiliation_type  = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    student_level     = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    professional_type = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    programme         = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    research_areas    = serializers.CharField(required=False, allow_blank=True)
+    state             = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    date_of_birth     = serializers.DateField(required=False, allow_null=True)
 
     # ── Field validation ─────────────────────────────────────────────────────
 
@@ -95,18 +109,23 @@ class RegisterSerializer(serializers.Serializer):
     # ── Create ───────────────────────────────────────────────────────────────
 
     def create(self, validated_data):
-        full_name = validated_data.pop('full_name')
-        password = validated_data.pop('password')
-        email = validated_data.pop('email')
-        role = validated_data.pop('role', UserProfile.Role.STUDENT)
-        institution = validated_data.pop('institution', '')
+        full_name         = validated_data.pop('full_name')
+        password          = validated_data.pop('password')
+        email             = validated_data.pop('email')
+        role              = validated_data.pop('role', UserProfile.Role.AUTHOR)
+        institution       = validated_data.pop('institution', '')
+        affiliation_type  = validated_data.pop('affiliation_type', '')
+        student_level     = validated_data.pop('student_level', '')
+        professional_type = validated_data.pop('professional_type', '')
+        programme         = validated_data.pop('programme', '')
+        research_areas    = validated_data.pop('research_areas', '')
+        state             = validated_data.pop('state', '')
+        date_of_birth     = validated_data.pop('date_of_birth', None)
 
-        # Split full name into first + last
         name_parts = full_name.split(maxsplit=1)
         first_name = name_parts[0]
-        last_name = name_parts[1] if len(name_parts) > 1 else ''
+        last_name  = name_parts[1] if len(name_parts) > 1 else ''
 
-        # Create Django user
         user = User.objects.create_user(
             username=email,
             email=email,
@@ -115,8 +134,6 @@ class RegisterSerializer(serializers.Serializer):
             password=password,
         )
 
-        # Create profile
-        # Reviewers start as pending until admin approves
         status = (
             UserProfile.Status.PENDING
             if role == UserProfile.Role.REVIEWER
@@ -125,9 +142,16 @@ class RegisterSerializer(serializers.Serializer):
         UserProfile.objects.update_or_create(
             user=user,
             defaults={
-                'role': role,
-                'status': status,
-                'institution': institution,
+                'role':              role,
+                'status':            status,
+                'institution':       institution,
+                'affiliation_type':  affiliation_type,
+                'student_level':     student_level,
+                'professional_type': professional_type,
+                'programme':         programme,
+                'research_areas':    research_areas,
+                'state':             state,
+                'date_of_birth':     date_of_birth,
             },
         )
         return user
