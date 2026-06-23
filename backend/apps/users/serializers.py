@@ -79,9 +79,12 @@ class RegisterSerializer(serializers.Serializer):
     student_level     = serializers.CharField(required=False, allow_blank=True, max_length=50)
     professional_type = serializers.CharField(required=False, allow_blank=True, max_length=50)
     programme         = serializers.CharField(required=False, allow_blank=True, max_length=255)
-    research_areas    = serializers.CharField(required=False, allow_blank=True)
-    state             = serializers.CharField(required=False, allow_blank=True, max_length=100)
-    date_of_birth     = serializers.DateField(required=False, allow_null=True)
+    research_areas      = serializers.CharField(required=False, allow_blank=True)
+    state               = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    date_of_birth       = serializers.DateField(required=False, allow_null=True)
+    expertise_areas     = serializers.CharField(required=False, allow_blank=True)
+    availability_status = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    degree              = serializers.CharField(required=False, allow_blank=True, max_length=100)
 
     # ── Field validation ─────────────────────────────────────────────────────
 
@@ -123,9 +126,12 @@ class RegisterSerializer(serializers.Serializer):
         student_level     = validated_data.pop('student_level', '')
         professional_type = validated_data.pop('professional_type', '')
         programme         = validated_data.pop('programme', '')
-        research_areas    = validated_data.pop('research_areas', '')
-        state             = validated_data.pop('state', '')
-        date_of_birth     = validated_data.pop('date_of_birth', None)
+        research_areas      = validated_data.pop('research_areas', '')
+        state               = validated_data.pop('state', '')
+        date_of_birth       = validated_data.pop('date_of_birth', None)
+        expertise_areas     = validated_data.pop('expertise_areas', '')
+        availability_status = validated_data.pop('availability_status', '')
+        degree              = validated_data.pop('degree', '')
 
         name_parts = full_name.split(maxsplit=1)
         first_name = name_parts[0]
@@ -150,11 +156,14 @@ class RegisterSerializer(serializers.Serializer):
                 'student_level':     student_level,
                 'professional_type': professional_type,
                 'programme':         programme,
-                'research_areas':    research_areas,
-                'state':             state,
-                'date_of_birth':     date_of_birth,
-                'roles':             [role],
-                'reviewer_status':   reviewer_status,
+                'research_areas':      research_areas,
+                'state':               state,
+                'date_of_birth':       date_of_birth,
+                'roles':               [role],
+                'reviewer_status':     reviewer_status,
+                'expertise_areas':     expertise_areas,
+                'availability_status': availability_status,
+                'degree':              degree,
             },
         )
         return user

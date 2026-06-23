@@ -173,6 +173,10 @@ export default function RegisterPage() {
   const [affiliationType, setAffiliationType] = useState('student');
   const [myState, setMyState]                 = useState('');
   const [dateOfBirth, setDateOfBirth]         = useState('');
+  const [degree, setDegree]                   = useState('');
+  const [position, setPosition]               = useState('');
+  const [reviewerState, setReviewerState]     = useState('');
+  const [availability, setAvailability]       = useState('');
 
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -228,7 +232,14 @@ export default function RegisterPage() {
         body.state             = myState;
         if (dateOfBirth) body.date_of_birth = dateOfBirth;
       }
-      if (role === 'reviewer' && expertiseAreas) body.expertise_areas = expertiseAreas;
+      if (role === 'reviewer') {
+        body.expertise_areas     = expertiseAreas;
+        body.degree              = degree;
+        body.programme           = position;
+        body.state               = reviewerState;
+        body.availability_status = availability;
+        if (dateOfBirth) body.date_of_birth = dateOfBirth;
+      }
 
       const res  = await fetch(`${API_URL}/api/auth/register/`, {
         method:  'POST',
@@ -627,9 +638,62 @@ export default function RegisterPage() {
                     onChange={e => setEmail(e.target.value)} autoComplete="email" required />
                 </div>
                 <div className="field">
+                  <label className="field-label">Date of birth <span className="req">*</span></label>
+                  <input className="field-input" type="date" value={dateOfBirth}
+                    onChange={e => setDateOfBirth(e.target.value)} required />
+                  <div className="field-hint">Used for age verification purposes.</div>
+                </div>
+                <div className="field">
+                  <label className="field-label">Academic degree <span className="req">*</span></label>
+                  <select className="field-select" value={degree} onChange={e => setDegree(e.target.value)} required>
+                    <option value="">Select degree…</option>
+                    <option value="bachelor">Bachelor's Degree</option>
+                    <option value="master">Master's Degree</option>
+                    <option value="phd">PhD / Doctorate</option>
+                    <option value="professor">Professor / Associate Professor</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="field">
                   <label className="field-label">Institution</label>
                   <input className="field-input" type="text" placeholder="Universiti Malaya"
                     value={institution} onChange={e => setInstitution(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label className="field-label">Current position</label>
+                  <input className="field-input" type="text" placeholder="e.g. Senior Lecturer, Research Fellow"
+                    value={position} onChange={e => setPosition(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label className="field-label">State</label>
+                  <select className="field-select" value={reviewerState} onChange={e => setReviewerState(e.target.value)}>
+                    <option value="">Select state…</option>
+                    <option value="Johor">Johor</option>
+                    <option value="Kedah">Kedah</option>
+                    <option value="Kelantan">Kelantan</option>
+                    <option value="Melaka">Melaka</option>
+                    <option value="Negeri Sembilan">Negeri Sembilan</option>
+                    <option value="Pahang">Pahang</option>
+                    <option value="Perak">Perak</option>
+                    <option value="Perlis">Perlis</option>
+                    <option value="Pulau Pinang">Pulau Pinang</option>
+                    <option value="Sabah">Sabah</option>
+                    <option value="Sarawak">Sarawak</option>
+                    <option value="Selangor">Selangor</option>
+                    <option value="Terengganu">Terengganu</option>
+                    <option value="Kuala Lumpur">W.P. Kuala Lumpur</option>
+                    <option value="Labuan">W.P. Labuan</option>
+                    <option value="Putrajaya">W.P. Putrajaya</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label">Availability</label>
+                  <select className="field-select" value={availability} onChange={e => setAvailability(e.target.value)}>
+                    <option value="">Select availability…</option>
+                    <option value="available">Available</option>
+                    <option value="busy">Busy</option>
+                    <option value="on_leave">On Leave</option>
+                  </select>
                 </div>
                 <div className="field">
                   <label className="field-label">
