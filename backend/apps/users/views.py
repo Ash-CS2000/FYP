@@ -15,7 +15,7 @@ from .serializers import (
     UserSerializer,
 )
 from .throttles import AuthRateThrottle
-from .models import UserProfile
+from .models import UserProfile, UserRole
 
 User = get_user_model()
 
@@ -42,7 +42,6 @@ class EmailTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
 
-        # Reset progressive throttle count on successful login
         if response.status_code == 200:
             for throttle in self.get_throttles():
                 if hasattr(throttle, 'on_success'):
@@ -55,8 +54,6 @@ class LogoutView(APIView):
     """
     POST /api/auth/logout/
     Body: { refresh }
-    Blacklists the refresh token so it cannot be reused.
-    Requires: Authorization: Bearer <access_token>
     """
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [UserRateThrottle]
@@ -90,7 +87,7 @@ class MeView(APIView):
     PATCH /api/users/me/  → update own profile
     """
     permission_classes = [permissions.IsAuthenticated]
-    throttle_classes = [UserRateThrottle]  # 100/minute
+    throttle_classes = [UserRateThrottle]
 
     def get(self, request):
         return Response(UserSerializer(request.user).data)
@@ -116,12 +113,13 @@ class ApplyReviewerView(APIView):
     def post(self, request):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
-        if 'reviewer' in (profile.roles or []):
+        existing_role = UserRole.objects.filter(user=request.user, role=UserProfile.Role.REVIEWER).first()
+        if existing_role and existing_role.status == UserRole.Status.ACTIVE:
             return Response(
                 {'detail': 'You already hold the reviewer role.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if profile.reviewer_status == UserProfile.Status.PENDING:
+        if existing_role and existing_role.status == UserRole.Status.PENDING:
             return Response(
                 {'detail': 'Your reviewer application is already pending review.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -130,13 +128,12 @@ class ApplyReviewerView(APIView):
         expertise = request.data.get('expertise_areas', '').strip()
         if expertise:
             profile.expertise_areas = expertise
+            profile.save(update_fields=['expertise_areas'])
 
-        roles = list(profile.roles or [])
-        if 'reviewer' not in roles:
-            roles.append('reviewer')
-        profile.roles = roles
-        profile.reviewer_status = UserProfile.Status.PENDING
-        profile.save()
+        UserRole.objects.update_or_create(
+            user=request.user, role=UserProfile.Role.REVIEWER,
+            defaults={'status': UserRole.Status.PENDING},
+        )
 
         return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
 
@@ -162,19 +159,13 @@ class ReviewerApprovalView(APIView):
         except User.DoesNotExist:
             return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-        roles = list(profile.roles or [])
-
-        if action == 'approve':
-            profile.reviewer_status = UserProfile.Status.ACTIVE
-            if 'reviewer' not in roles:
-                roles.append('reviewer')
-        else:
-            profile.reviewer_status = UserProfile.Status.REJECTED
-            roles = [r for r in roles if r != 'reviewer']
-
-        profile.roles = roles
-        profile.save()
+        new_status = (
+            UserRole.Status.ACTIVE if action == 'approve' else UserRole.Status.REJECTED
+        )
+        UserRole.objects.update_or_create(
+            user=user, role=UserProfile.Role.REVIEWER,
+            defaults={'status': new_status},
+        )
 
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
 
@@ -183,7 +174,7 @@ class ReviewerApprovalView(APIView):
 
 class OrcidAuthUrlView(APIView):
     """
-    GET /api/users/orcid/url/
+    GET /api/users/orcid/url/?role=author|reviewer
     Returns the ORCID authorization URL + a state token.
     The frontend must store `state` (e.g. sessionStorage) and send it
     back in the callback request.
@@ -192,11 +183,15 @@ class OrcidAuthUrlView(APIView):
     throttle_classes = [AnonRateThrottle]
 
     def get(self, request):
+        role = request.query_params.get('role', UserProfile.Role.AUTHOR)
+        if role not in {UserProfile.Role.AUTHOR, UserProfile.Role.REVIEWER}:
+            role = UserProfile.Role.AUTHOR
+
         state = orcid_service.generate_state()
         state_hash = orcid_service.hash_state(state)
 
-        # Store hash server-side for 10 minutes — one-time use, CSRF protection
-        cache.set(f'orcid_state:{state_hash}', True, timeout=600)
+        # Store the requested role alongside the state hash — 10 min, one-time use
+        cache.set(f'orcid_state:{state_hash}', role, timeout=600)
 
         return Response({
             'auth_url': orcid_service.build_auth_url(state),
@@ -209,10 +204,11 @@ class OrcidCallbackView(APIView):
     POST /api/users/orcid/callback/
     Body: { code, state }
 
-    - If user is authenticated (Bearer token sent) → links ORCID iD to
-      their existing profile.
+    - If user is authenticated (Bearer token sent) → links ORCID iD and/or
+      adds the requested role to their existing account.
     - If user is NOT authenticated → creates a new account using the
-      ORCID record (or logs them in if that ORCID iD already exists).
+      ORCID record (or logs them in if that ORCID iD already exists),
+      with the requested role.
     """
     permission_classes = [permissions.AllowAny]
     throttle_classes = [AnonRateThrottle]
@@ -227,9 +223,10 @@ class OrcidCallbackView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Verify state (CSRF protection) — one-time use
+        # Verify state (CSRF protection) — one-time use, also carries requested role
         state_hash = orcid_service.hash_state(state)
-        if not cache.get(f'orcid_state:{state_hash}'):
+        requested_role = cache.get(f'orcid_state:{state_hash}')
+        if not requested_role:
             return Response(
                 {'detail': 'Invalid or expired state token.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -265,7 +262,7 @@ class OrcidCallbackView(APIView):
                 'last_name': ' '.join(token_data.get('name', '').split()[1:]) if token_data.get('name') else '',
             }
 
-        # ── Case 1: Logged-in user linking ORCID to their existing profile ──
+        # ── Case 1: Logged-in user linking ORCID / adding a role ────────────
         if request.user and request.user.is_authenticated:
             existing = User.objects.filter(profile__orcid_id=orcid_id).exclude(pk=request.user.pk).first()
             if existing:
@@ -275,16 +272,36 @@ class OrcidCallbackView(APIView):
                 )
 
             profile, _ = UserProfile.objects.get_or_create(user=request.user)
-            profile.orcid_id = orcid_id
-            profile.save(update_fields=['orcid_id'])
+            already_linked = bool(profile.orcid_id)
+
+            if not profile.orcid_id:
+                profile.orcid_id = orcid_id
+                profile.save(update_fields=['orcid_id'])
+
+            role_status = (
+                UserRole.Status.PENDING if requested_role == UserProfile.Role.REVIEWER
+                else UserRole.Status.ACTIVE
+            )
+            role_obj, role_created = UserRole.objects.get_or_create(
+                user=request.user, role=requested_role,
+                defaults={'status': role_status},
+            )
+
+            if already_linked and not role_created:
+                return Response({
+                    'detail': 'This ORCID iD is already registered with this role on your account.',
+                    'already_registered': True,
+                    'user': UserSerializer(request.user).data,
+                })
 
             return Response({
                 'detail': 'ORCID iD linked successfully.',
+                'already_registered': False,
                 'user': UserSerializer(request.user).data,
             })
 
-        # ── Case 2: Not logged in — find or create account ──────────────────
-        user, created = self._get_or_create_user(profile_data)
+        # ── Case 2: Not logged in — find existing-by-orcid/email, or create ─
+        user, created = self._get_or_create_user(profile_data, requested_role)
 
         refresh = RefreshToken.for_user(user)
         return Response(
@@ -298,42 +315,47 @@ class OrcidCallbackView(APIView):
         )
 
     @staticmethod
-    def _get_or_create_user(profile_data: dict):
+    def _get_or_create_user(profile_data: dict, requested_role: str):
         orcid_id = profile_data['orcid_id']
         email = profile_data.get('email')
+        role_status = (
+            UserRole.Status.PENDING if requested_role == UserProfile.Role.REVIEWER
+            else UserRole.Status.ACTIVE
+        )
 
-        # 1. Find by ORCID iD already linked
+        # 1. Already linked to this ORCID iD → ensure they have the requested role too
         existing = User.objects.filter(profile__orcid_id=orcid_id).first()
         if existing:
+            UserRole.objects.get_or_create(
+                user=existing, role=requested_role, defaults={'status': role_status},
+            )
             return existing, False
 
-        # 2. Find by email and link ORCID to that account
+        # 2. Found by email → link ORCID + add requested role
         if email:
             existing = User.objects.filter(email__iexact=email).first()
             if existing:
                 profile, _ = UserProfile.objects.get_or_create(user=existing)
-                profile.orcid_id = orcid_id
-                profile.save(update_fields=['orcid_id'])
+                if not profile.orcid_id:
+                    profile.orcid_id = orcid_id
+                    profile.save(update_fields=['orcid_id'])
+                UserRole.objects.get_or_create(
+                    user=existing, role=requested_role, defaults={'status': role_status},
+                )
                 return existing, False
 
-        # 3. Create a brand new account (ORCID-only, no password)
+        # 3. Brand new account
         if not email:
             email = f"orcid_{orcid_id.replace('-', '')}@orcid.placeholder"
 
         user = User.objects.create_user(
-            username=email,
-            email=email,
+            username=email, email=email,
             first_name=profile_data.get('first_name', ''),
             last_name=profile_data.get('last_name', ''),
         )
         UserProfile.objects.update_or_create(
             user=user,
-            defaults={
-                'role':            UserProfile.Role.AUTHOR,
-                'status':          UserProfile.Status.ACTIVE,
-                'orcid_id':        orcid_id,
-                'roles':           [UserProfile.Role.AUTHOR],
-                'reviewer_status': '',
-            },
+            defaults={'role': requested_role, 'status': UserProfile.Status.ACTIVE, 'orcid_id': orcid_id},
         )
+        UserRole.objects.create(user=user, role=requested_role, status=role_status)
         return user, True

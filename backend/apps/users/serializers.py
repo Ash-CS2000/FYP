@@ -3,7 +3,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import UserProfile
+from .models import UserProfile, UserRole
 
 User = get_user_model()
 
@@ -16,8 +16,8 @@ class UserSerializer(serializers.ModelSerializer):
         source='profile.institution', required=False, allow_blank=True
     )
 
-    roles           = serializers.JSONField(source='profile.roles', read_only=True)
-    reviewer_status = serializers.CharField(source='profile.reviewer_status', read_only=True)
+    roles = serializers.SerializerMethodField()
+    reviewer_status = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -37,6 +37,13 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_name(self, obj):
         return obj.get_full_name() or obj.email
+
+    def get_roles(self, obj):
+        return list(obj.roles.filter(status=UserRole.Status.ACTIVE).values_list('role', flat=True))
+
+    def get_reviewer_status(self, obj):
+        reviewer_role = obj.roles.filter(role=UserProfile.Role.REVIEWER).first()
+        return reviewer_role.status if reviewer_role else ''
 
     def update(self, instance, validated_data):
         profile_data = validated_data.pop('profile', {})
@@ -145,7 +152,6 @@ class RegisterSerializer(serializers.Serializer):
             password=password,
         )
 
-        reviewer_status = UserProfile.Status.PENDING if role == UserProfile.Role.REVIEWER else ''
         UserProfile.objects.update_or_create(
             user=user,
             defaults={
@@ -159,13 +165,18 @@ class RegisterSerializer(serializers.Serializer):
                 'research_areas':      research_areas,
                 'state':               state,
                 'date_of_birth':       date_of_birth,
-                'roles':               [role],
-                'reviewer_status':     reviewer_status,
                 'expertise_areas':     expertise_areas,
                 'availability_status': availability_status,
                 'degree':              degree,
             },
         )
+
+        role_status = (
+            UserRole.Status.PENDING if role == UserProfile.Role.REVIEWER
+            else UserRole.Status.ACTIVE
+        )
+        UserRole.objects.create(user=user, role=role, status=role_status)
+
         return user
 
     def to_representation(self, instance):
@@ -184,19 +195,16 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         self.fields[self.username_field].required = False
 
     def validate(self, attrs):
-        # Accept email field or username field
         login = attrs.get('email') or attrs.get(self.username_field, '')
         if not login:
             raise serializers.ValidationError({'email': 'Email is required.'})
 
-        # Find user by email
         user = User.objects.filter(email__iexact=login.strip().lower()).first()
         attrs[self.username_field] = user.get_username() if user else login
         attrs.pop('email', None)
 
         data = super().validate(attrs)
 
-        # Check if account is suspended
         profile = getattr(self.user, 'profile', None)
         if profile and profile.status == UserProfile.Status.REJECTED:
             raise serializers.ValidationError({'detail': 'Your account has been suspended.'})
@@ -208,9 +216,14 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     def get_token(cls, user):
         token = super().get_token(user)
         profile = getattr(user, 'profile', None)
-        token['email']           = user.email
-        token['role']            = profile.role            if profile else ''
-        token['status']          = profile.status          if profile else ''
-        token['roles']           = profile.roles           if profile else []
-        token['reviewer_status'] = profile.reviewer_status if profile else ''
+        active_roles = list(
+            user.roles.filter(status=UserRole.Status.ACTIVE).values_list('role', flat=True)
+        )
+        reviewer_role = user.roles.filter(role=UserProfile.Role.REVIEWER).first()
+
+        token['email'] = user.email
+        token['role'] = profile.role if profile else ''
+        token['status'] = profile.status if profile else ''
+        token['roles'] = active_roles
+        token['reviewer_status'] = reviewer_role.status if reviewer_role else ''
         return token

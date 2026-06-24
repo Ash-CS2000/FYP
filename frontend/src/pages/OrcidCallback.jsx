@@ -3,14 +3,18 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 
 const API_URL = 'https://fyp-production-6d7f.up.railway.app';
 
-const ROLE_ROUTES = {
-  user:     '/',
-  student:  '/',
-  author:   '/',
-  reviewer: '/',
-  editor:   '/',
-  admin:    '/',
+const WORKSPACE_ROUTES = {
+  author:   '/author/dashboard',
+  reviewer: '/reviewer/dashboard',
+  editor:   '/editor/dashboard',
+  admin:    '/admin/dashboard',
 };
+
+function landingRoute(user) {
+  const roles = user?.roles || [];
+  if (roles.length > 1) return '/select-workspace';
+  return WORKSPACE_ROUTES[roles[0] || user?.role] || '/';
+}
 
 export default function OrcidCallback() {
   const [searchParams] = useSearchParams();
@@ -64,16 +68,22 @@ export default function OrcidCallback() {
           throw new Error(data?.detail || 'ORCID authentication failed.');
         }
 
-        if (data.detail === 'ORCID iD linked successfully.') {
+        // Logged-in user linking/adding a role via ORCID (no new tokens issued)
+        if (data.detail && data.user && !data.access) {
           localStorage.setItem('user', JSON.stringify(data.user));
-          navigate('/profile', { state: { orcidLinked: true } });
+          navigate(landingRoute(data.user), {
+            state: data.already_registered
+              ? { message: 'This ORCID iD is already registered for this role.' }
+              : { orcidLinked: true },
+          });
           return;
         }
 
+        // Fresh login/registration via ORCID (new tokens issued)
         localStorage.setItem('access', data.access);
         localStorage.setItem('refresh', data.refresh);
         localStorage.setItem('user', JSON.stringify(data.user));
-        navigate(ROLE_ROUTES[data.user?.role] || '/');
+        navigate(landingRoute(data.user));
 
       } catch (err) {
         setStatus('error');
