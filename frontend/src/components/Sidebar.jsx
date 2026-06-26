@@ -1,17 +1,26 @@
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { getMergedSidebar } from '../data/sidebarConfig.jsx';
 import { clearDemoSession, getDemoSession, ROLE_HOME, ROLE_LABELS } from '../data/demoAccounts.js';
+import { getStoredUser, getInitials } from '../utils/user.js';
 
 export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
   const navigate = useNavigate();
 
-  const storedUser = (() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } })();
+  const storedUser = getStoredUser();
   const roles = storedUser?.roles?.length ? storedUser.roles : [role];
   const cfg = getMergedSidebar(roles);
   if (!cfg) return null;
 
   const session = getDemoSession();
-  const user = session || cfg.user;
+  const user = session
+    ? session
+    : storedUser
+      ? {
+          name: storedUser.name,
+          initials: getInitials(storedUser),
+          role: storedUser.institution || cfg.role,
+        }
+      : cfg.user;
   const availableRoles = session?.roles?.length ? session.roles : [role];
   const canSwitchRole = availableRoles.length > 1;
 
@@ -85,7 +94,7 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
           <div className="sidebar-avatar">{user.initials}</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">{user.name}</div>
-            <div className="sidebar-user-role">{cfg.user.role}</div>
+            <div className="sidebar-user-role">{user.role}</div>
           </div>
         </div>
         <button type="button" className="sidebar-signout" title="Sign out" onClick={handleSignOut}>

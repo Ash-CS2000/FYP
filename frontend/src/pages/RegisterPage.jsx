@@ -94,8 +94,8 @@ const EXTENDED_ROLES = [
     id:        'reviewer',
     label:     'Reviewer',
     desc:      'Evaluate assigned manuscripts and contribute to academic quality.',
-    note:      'Subject to admin approval',
-    noteColor: 'var(--amber-700)',
+    note:      'Instant access',
+    noteColor: 'var(--teal-700)',
     icon: (
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
@@ -608,14 +608,7 @@ export default function RegisterPage() {
                 Back
               </button>
               <h1 className="auth-form-title">Register as a <em>reviewer</em>.</h1>
-              <p className="auth-form-sub">Provide your credentials to apply for reviewer access.</p>
-
-              <div className="info-box">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <span>Reviewer accounts require admin approval before activation. You'll be notified by email once your application is reviewed.</span>
-              </div>
+              <p className="auth-form-sub">Provide your credentials to set up your reviewer account.</p>
 
               <button type="button" className="orcid-btn" onClick={handleOrcidClick}>
                 <span className="orcid-badge">iD</span>

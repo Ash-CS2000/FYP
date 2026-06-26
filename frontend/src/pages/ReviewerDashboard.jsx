@@ -1,13 +1,15 @@
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import { getStoredUser, getFirstName } from '../utils/user.js';
 
 export default function ReviewerDashboard() {
+  const firstName = getFirstName(getStoredUser()) || 'Reviewer';
   return (
     <AppShell role="reviewer" searchPlaceholder="Search assigned papers...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Reviewer Workspace</span>
-          <h1 className="page-title" style={{ marginTop: 8 }}>Welcome, <em className="serif-italic">Dr. Lim</em>.</h1>
+          <h1 className="page-title" style={{ marginTop: 8 }}>Welcome, <em className="serif-italic">{firstName}</em>.</h1>
           <p className="page-subtitle">You have 3 papers awaiting your review. One is approaching its deadline.</p>
         </div>
       </div>

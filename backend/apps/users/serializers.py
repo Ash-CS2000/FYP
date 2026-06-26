@@ -171,11 +171,8 @@ class RegisterSerializer(serializers.Serializer):
             },
         )
 
-        role_status = (
-            UserRole.Status.PENDING if role == UserProfile.Role.REVIEWER
-            else UserRole.Status.ACTIVE
-        )
-        UserRole.objects.create(user=user, role=role, status=role_status)
+        # Reviewers are activated immediately on registration — no admin approval gate.
+        UserRole.objects.create(user=user, role=role, status=UserRole.Status.ACTIVE)
 
         return user
 

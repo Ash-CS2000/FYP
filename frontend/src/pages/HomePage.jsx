@@ -4,6 +4,10 @@ import PublicNav from '../components/PublicNav.jsx';
 
 const TRENDING = [...TOPICS].sort((a, b) => b.rating - a.rating).slice(0, 3);
 
+function getUser() {
+  try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
+}
+
 const HOW_IT_WORKS = [
   {
     step: '01',
@@ -23,6 +27,7 @@ const HOW_IT_WORKS = [
 ];
 
 export default function HomePage() {
+  const user = getUser();
   return (
     <div className="paper-portal">
       <style>{`
@@ -368,7 +373,9 @@ export default function HomePage() {
               <span className="eyebrow">Public Research Library</span>
               <h1>Explore research topics, learn methods, and build your <em>research skills</em>.</h1>
               <p>Discover what researchers are studying, read peer-reviewed summaries, and find inspiration to conduct your own original research.</p>
-              <Link to="/register" className="btn btn-primary">Join Us</Link>
+              {user
+                ? <Link to="/search" className="btn btn-primary">Browse Topics</Link>
+                : <Link to="/register" className="btn btn-primary">Join Us</Link>}
             </div>
 
             {/* Right — floating cards */}

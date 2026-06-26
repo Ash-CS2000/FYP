@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import { getStoredUser, getFirstName } from '../utils/user.js';
 
 export default function AuthorDashboard() {
+  const firstName = getFirstName(getStoredUser()) || 'Author';
   const newSubmission = (
     <Link to="/author/submit" className="btn btn-primary btn-sm">+ New Submission</Link>
   );
@@ -11,7 +13,7 @@ export default function AuthorDashboard() {
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Author Workspace</span>
-          <h1 className="page-title" style={{ marginTop: 8 }}>Welcome back, <em className="serif-italic">Ahmad</em>.</h1>
+          <h1 className="page-title" style={{ marginTop: 8 }}>Welcome back, <em className="serif-italic">{firstName}</em>.</h1>
           <p className="page-subtitle">Sunday, 3 May 2026 · You have 1 paper awaiting reviewer feedback.</p>
         </div>
       </div>

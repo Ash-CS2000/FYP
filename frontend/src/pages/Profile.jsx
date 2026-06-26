@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import { SIDEBAR_CONFIG } from '../data/sidebarConfig.jsx';
+import { getStoredUser, getInitials } from '../utils/user.js';
 
 const API_URL = 'https://fyp-production-6d7f.up.railway.app';
 
 export default function Profile({ role = 'author' }) {
   const cfg = SIDEBAR_CONFIG[role];
 
-  const storedUser = (() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } })();
+  const storedUser = getStoredUser();
   const userRoles        = storedUser?.roles || [role];
   const reviewerStatus   = storedUser?.reviewer_status || '';
   const isAuthor         = userRoles.includes('author');
@@ -60,9 +61,9 @@ export default function Profile({ role = 'author' }) {
             color: 'var(--navy-900)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 500,
-          }}>{cfg.user.initials}</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--navy-900)' }}>{cfg.user.name}</div>
-          <div style={{ fontSize: 13, color: 'var(--ink-600)', marginTop: 4 }}>{cfg.user.role}</div>
+          }}>{getInitials(storedUser) || cfg.user.initials}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--navy-900)' }}>{storedUser?.name || cfg.user.name}</div>
+          <div style={{ fontSize: 13, color: 'var(--ink-600)', marginTop: 4 }}>{storedUser?.institution || cfg.role}</div>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 16 }}>Change photo</button>
         </div>
 
@@ -71,28 +72,24 @@ export default function Profile({ role = 'author' }) {
           <div className="field-grid">
             <div className="field">
               <label className="field-label">Full name</label>
-              <input className="field-input" defaultValue={cfg.user.name} />
+              <input className="field-input" defaultValue={storedUser?.name || ''} />
             </div>
             <div className="field">
               <label className="field-label">Email</label>
-              <input className="field-input" type="email" defaultValue="ahmad@utm.edu.my" />
+              <input className="field-input" type="email" defaultValue={storedUser?.email || ''} />
             </div>
             <div className="field">
               <label className="field-label">Institution</label>
-              <input className="field-input" defaultValue="Universiti Teknologi Malaysia" />
-            </div>
-            <div className="field">
-              <label className="field-label">ORCID</label>
-              <input className="field-input" defaultValue="0000-0001-2345-6789" />
+              <input className="field-input" defaultValue={storedUser?.institution || ''} placeholder="Your institution" />
             </div>
           </div>
           <div className="field">
             <label className="field-label">Bio</label>
-            <textarea className="field-textarea" rows="4" defaultValue="Researcher in deep learning and computer vision, with a focus on medical imaging applications. Currently working on transformer architectures for diagnostic accuracy improvements." />
+            <textarea className="field-textarea" rows="4" placeholder="Tell us about your research background and interests." />
           </div>
           <div className="field">
             <label className="field-label">Research interests</label>
-            <input className="field-input" defaultValue="deep learning, medical imaging, computer vision, transformers" />
+            <input className="field-input" placeholder="e.g. deep learning, medical imaging, computer vision" />
           </div>
         </div>
       </div>
