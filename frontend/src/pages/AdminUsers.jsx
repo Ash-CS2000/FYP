@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import AppShell from '../components/AppShell.jsx';
-
-const API_URL = 'https://fyp-production-6d7f.up.railway.app';
+import { API_URL } from '../config';
 
 const DEMO_USERS = [
   { id: 1, initials: 'AR', name: 'Ahmad Razif', email: 'ahmad@utm.edu.my', roles: ['author'], institution: 'UTM', date: '12 Jan 2026', status: 'active', reviewer_status: '' },

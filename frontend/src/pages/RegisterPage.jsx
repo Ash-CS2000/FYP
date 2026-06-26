@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { saveTokens } from '../api/auth';
-
-
-const API_URL = 'https://fyp-production-6d7f.up.railway.app';
+import { API_URL } from '../config';
 
 const ROLE_ROUTES = {
   user:     '/',

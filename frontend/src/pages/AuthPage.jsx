@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { findDemoAccount, ROLE_HOME, saveDemoSession } from '../data/demoAccounts.js';
+import { API_URL } from '../config';
 
 
 export default function AuthPage({ initialTab = 'signin' }) {
-  const API_URL = 'https://fyp-production-6d7f.up.railway.app';
-
   const [tab, setTab] = useState(initialTab);
 
   // Form fields

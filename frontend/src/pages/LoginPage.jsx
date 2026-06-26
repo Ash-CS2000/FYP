@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { saveTokens } from '../api/auth';
 import { findDemoAccount, saveDemoSession, ROLE_HOME } from '../data/demoAccounts.js';
-
-const API_URL = 'https://fyp-production-6d7f.up.railway.app';
+import { API_URL } from '../config';
 
 const ROLE_ROUTES = {
   student:  '/',

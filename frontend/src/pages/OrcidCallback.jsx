@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-
-const API_URL = 'https://fyp-production-6d7f.up.railway.app';
+import { API_URL } from '../config';
 
 const WORKSPACE_ROUTES = {
   author:   '/author/dashboard',

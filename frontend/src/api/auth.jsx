@@ -1,5 +1,5 @@
 // src/api/auth.js
-const API_URL = 'https://fyp-production-6d7f.up.railway.app';
+import { API_URL } from '../config';
 
 export const register = async (formData) => {
   const res = await fetch(`${API_URL}/api/auth/register/`, {

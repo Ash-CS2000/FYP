@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import { API_URL } from '../config';
 import {
   getProgress,
   countCompletedUnits,
@@ -9,6 +10,74 @@ import {
 } from '../data/trainingProgress.js';
 import { getDemoSession } from '../data/demoAccounts.js';
 import { TRAINING_UNITS, PUBLICATION_WINDOW_DAYS } from '../data/trainingContent.js';
+
+const MAX_UPLOAD_SIZE = 20 * 1024 * 1024; // 20 MB
+const TOTAL_STEPS = 5;
+
+// Standard journal manuscript types.
+const ARTICLE_TYPES = [
+  'Research article',
+  'Review article',
+  'Case study',
+  'Short communication',
+  'Methods / Protocol',
+  'Perspective / Opinion',
+];
+
+const TITLES = ['', 'Dr', 'Prof', 'Mr', 'Ms', 'Mx'];
+const DEGREES = ['', 'Student', 'BSc', 'MSc', 'MD', 'PhD', 'Professor', 'Other'];
+
+const STEPS = [
+  { n: 1, title: 'Type & Details', sub: 'Article type, title, abstract' },
+  { n: 2, title: 'Authors', sub: 'Co-authors and affiliations' },
+  { n: 3, title: 'Files', sub: 'Manuscript, supplements, cover letter' },
+  { n: 4, title: 'Declarations', sub: 'Funding, ethics, data' },
+  { n: 5, title: 'Review & Agreement', sub: 'Confirm and submit' },
+];
+
+const STEP_META = {
+  1: 'All fields marked * are required.',
+  2: 'List every author and their affiliations.',
+  3: 'Upload your manuscript and any supporting files.',
+  4: 'Disclosures required by most journals.',
+  5: 'Review everything and accept the submission terms.',
+};
+
+function emptyAffiliation(overrides = {}) {
+  return { department: '', institution: '', city: '', country: '', ...overrides };
+}
+
+function emptyAuthor(overrides = {}) {
+  return {
+    title: '',
+    givenName: '',
+    familyName: '',
+    degree: '',
+    email: '',
+    orcid: '',
+    corresponding: false,
+    affiliations: [emptyAffiliation()],
+    ...overrides,
+  };
+}
+
+// Split a full name into given name(s) + family (last token).
+function splitName(full) {
+  const parts = (full || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { givenName: '', familyName: '' };
+  if (parts.length === 1) return { givenName: parts[0], familyName: '' };
+  return { givenName: parts.slice(0, -1).join(' '), familyName: parts[parts.length - 1] };
+}
+
+function authorDisplayName(a) {
+  return [a.title, a.givenName, a.familyName].filter(Boolean).join(' ');
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -27,7 +96,121 @@ export default function UserSubmit() {
   const completedUnits = countCompletedUnits(progress);
 
   const [step, setStep] = useState(1);
+
+  // Step 1 — Type & details
+  const [articleType, setArticleType] = useState(ARTICLE_TYPES[0]);
   const [title, setTitle] = useState('');
+  const [runningTitle, setRunningTitle] = useState('');
+  const [abstract, setAbstract] = useState('');
+  const [category, setCategory] = useState('Computer Science — AI & ML');
+  const [subCategory, setSubCategory] = useState('Medical Imaging');
+  const [keywords, setKeywords] = useState('');
+
+  // Step 2 — Authors
+  const [authors, setAuthors] = useState(() => [
+    emptyAuthor({ ...splitName(getDemoSession()?.name), corresponding: true }),
+  ]);
+
+  // Step 3 — Files
+  const [file, setFile] = useState(null);
+  const [supplementary, setSupplementary] = useState([]);
+  const [coverLetter, setCoverLetter] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef(null);
+  const suppInputRef = useRef(null);
+
+  // Step 4 — Declarations
+  const [noFunding, setNoFunding] = useState(false);
+  const [funder, setFunder] = useState('');
+  const [grantNo, setGrantNo] = useState('');
+  const [noCompeting, setNoCompeting] = useState(false);
+  const [competing, setCompeting] = useState('');
+  const [ethicsNA, setEthicsNA] = useState(false);
+  const [ethics, setEthics] = useState('');
+  const [dataStatement, setDataStatement] = useState('');
+
+  // Step 5 — Agreement checklist
+  const [agreements, setAgreements] = useState({
+    original: false,
+    notUnderReview: false,
+    allApprove: false,
+    policies: false,
+  });
+  const allAgreed = Object.values(agreements).every(Boolean);
+  const [stepError, setStepError] = useState('');
+
+  // ---- Author helpers -----------------------------------------------------
+  const updateAuthor = (index, patch) =>
+    setAuthors((prev) => prev.map((a, i) => (i === index ? { ...a, ...patch } : a)));
+
+  const addAuthor = () => setAuthors((prev) => [...prev, emptyAuthor()]);
+
+  const removeAuthor = (index) =>
+    setAuthors((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+
+  const moveAuthor = (index, dir) =>
+    setAuthors((prev) => {
+      const target = index + dir;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+
+  const updateAffiliation = (ai, fi, patch) =>
+    setAuthors((prev) =>
+      prev.map((a, i) =>
+        i === ai
+          ? { ...a, affiliations: a.affiliations.map((af, j) => (j === fi ? { ...af, ...patch } : af)) }
+          : a,
+      ),
+    );
+
+  const addAffiliation = (ai) =>
+    setAuthors((prev) =>
+      prev.map((a, i) => (i === ai ? { ...a, affiliations: [...a.affiliations, emptyAffiliation()] } : a)),
+    );
+
+  const removeAffiliation = (ai, fi) =>
+    setAuthors((prev) =>
+      prev.map((a, i) =>
+        i === ai && a.affiliations.length > 1
+          ? { ...a, affiliations: a.affiliations.filter((_, j) => j !== fi) }
+          : a,
+      ),
+    );
+
+  // ---- File helpers -------------------------------------------------------
+  const pickFile = (selected) => {
+    if (!selected) return;
+    const isPdf =
+      selected.type === 'application/pdf' ||
+      selected.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setUploadError('Manuscript must be a PDF file.');
+      return;
+    }
+    if (selected.size > MAX_UPLOAD_SIZE) {
+      setUploadError('Manuscript exceeds the 20MB size limit.');
+      return;
+    }
+    setUploadError('');
+    setFile(selected);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    pickFile(e.dataTransfer.files?.[0]);
+  };
+
+  const addSupplementary = (fileList) => {
+    const picked = Array.from(fileList || []);
+    if (picked.length) setSupplementary((prev) => [...prev, ...picked]);
+  };
+
+  const removeSupplementary = (index) =>
+    setSupplementary((prev) => prev.filter((_, i) => i !== index));
 
   // ---- Gated (assessment not passed) --------------------------------------
   if (!canSubmit) {
@@ -72,11 +255,67 @@ export default function UserSubmit() {
   }
 
   // ---- Passed: submission form --------------------------------------------
-  const handleNext = () => {
-    if (step < 3) {
+  const validateStep = (n) => {
+    if (n === 1) {
+      if (!title.trim() || !abstract.trim()) return 'Title and abstract are required.';
+    }
+    if (n === 2) {
+      if (!authors.some((a) => a.givenName.trim() && a.familyName.trim()))
+        return 'Add at least one author with a given and family name.';
+      if (!authors.some((a) => a.corresponding)) return 'Mark one author as the corresponding author.';
+    }
+    if (n === 3) {
+      if (!file) return 'Please upload your manuscript PDF.';
+    }
+    return '';
+  };
+
+  const handleNext = async () => {
+    if (step < TOTAL_STEPS) {
+      const err = validateStep(step);
+      if (err) {
+        setStepError(err);
+        return;
+      }
+      setStepError('');
       setStep(step + 1);
       return;
     }
+
+    // Final step — make sure earlier requirements still hold.
+    if (!file) {
+      setUploadError('Please upload your manuscript PDF before submitting.');
+      setStep(3);
+      return;
+    }
+    if (!allAgreed) {
+      setStepError('Please accept all submission terms before submitting.');
+      return;
+    }
+
+    setStepError('');
+    setUploading(true);
+    setUploadError('');
+    try {
+      const formData = new FormData();
+      formData.append('manuscript', file);
+      const res = await fetch(`${API_URL}/api/manuscripts/upload/`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('access')}` },
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setUploadError(data.detail || 'Upload failed. Please try again.');
+        return;
+      }
+    } catch {
+      setUploadError('Could not reach the server. Please try again.');
+      return;
+    } finally {
+      setUploading(false);
+    }
+
     if (fulfillingRequirement) {
       submitPublication(title, getDemoSession()?.name || 'JSRMS Student');
       alert(
@@ -118,11 +357,7 @@ export default function UserSubmit() {
       )}
 
       <div className="steps fade-up delay-1">
-        {[
-          { n: 1, title: 'Paper Details', sub: 'Title, abstract, and authors' },
-          { n: 2, title: 'Upload Manuscript', sub: 'PDF and supporting files' },
-          { n: 3, title: 'Review & Submit', sub: 'Confirm and send' },
-        ].map((s) => (
+        {STEPS.map((s) => (
           <div key={s.n} className={`step ${step === s.n ? 'active' : ''} ${step > s.n ? 'done' : ''}`}>
             <div className="step-num">{step > s.n ? '✓' : s.n}</div>
             <div>
@@ -137,13 +372,24 @@ export default function UserSubmit() {
         <div className="card">
           <div className="card-header">
             <div>
-              <div className="card-title">Step {step} — {step === 1 ? 'Paper Details' : step === 2 ? 'Upload Manuscript' : 'Review & Submit'}</div>
-              <div className="card-meta">{step === 1 && 'All fields marked * are required.'}{step === 2 && 'Upload your manuscript and any supporting files.'}{step === 3 && 'Review everything before submitting.'}</div>
+              <div className="card-title">Step {step} — {STEPS[step - 1].title}</div>
+              <div className="card-meta">{STEP_META[step]}</div>
             </div>
           </div>
 
           {step === 1 && (
             <>
+              <div className="field">
+                <label className="field-label">Article type <span className="req">*</span></label>
+                <select
+                  className="field-select"
+                  value={articleType}
+                  onChange={(e) => setArticleType(e.target.value)}
+                >
+                  {ARTICLE_TYPES.map((t) => <option key={t}>{t}</option>)}
+                </select>
+                <div className="field-hint">Choose the category that best describes your manuscript.</div>
+              </div>
               <div className="field">
                 <label className="field-label">Paper title <span className="req">*</span></label>
                 <input
@@ -156,68 +402,370 @@ export default function UserSubmit() {
                 <div className="field-hint">Use the final title you would like to appear in publication.</div>
               </div>
               <div className="field">
+                <label className="field-label">Running / short title</label>
+                <input
+                  className="field-input"
+                  type="text"
+                  placeholder="A shortened title (max ~100 characters)"
+                  maxLength={100}
+                  value={runningTitle}
+                  onChange={(e) => setRunningTitle(e.target.value)}
+                />
+                <div className="field-hint">Appears in page headers. {100 - runningTitle.length} characters left.</div>
+              </div>
+              <div className="field">
                 <label className="field-label">Abstract <span className="req">*</span></label>
-                <textarea className="field-textarea" rows="6" placeholder="Paste your abstract here..."></textarea>
+                <textarea
+                  className="field-textarea"
+                  rows="6"
+                  placeholder="Paste your abstract here..."
+                  value={abstract}
+                  onChange={(e) => setAbstract(e.target.value)}
+                ></textarea>
                 <div className="field-hint ai">AI suggestion will appear here based on your abstract.</div>
               </div>
               <div className="field-grid">
                 <div className="field">
                   <label className="field-label">Research category <span className="req">*</span></label>
-                  <select className="field-select"><option>Computer Science — AI & ML</option><option>Computer Science — Software Engineering</option><option>Engineering — Electronics</option><option>Medicine — Imaging</option></select>
+                  <select className="field-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+                    <option>Computer Science — AI & ML</option>
+                    <option>Computer Science — Software Engineering</option>
+                    <option>Engineering — Electronics</option>
+                    <option>Medicine — Imaging</option>
+                  </select>
                 </div>
                 <div className="field">
                   <label className="field-label">Sub-category</label>
-                  <select className="field-select"><option>Medical Imaging</option><option>Computer Vision</option><option>Neural Networks</option></select>
+                  <select className="field-select" value={subCategory} onChange={(e) => setSubCategory(e.target.value)}>
+                    <option>Medical Imaging</option>
+                    <option>Computer Vision</option>
+                    <option>Neural Networks</option>
+                  </select>
                 </div>
               </div>
               <div className="field">
                 <label className="field-label">Keywords</label>
-                <input className="field-input" type="text" placeholder="4–6 keywords, comma separated" />
+                <input
+                  className="field-input"
+                  type="text"
+                  placeholder="4–6 keywords, comma separated"
+                  value={keywords}
+                  onChange={(e) => setKeywords(e.target.value)}
+                />
                 <div className="field-hint">These help with discoverability and reviewer matching.</div>
               </div>
             </>
           )}
 
           {step === 2 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {authors.map((author, i) => (
+                <div
+                  key={i}
+                  style={{ padding: 16, border: '1px solid var(--ink-200)', borderRadius: 'var(--r-md)', background: 'var(--ink-50)' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div className="label">Author {i + 1}{author.corresponding ? ' · Corresponding' : ''}</div>
+                    <div className="row" style={{ gap: 6 }}>
+                      <button type="button" className="btn btn-ghost btn-sm" title="Move up"
+                        disabled={i === 0} onClick={() => moveAuthor(i, -1)}>↑</button>
+                      <button type="button" className="btn btn-ghost btn-sm" title="Move down"
+                        disabled={i === authors.length - 1} onClick={() => moveAuthor(i, 1)}>↓</button>
+                      {authors.length > 1 && (
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeAuthor(i)}>Remove</button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="field-grid" style={{ gridTemplateColumns: '0.7fr 1.3fr 1.3fr' }}>
+                    <div className="field">
+                      <label className="field-label">Title</label>
+                      <select className="field-select" value={author.title}
+                        onChange={(e) => updateAuthor(i, { title: e.target.value })}>
+                        {TITLES.map((t) => <option key={t} value={t}>{t || '—'}</option>)}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Given name <span className="req">*</span></label>
+                      <input className="field-input" type="text" placeholder="e.g. Ahmad"
+                        value={author.givenName} onChange={(e) => updateAuthor(i, { givenName: e.target.value })} />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Family name <span className="req">*</span></label>
+                      <input className="field-input" type="text" placeholder="e.g. Razif"
+                        value={author.familyName} onChange={(e) => updateAuthor(i, { familyName: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="field-grid">
+                    <div className="field">
+                      <label className="field-label">Academic degree</label>
+                      <select className="field-select" value={author.degree}
+                        onChange={(e) => updateAuthor(i, { degree: e.target.value })}>
+                        {DEGREES.map((d) => <option key={d} value={d}>{d || '—'}</option>)}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Email</label>
+                      <input className="field-input" type="email" placeholder="name@institution.edu"
+                        value={author.email} onChange={(e) => updateAuthor(i, { email: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">ORCID iD</label>
+                    <input className="field-input" type="text" placeholder="0000-0000-0000-0000"
+                      value={author.orcid} onChange={(e) => updateAuthor(i, { orcid: e.target.value })} />
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Affiliation(s)</label>
+                    {author.affiliations.map((af, fi) => (
+                      <div key={fi} style={{ padding: 12, border: '1px solid var(--ink-200)', borderRadius: 'var(--r-md)', background: 'var(--white)', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <span style={{ fontSize: 12, color: 'var(--ink-600)' }}>Affiliation {fi + 1}</span>
+                          {author.affiliations.length > 1 && (
+                            <span style={{ cursor: 'pointer', color: 'var(--ink-500)', fontSize: 13 }}
+                              onClick={() => removeAffiliation(i, fi)}>× Remove</span>
+                          )}
+                        </div>
+                        <div className="field-grid">
+                          <div className="field" style={{ marginBottom: 8 }}>
+                            <label className="field-label">Department</label>
+                            <input className="field-input" type="text" placeholder="e.g. School of Computing"
+                              value={af.department} onChange={(e) => updateAffiliation(i, fi, { department: e.target.value })} />
+                          </div>
+                          <div className="field" style={{ marginBottom: 8 }}>
+                            <label className="field-label">Institution</label>
+                            <input className="field-input" type="text" placeholder="e.g. Universiti Teknologi Malaysia"
+                              value={af.institution} onChange={(e) => updateAffiliation(i, fi, { institution: e.target.value })} />
+                          </div>
+                        </div>
+                        <div className="field-grid">
+                          <div className="field" style={{ marginBottom: 0 }}>
+                            <label className="field-label">City</label>
+                            <input className="field-input" type="text" placeholder="e.g. Johor Bahru"
+                              value={af.city} onChange={(e) => updateAffiliation(i, fi, { city: e.target.value })} />
+                          </div>
+                          <div className="field" style={{ marginBottom: 0 }}>
+                            <label className="field-label">Country</label>
+                            <input className="field-input" type="text" placeholder="e.g. Malaysia"
+                              value={af.country} onChange={(e) => updateAffiliation(i, fi, { country: e.target.value })} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => addAffiliation(i)}>+ Add affiliation</button>
+                  </div>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 0, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={author.corresponding}
+                      onChange={(e) => updateAuthor(i, { corresponding: e.target.checked })} />
+                    Corresponding author
+                  </label>
+                </div>
+              ))}
+              <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={addAuthor}>
+                + Add author
+              </button>
+            </div>
+          )}
+
+          {step === 3 && (
             <>
               <div className="field">
                 <label className="field-label">Manuscript PDF <span className="req">*</span></label>
-                <div className="upload-area">
-                  <div className="upload-area-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="22" height="22"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  style={{ display: 'none' }}
+                  onChange={(e) => pickFile(e.target.files?.[0])}
+                />
+                {file ? (
+                  <div className="upload-area" style={{ borderStyle: 'solid', cursor: 'default' }}>
+                    <div className="upload-area-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="var(--green-800)" strokeWidth="2" width="22" height="22"><polyline points="20 6 9 17 4 12" /></svg>
+                    </div>
+                    <div className="upload-area-title">{file.name}</div>
+                    <div className="upload-area-meta">{formatSize(file.size)} · ready to submit</div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ marginTop: 10 }}
+                      onClick={() => {
+                        setFile(null);
+                        setUploadError('');
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                    >
+                      Remove
+                    </button>
                   </div>
-                  <div className="upload-area-title">Drop your manuscript PDF here</div>
-                  <div className="upload-area-meta">PDF only · Max 20MB</div>
-                </div>
+                ) : (
+                  <div
+                    className="upload-area"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDrop}
+                  >
+                    <div className="upload-area-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width="22" height="22"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+                    </div>
+                    <div className="upload-area-title">Drop your manuscript PDF here</div>
+                    <div className="upload-area-meta">PDF only · Max 20MB · or click to browse</div>
+                  </div>
+                )}
+                {uploadError && (
+                  <div className="field-hint" style={{ color: 'var(--red-700, #b42318)' }}>{uploadError}</div>
+                )}
               </div>
+
+              <div className="field">
+                <label className="field-label">Supplementary files (optional)</label>
+                <input
+                  ref={suppInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => { addSupplementary(e.target.files); if (suppInputRef.current) suppInputRef.current.value = ''; }}
+                />
+                <div
+                  className="upload-area"
+                  style={{ cursor: 'pointer', padding: 24 }}
+                  onClick={() => suppInputRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); addSupplementary(e.dataTransfer.files); }}
+                >
+                  <div className="upload-area-meta">Datasets, figures, tables, or code · click to browse or drop files</div>
+                </div>
+                {supplementary.length > 0 && (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {supplementary.map((s, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: 'var(--ink-50)', borderRadius: 'var(--r-md)', fontSize: 13 }}>
+                        <span style={{ color: 'var(--navy-900)' }}>{s.name} <span className="muted">· {formatSize(s.size)}</span></span>
+                        <span style={{ cursor: 'pointer', color: 'var(--ink-500)' }} onClick={() => removeSupplementary(i)}>×</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="field">
                 <label className="field-label">Cover letter (optional)</label>
-                <textarea className="field-textarea" rows="4" placeholder="A short note to the editor..."></textarea>
+                <textarea
+                  className="field-textarea"
+                  rows="4"
+                  placeholder="A short note to the editor..."
+                  value={coverLetter}
+                  onChange={(e) => setCoverLetter(e.target.value)}
+                ></textarea>
               </div>
             </>
           )}
 
-          {step === 3 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ padding: 18, background: 'var(--green-50)', borderRadius: 'var(--r-md)', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--green-800)" strokeWidth="2.5" width="20" height="20"><polyline points="20 6 9 17 4 12" /></svg>
-                <div style={{ fontSize: 13.5, color: 'var(--green-800)' }}>You are a certified author. Your submission is ready to send.</div>
+          {step === 4 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div className="field">
+                <label className="field-label">Funding</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 10, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={noFunding} onChange={(e) => setNoFunding(e.target.checked)} />
+                  This research received no specific funding
+                </label>
+                {!noFunding && (
+                  <div className="field-grid">
+                    <div className="field">
+                      <label className="field-label">Funder / organization</label>
+                      <input className="field-input" type="text" placeholder="e.g. Ministry of Higher Education"
+                        value={funder} onChange={(e) => setFunder(e.target.value)} />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Grant / award number</label>
+                      <input className="field-input" type="text" placeholder="e.g. FRGS/1/2025/ICT/001"
+                        value={grantNo} onChange={(e) => setGrantNo(e.target.value)} />
+                    </div>
+                  </div>
+                )}
               </div>
+
+              <div className="field">
+                <label className="field-label">Competing interests</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 10, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={noCompeting} onChange={(e) => setNoCompeting(e.target.checked)} />
+                  The authors declare no competing interests
+                </label>
+                {!noCompeting && (
+                  <textarea className="field-textarea" rows="3" placeholder="Describe any financial or non-financial competing interests..."
+                    value={competing} onChange={(e) => setCompeting(e.target.value)}></textarea>
+                )}
+              </div>
+
+              <div className="field">
+                <label className="field-label">Ethics / IRB approval</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 10, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={ethicsNA} onChange={(e) => setEthicsNA(e.target.checked)} />
+                  Not applicable (no human/animal subjects)
+                </label>
+                {!ethicsNA && (
+                  <textarea className="field-textarea" rows="3" placeholder="Approval body, reference number, and informed-consent details..."
+                    value={ethics} onChange={(e) => setEthics(e.target.value)}></textarea>
+                )}
+              </div>
+
+              <div className="field">
+                <label className="field-label">Data availability statement</label>
+                <textarea className="field-textarea" rows="3" placeholder="Where can the data supporting this study be found? (repository, DOI, on request, etc.)"
+                  value={dataStatement} onChange={(e) => setDataStatement(e.target.value)}></textarea>
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ padding: 18, background: 'var(--ink-50)', borderRadius: 'var(--r-md)' }}>
-                <div className="label" style={{ marginBottom: 6 }}>Reminder</div>
-                <div style={{ fontSize: 14, color: 'var(--navy-900)' }}>Check your formatting, references, and author details one more time before submitting.</div>
+                <div className="label" style={{ marginBottom: 10 }}>Submission summary</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', rowGap: 8, columnGap: 12, fontSize: 13.5, color: 'var(--navy-900)' }}>
+                  <span className="muted">Type</span><span>{articleType}</span>
+                  <span className="muted">Title</span><span>{title || <em className="muted">—</em>}</span>
+                  <span className="muted">Authors</span><span>{authors.map(authorDisplayName).filter(Boolean).join(', ') || <em className="muted">—</em>}</span>
+                  <span className="muted">Manuscript</span><span>{file ? file.name : <em className="muted">not uploaded</em>}</span>
+                  <span className="muted">Supplements</span><span>{supplementary.length ? `${supplementary.length} file(s)` : 'none'}</span>
+                </div>
+              </div>
+
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label className="field-label">Submission agreement <span className="req">*</span></label>
+                {[
+                  ['original', 'This manuscript is original work and has not been published before.'],
+                  ['notUnderReview', 'This manuscript is not under consideration at another journal.'],
+                  ['allApprove', 'All listed authors have read and approved this submission.'],
+                  ['policies', 'I agree to the journal’s submission and ethics policies.'],
+                ].map(([key, label]) => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 10, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={agreements[key]} style={{ marginTop: 3 }}
+                      onChange={(e) => setAgreements((prev) => ({ ...prev, [key]: e.target.checked }))} />
+                    {label}
+                  </label>
+                ))}
               </div>
             </div>
           )}
 
           <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--ink-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="row">
-              {step > 1 && <button onClick={() => setStep(step - 1)} className="btn btn-ghost">← Back</button>}
+              {step > 1 && <button onClick={() => { setStepError(''); setStep(step - 1); }} className="btn btn-ghost">← Back</button>}
               <button className="btn btn-ghost">Save as Draft</button>
             </div>
             <div className="row">
-              <span style={{ fontSize: 13, color: 'var(--ink-500)' }}>Step {step} of 3</span>
-              <button onClick={handleNext} className="btn btn-primary">{step === 3 ? 'Submit Paper →' : 'Continue →'}</button>
+              {(stepError || (step === TOTAL_STEPS && uploadError)) && (
+                <span style={{ fontSize: 13, color: 'var(--red-700, #b42318)' }}>{stepError || uploadError}</span>
+              )}
+              <span style={{ fontSize: 13, color: 'var(--ink-500)' }}>Step {step} of {TOTAL_STEPS}</span>
+              <button
+                onClick={handleNext}
+                className="btn btn-primary"
+                disabled={uploading || (step === TOTAL_STEPS && !allAgreed)}
+              >
+                {step === TOTAL_STEPS ? (uploading ? 'Submitting…' : 'Submit Paper →') : 'Continue →'}
+              </button>
             </div>
           </div>
         </div>

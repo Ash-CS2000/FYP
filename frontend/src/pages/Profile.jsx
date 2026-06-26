@@ -2,8 +2,7 @@ import { useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import { SIDEBAR_CONFIG } from '../data/sidebarConfig.jsx';
 import { getStoredUser, getInitials } from '../utils/user.js';
-
-const API_URL = 'https://fyp-production-6d7f.up.railway.app';
+import { API_URL } from '../config';
 
 export default function Profile({ role = 'author' }) {
   const cfg = SIDEBAR_CONFIG[role];
