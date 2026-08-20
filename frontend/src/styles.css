@@ -18,12 +18,14 @@
   --navy-100: #E6F1FB;
 
   /* Accent */
+  --amber-50:  #FDF2E1;
   --amber-500: #EF9F27;
   --amber-600: #D88E1F;
   --amber-700: #BA7517;
   --amber-800: #854F0B;
 
   --teal-500: #1D9E75;
+  --teal-600: #16855F;
   --teal-700: #0F6E56;
   --teal-800: #085041;
   --teal-50: #E1F5EE;
@@ -37,6 +39,7 @@
   --purple-800: #3C3489;
 
   --red-50: #FCEBEB;
+  --red-200: #F2C4C4;
   --red-500: #E24B4A;
   --red-700: #A32D2D;
   --red-800: #791F1F;
@@ -890,7 +893,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   transition: all var(--t-base);
   cursor: pointer;
 }
-.upload-area:hover { background: var(--blue-50); border-color: var(--navy-700); }
+.upload-area:hover { background: var(--navy-100); border-color: var(--navy-700); }
 .upload-area-icon {
   width: 48px; height: 48px;
   margin: 0 auto 14px;
@@ -1806,6 +1809,16 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   background: var(--teal-50);
   color: var(--teal-800);
   border: 1px solid var(--teal-500);
+}
+.lms-banner.is-todo {
+  background: var(--amber-50);
+  color: var(--amber-800);
+  border: 1px solid var(--amber-500);
+}
+.lms-banner.is-todo a {
+  color: inherit;
+  text-decoration: underline;
+  white-space: nowrap;
 }
 
 /* Module box */

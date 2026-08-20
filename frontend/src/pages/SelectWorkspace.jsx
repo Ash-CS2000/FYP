@@ -4,7 +4,7 @@ import {
   getStoredUser,
   getRoles,
   setActiveRole,
-  WORKSPACE_ROUTES,
+  workspaceEntry,
   ROLE_LABELS,
   ROLE_DESCRIPTIONS,
 } from '../auth/roles';
@@ -49,14 +49,14 @@ export default function SelectWorkspace() {
     if (roles.length <= 1) {
       const only = roles[0];
       setActiveRole(only);
-      navigate(WORKSPACE_ROUTES[only] || '/', { replace: true });
+      navigate(workspaceEntry(only), { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function choose(role) {
     setActiveRole(role);
-    navigate(WORKSPACE_ROUTES[role] || '/');
+    navigate(workspaceEntry(role));
   }
 
   if (!user || roles.length <= 1) return null;

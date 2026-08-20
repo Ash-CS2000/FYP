@@ -2,6 +2,20 @@ import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { getStoredUser, getFirstName } from '../utils/user.js';
 
+// Double-blind: a reviewer must never see who wrote the manuscript they are
+// assessing. The column stays so the masking is visible rather than silently
+// absent — matching the "Reviewer 2 / Anonymous" treatment in ReviewForm.
+// The backend must omit author identity from reviewer-facing responses; this
+// component only reflects that, it does not enforce it.
+function AnonymousAuthor() {
+  return (
+    <div className="row">
+      <div className="avatar avatar-sm" title="Hidden under double-blind review">??</div>
+      <span className="muted" style={{ fontSize: 13 }}>Anonymised</span>
+    </div>
+  );
+}
+
 export default function ReviewerDashboard() {
   const firstName = getFirstName(getStoredUser()) || 'Reviewer';
   return (
@@ -33,7 +47,7 @@ export default function ReviewerDashboard() {
         <div className="card-header">
           <div>
             <div className="card-title">Papers Assigned to Me</div>
-            <div className="card-meta">Click any paper to read the manuscript and submit your review.</div>
+            <div className="card-meta">Click any paper to read the manuscript and submit your review. Author identities are hidden under double-blind review.</div>
           </div>
           <div className="row">
             <button className="filter-chip active">All <span style={{ opacity: .6 }}>3</span></button>
@@ -48,7 +62,7 @@ export default function ReviewerDashboard() {
             <tr style={{ background: 'linear-gradient(90deg, rgba(252,235,235,0.4), transparent)' }}>
               <td><div className="table-title">Supply Chain Blockchain Use Cases in ASEAN</div><div className="table-meta">MS-2026-021 · Assigned 2 weeks ago</div></td>
               <td><span className="muted">Business</span></td>
-              <td><div className="row"><div className="avatar avatar-sm">RT</div><span className="muted" style={{ fontSize: 13 }}>Roslan Tahir</span></div></td>
+              <td><AnonymousAuthor /></td>
               <td><span style={{ color: 'var(--red-700)', fontWeight: 600, fontSize: 13 }}>Overdue · 8 May</span></td>
               <td><span className="pill pill-overdue">Overdue</span></td>
               <td><Link to="/reviewer/review" className="btn btn-danger btn-sm">Review Now</Link></td>
@@ -56,7 +70,7 @@ export default function ReviewerDashboard() {
             <tr>
               <td><div className="table-title">Deep Learning Methods in Medical Imaging</div><div className="table-meta">MS-2026-014 · Assigned 5 days ago</div></td>
               <td><span className="muted">Computer Science</span></td>
-              <td><div className="row"><div className="avatar avatar-sm">AR</div><span className="muted" style={{ fontSize: 13 }}>Ahmad Razif</span></div></td>
+              <td><AnonymousAuthor /></td>
               <td><span style={{ color: 'var(--amber-700)', fontWeight: 600, fontSize: 13 }}>10 May 2026</span></td>
               <td><span className="pill pill-pending">In Progress</span></td>
               <td><Link to="/reviewer/review" className="btn btn-primary btn-sm">Continue</Link></td>
@@ -64,7 +78,7 @@ export default function ReviewerDashboard() {
             <tr>
               <td><div className="table-title">Renewable Energy Grid Optimization</div><div className="table-meta">MS-2026-019 · Assigned 1 week ago</div></td>
               <td><span className="muted">Engineering</span></td>
-              <td><div className="row"><div className="avatar avatar-sm">SK</div><span className="muted" style={{ fontSize: 13 }}>Siti Khadijah</span></div></td>
+              <td><AnonymousAuthor /></td>
               <td><span className="muted" style={{ fontSize: 13 }}>15 May 2026</span></td>
               <td><span className="pill pill-pending">Not Started</span></td>
               <td><Link to="/reviewer/review" className="btn btn-ghost btn-sm">Start</Link></td>

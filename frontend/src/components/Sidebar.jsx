@@ -3,7 +3,7 @@ import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { getMergedSidebar } from '../data/sidebarConfig.jsx';
 import { clearDemoSession, getDemoSession } from '../data/demoAccounts.js';
 import { clearSession } from '../api/auth';
-import { WORKSPACE_ROUTES, ROLE_LABELS, setActiveRole } from '../auth/roles';
+import { workspaceEntry, ROLE_LABELS, setActiveRole } from '../auth/roles';
 import { getStoredUser, getInitials } from '../utils/user.js';
 
 // Remember the sidebar's scroll position across route changes. Each page mounts
@@ -43,7 +43,7 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
   function switchRole(nextRole) {
     if (nextRole === role) return;
     setActiveRole(nextRole);
-    navigate(WORKSPACE_ROUTES[nextRole] || '/');
+    navigate(workspaceEntry(nextRole));
   }
 
   function handleSignOut() {

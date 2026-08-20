@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 
 const SUBMISSIONS = [
@@ -11,8 +13,24 @@ const SUBMISSIONS = [
   { id: 'MS-2025-142', title: 'Blockchain Applications in Finance', author: 'Ahmad Razif', cat: 'Finance', status: 'approved', label: 'Approved' },
 ];
 
-export default function EditorSubmissions({ role = 'editor' }) {
+const FILTERS = [
+  { id: 'all',      label: 'All' },
+  { id: 'review',   label: 'In Review' },
+  { id: 'pending',  label: 'Pending' },
+  { id: 'revision', label: 'Revision' },
+  { id: 'approved', label: 'Approved' },
+];
+
+// `initialFilter` lets a route land straight on a slice of the table — the
+// sidebar's "Pending Decision" entry points at /editor/pending, which is this
+// same page pre-filtered rather than a separate screen.
+export default function EditorSubmissions({ role = 'editor', initialFilter = 'all' }) {
   const isAdmin = role === 'admin';
+  const [filter, setFilter] = useState(initialFilter);
+
+  const counts = id => (id === 'all' ? SUBMISSIONS.length : SUBMISSIONS.filter(s => s.status === id).length);
+  const visible = filter === 'all' ? SUBMISSIONS : SUBMISSIONS.filter(s => s.status === filter);
+  const heading = FILTERS.find(f => f.id === filter);
 
   return (
     <AppShell role={role} searchPlaceholder="Search submissions...">
@@ -26,26 +44,41 @@ export default function EditorSubmissions({ role = 'editor' }) {
 
       <div className="card fade-up delay-1">
         <div className="card-header">
-          <div><div className="card-title">{SUBMISSIONS.length} submissions</div></div>
+          <div>
+            <div className="card-title">
+              {visible.length} {filter === 'all' ? 'submissions' : `· ${heading.label}`}
+            </div>
+          </div>
           <div className="row">
-            <button className="filter-chip active">All</button>
-            <button className="filter-chip">In Review</button>
-            <button className="filter-chip">Pending</button>
-            <button className="filter-chip">Revision</button>
-            <button className="filter-chip">Approved</button>
+            {FILTERS.map(f => (
+              <button
+                key={f.id}
+                className={`filter-chip ${filter === f.id ? 'active' : ''}`}
+                onClick={() => setFilter(f.id)}
+              >
+                {f.label} <span style={{ opacity: .6 }}>{counts(f.id)}</span>
+              </button>
+            ))}
           </div>
         </div>
 
         <table className="data-table">
           <thead><tr><th>Paper</th><th>Author</th><th>Category</th><th>Status</th><th></th></tr></thead>
           <tbody>
-            {SUBMISSIONS.map(s => (
+            {visible.map(s => (
               <tr key={s.id}>
                 <td><div className="table-title">{s.title}</div><div className="table-meta">{s.id}</div></td>
                 <td><span className="muted">{s.author}</span></td>
                 <td><span className="muted">{s.cat}</span></td>
                 <td><span className={`pill pill-${s.status}`}>{s.label}</span></td>
-                <td><a href="#" style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</a></td>
+                <td>
+                  <Link
+                    to={`${isAdmin ? '/admin' : '/editor'}/submissions/${s.id}/reviews`}
+                    style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}
+                  >
+                    View reviews →
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

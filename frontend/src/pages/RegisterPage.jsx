@@ -51,6 +51,7 @@ const BRAND = {
     title:    <>Register as a <em>reviewer</em>.</>,
     body:     'Contribute to academic publishing by evaluating manuscripts matched to your area of expertise.',
     benefits: [
+      'Applications are checked by an administrator before approval.',
       'Receive manuscripts matched to your expertise.',
       'Submit structured reviews with scores and recommendations.',
       'Build your academic contribution record.',
@@ -86,8 +87,8 @@ const EXTENDED_ROLES = [
     id:        'reviewer',
     label:     'Reviewer',
     desc:      'Evaluate assigned manuscripts and contribute to academic quality.',
-    note:      'Instant access',
-    noteColor: 'var(--teal-700)',
+    note:      'Requires approval',
+    noteColor: 'var(--amber-700)',
     icon: (
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
@@ -144,9 +145,23 @@ function PasswordField({ label, value, onChange, placeholder, show, onToggle, sh
   );
 }
 
+// The only roles a member of the public may create for themselves.
+//
+//   author   — open self-registration, active immediately (training gates
+//              submission, not account creation)
+//   reviewer — self-apply, but lands pending until an admin approves
+//
+// Editor and admin are deliberately absent: editors are promoted by an admin,
+// and admins are seeded at deployment then invited by an existing admin.
+//
+// SECURITY: this whitelist is defence-in-depth, NOT the enforcement point.
+// The backend MUST reject any registration whose `role` falls outside this set,
+// because a crafted API call never touches this file.
+export const REGISTRABLE_ROLES = ['user', 'author', 'reviewer'];
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function RegisterPage() {
-  // 'roles' | 'user' | 'author' | 'reviewer' | 'editor'
+  // 'roles' | 'user' | 'author' | 'reviewer'
   const [view, setView] = useState('roles');
 
   // Shared account fields
@@ -175,6 +190,8 @@ export default function RegisterPage() {
   const navigate = useNavigate();
 
   function selectView(v) {
+    // 'roles' is the picker itself; anything else must be publicly registrable.
+    if (v !== 'roles' && !REGISTRABLE_ROLES.includes(v)) return;
     setView(v);
     setError('');
   }
@@ -206,6 +223,11 @@ export default function RegisterPage() {
 
   async function handleSubmit(e, role) {
     e.preventDefault();
+    // Refuse before the request is built, so a non-registrable role can never
+    // leave the client even if the view were reached some other way.
+    if (!REGISTRABLE_ROLES.includes(role)) {
+      return setError('That account type cannot be created here. Editor access is granted by an administrator.');
+    }
     const err = validateBase();
     if (err) return setError(err);
     setError('');
@@ -253,9 +275,11 @@ export default function RegisterPage() {
       if (loginRes.ok) {
         saveTokens(data.access, data.refresh);
         localStorage.setItem('user', JSON.stringify(data.user));
-        // Route on the same user object we persisted, so the guards in
-        // ProtectedRoute agree with where we send them.
-        navigate(landingRoute(data.user));
+        // A reviewer registration is an application, not an activation — hold
+        // them on the pending screen regardless of what the backend echoes
+        // back. Everyone else routes on the same user object we persisted, so
+        // the guards in ProtectedRoute agree with where we send them.
+        navigate(role === 'reviewer' ? '/reviewer/pending' : landingRoute(data.user));
       } else {
         navigate('/login', { state: { registered: true } });
       }
@@ -316,8 +340,6 @@ export default function RegisterPage() {
         .pw-strength-label { font-size:11.5px; }
         .info-box { background:var(--ink-50); border:1px solid var(--ink-200); border-radius:var(--r-md); padding:12px 14px; margin-bottom:16px; font-size:13px; color:var(--ink-700); display:flex; gap:10px; align-items:flex-start; }
         .info-box svg { flex-shrink:0; margin-top:1px; color:var(--amber-700); }
-        .info-box.editor { border-color:var(--navy-300); background:var(--navy-100); color:var(--navy-800); }
-        .info-box.editor svg { color:var(--navy-700); }
         .orcid-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:12px; border:1.5px solid #a6ce39; border-radius:var(--r-md); background:#a6ce39; color:#1a1a1a; font-size:14px; font-weight:600; cursor:pointer; transition:all var(--t-fast); margin-bottom:4px; }
         .orcid-btn:hover { background:#91b82e; border-color:#91b82e; transform:translateY(-1px); box-shadow:0 4px 12px rgba(166,206,57,0.35); }
         .orcid-badge { width:24px; height:24px; border-radius:50%; background:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#a6ce39; flex-shrink:0; letter-spacing:-0.02em; }
@@ -601,7 +623,7 @@ export default function RegisterPage() {
                 Back
               </button>
               <h1 className="auth-form-title">Register as a <em>reviewer</em>.</h1>
-              <p className="auth-form-sub">Provide your credentials to set up your reviewer account.</p>
+              <p className="auth-form-sub">Provide your credentials to apply. An administrator reviews every reviewer application before the workspace opens.</p>
 
               <button type="button" className="orcid-btn" onClick={handleOrcidClick}>
                 <span className="orcid-badge">iD</span>

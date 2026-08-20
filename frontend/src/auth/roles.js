@@ -3,6 +3,8 @@
 // Keep every "where does this role go?" decision here — do not re-declare
 // route maps in pages/components.
 
+import { isTrained } from '../data/trainingProgress.js';
+
 export const WORKSPACE_ROUTES = {
   author:   '/author/dashboard',
   reviewer: '/reviewer/dashboard',
@@ -60,13 +62,31 @@ export function setActiveRole(role) {
   if (role) localStorage.setItem(ACTIVE_ROLE_KEY, role);
 }
 
+// Reviewing is approval-gated: an admin has to accept the application before
+// the reviewer workspace opens. Fail closed — anything other than an explicit
+// 'active' counts as still pending.
+export function isReviewerActive(user) {
+  return !!user && user.reviewer_status === 'active';
+}
+
+// Where a single role's workspace actually starts for this user. Role alone
+// isn't always enough: an author who hasn't passed the final assessment starts
+// in training, and an unapproved reviewer starts on the pending screen. Kept
+// here (rather than in the pages) so every caller — LoginPage, RegisterPage,
+// OrcidCallback, ProtectedRoute, the sidebar switcher — agrees.
+export function workspaceEntry(role, user = getStoredUser()) {
+  if (role === 'author' && !isTrained()) return '/author/training';
+  if (role === 'reviewer' && !isReviewerActive(user)) return '/reviewer/pending';
+  return WORKSPACE_ROUTES[role] || '/';
+}
+
 // Decide where a user should land immediately after authenticating.
 //  - no roles        → home
-//  - exactly 1 role  → that role's workspace
+//  - exactly 1 role  → that role's workspace entry
 //  - multiple roles  → workspace picker
 export function landingRoute(user) {
   const roles = getRoles(user);
   if (roles.length === 0) return '/';
   if (roles.length > 1) return '/select-workspace';
-  return WORKSPACE_ROUTES[roles[0]] || '/';
+  return workspaceEntry(roles[0], user);
 }

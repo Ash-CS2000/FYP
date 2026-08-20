@@ -1,15 +1,35 @@
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { getStoredUser, getFirstName } from '../utils/user.js';
+import { isTrained } from '../data/trainingProgress.js';
 
 export default function AuthorDashboard() {
   const firstName = getFirstName(getStoredUser()) || 'Author';
-  const newSubmission = (
+  const trained = isTrained();
+
+  // Submission is gated on the final assessment (see auth/TrainingGate.jsx).
+  // Point the untrained straight at training rather than at a dead end.
+  const newSubmission = trained ? (
     <Link to="/author/submit" className="btn btn-primary btn-sm">+ New Submission</Link>
+  ) : (
+    <Link to="/author/training" className="btn btn-ghost btn-sm">Training required</Link>
   );
 
   return (
     <AppShell role="author" searchPlaceholder="Search papers, reviewers, categories..." topbarActions={newSubmission}>
+      {!trained && (
+        <div className="lms-banner is-todo fade-up">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
+          <span>
+            Manuscript submission unlocks once you pass the final assessment.{' '}
+            <Link to="/author/training">Continue training →</Link>
+          </span>
+        </div>
+      )}
+
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Author Workspace</span>

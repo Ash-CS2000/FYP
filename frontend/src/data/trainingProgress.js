@@ -209,6 +209,12 @@ export function isCertified() {
   return !!getProgress().certificate;
 }
 
+// The bar for "trained": the final assessment is passed. The certificate is NOT
+// the bar — it is issued on paper submission, which is the thing we gate.
+export function isTrained() {
+  return !!getProgress().assessment.passed;
+}
+
 // ---- Developer / showcase helpers ------------------------------------------
 // Used by the in-app "Showcase tools" panel to jump between demo states.
 

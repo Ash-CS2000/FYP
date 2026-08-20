@@ -29,6 +29,10 @@ import SearchResultsPage from './pages/SearchResultsPage.jsx';
 import OrcidCallback from './pages/OrcidCallback';
 import SelectWorkspace from './pages/SelectWorkspace.jsx';
 import ProtectedRoute from './auth/ProtectedRoute.jsx';
+import TrainingGate from './auth/TrainingGate.jsx';
+import ReviewerActiveGate from './auth/ReviewerActiveGate.jsx';
+import ReviewerPending from './pages/ReviewerPending.jsx';
+import EditorReviews from './pages/EditorReviews.jsx';
 
 export default function App() {
   return (
@@ -41,9 +45,12 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
-      {/* Any authenticated user (multi-role workspace picker) */}
+      {/* Any authenticated user. /reviewer/pending must sit OUTSIDE the
+          reviewer block below, or ReviewerActiveGate would redirect into it
+          forever. */}
       <Route element={<ProtectedRoute />}>
         <Route path="/select-workspace" element={<SelectWorkspace />} />
+        <Route path="/reviewer/pending" element={<ReviewerPending />} />
       </Route>
 
       {/* Author */}
@@ -51,8 +58,14 @@ export default function App() {
         <Route path="/author" element={<Navigate to="/author/dashboard" replace />} />
         <Route path="/author/dashboard" element={<AuthorDashboard />} />
         <Route path="/author/papers" element={<UserPapers />} />
-        <Route path="/author/submit" element={<UserSubmit />} />
-        <Route path="/author/revision" element={<Revision />} />
+
+        {/* Submission requires a passed final assessment. Never gate the
+            training routes themselves — that would deadlock the gate. */}
+        <Route element={<TrainingGate />}>
+          <Route path="/author/submit" element={<UserSubmit />} />
+          <Route path="/author/revision" element={<Revision />} />
+        </Route>
+
         <Route path="/author/training" element={<TrainingModule />} />
         <Route path="/author/progress" element={<StudentProgress />} />
         <Route path="/author/assessment" element={<FinalAssessment />} />
@@ -75,12 +88,15 @@ export default function App() {
 
       {/* Reviewer */}
       <Route element={<ProtectedRoute allow={['reviewer']} />}>
-        <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />
-        <Route path="/reviewer/dashboard" element={<ReviewerDashboard />} />
-        <Route path="/reviewer/review" element={<ReviewForm />} />
-        <Route path="/reviewer/completed" element={<ReviewerCompleted />} />
-        <Route path="/reviewer/notifications" element={<Notifications role="reviewer" />} />
-        <Route path="/reviewer/profile" element={<Profile role="reviewer" />} />
+        {/* Reviewing is approval-gated — an admin must accept the application. */}
+        <Route element={<ReviewerActiveGate />}>
+          <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />
+          <Route path="/reviewer/dashboard" element={<ReviewerDashboard />} />
+          <Route path="/reviewer/review" element={<ReviewForm />} />
+          <Route path="/reviewer/completed" element={<ReviewerCompleted />} />
+          <Route path="/reviewer/notifications" element={<Notifications role="reviewer" />} />
+          <Route path="/reviewer/profile" element={<Profile role="reviewer" />} />
+        </Route>
       </Route>
 
       {/* Editor */}
@@ -88,6 +104,8 @@ export default function App() {
         <Route path="/editor" element={<Navigate to="/editor/dashboard" replace />} />
         <Route path="/editor/dashboard" element={<EditorDashboard />} />
         <Route path="/editor/submissions" element={<EditorSubmissions />} />
+        <Route path="/editor/pending" element={<EditorSubmissions initialFilter="pending" />} />
+        <Route path="/editor/submissions/:id/reviews" element={<EditorReviews />} />
         <Route path="/editor/notifications" element={<Notifications role="editor" />} />
         <Route path="/editor/settings" element={<Settings role="editor" />} />
       </Route>
@@ -98,6 +116,8 @@ export default function App() {
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/submissions" element={<EditorSubmissions role="admin" />} />
+        {/* Admin oversight is read-only — decisions stay with the editor. */}
+        <Route path="/admin/submissions/:id/reviews" element={<EditorReviews role="admin" />} />
         <Route path="/admin/settings" element={<Settings role="admin" />} />
       </Route>
 

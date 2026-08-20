@@ -5,6 +5,7 @@ import AppShell from '../components/AppShell.jsx';
 export default function ReviewForm() {
   const [ratings, setRatings] = useState({ originality: 4, technical: 3, clarity: 4, relevance: 5 });
   const [recommendation, setRecommendation] = useState('minor');
+  const [confidential, setConfidential] = useState('');
   const navigate = useNavigate();
 
   const composite = ((ratings.originality + ratings.technical + ratings.clarity + ratings.relevance) / 4).toFixed(1);
@@ -25,6 +26,8 @@ export default function ReviewForm() {
         .recommend-card.selected { border-color: var(--navy-900); background: var(--navy-100); }
         .recommend-card-title { font-weight: 600; font-size: 14px; color: var(--navy-900); margin-bottom: 4px; }
         .recommend-card-desc { font-size: 12.5px; color: var(--ink-600); }
+        .confidential-field { border-left: 3px solid var(--amber-500); background: var(--amber-50); border-radius: var(--r-md); padding: 16px 18px; margin-top: 8px; }
+        .confidential-field .field-label { color: var(--amber-800); display: flex; align-items: center; }
       `}</style>
 
       <div className="page-header fade-up">
@@ -87,6 +90,29 @@ export default function ReviewForm() {
             <label className="field-label">Weaknesses & suggestions <span className="req">*</span></label>
             <textarea className="field-textarea" rows="4" defaultValue="- The methodology section needs more detail on data preprocessing
 - Statistical significance tests should be reported with effect sizes" />
+          </div>
+
+          {/* Editor-only channel. The author never sees this — see
+              data/reviews.js for the contract the backend must honour. */}
+          <div className="field confidential-field">
+            <label className="field-label">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: '-2px', marginRight: 6 }}>
+                <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
+              </svg>
+              Confidential comments to the editor
+            </label>
+            <div className="field-hint" style={{ marginTop: 0, marginBottom: 8 }}>
+              Only the editor sees this. Use it for concerns you would not put in the open
+              report — suspected overlap with prior work, a conflict of interest, or your
+              availability for a re-review. Leave blank if you have none.
+            </div>
+            <textarea
+              className="field-textarea"
+              rows="3"
+              value={confidential}
+              onChange={e => setConfidential(e.target.value)}
+              placeholder="Not shared with the author…"
+            />
           </div>
 
           <div className="field">

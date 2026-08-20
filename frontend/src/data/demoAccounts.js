@@ -11,12 +11,27 @@ export const DEMO_ACCOUNTS = [
     defaultRole: 'author',
   },
   {
+    // Approved reviewer — goes straight into the reviewer workspace.
+    // reviewer_status is REQUIRED on any reviewer account: the gate in
+    // auth/ReviewerActiveGate.jsx fails closed, so a missing value is
+    // treated as still-pending.
     email: 'reviewer@um.edu.my',
     password: 'Reviewer@123',
     name: 'Dr. Lim Wei Ping',
     initials: 'LW',
     roles: ['reviewer'],
     defaultRole: 'reviewer',
+    reviewer_status: 'active',
+  },
+  {
+    // Reviewer whose application is still waiting on an admin decision.
+    email: 'pending@utm.edu.my',
+    password: 'Pending@123',
+    name: 'Dr. Nurul Aina',
+    initials: 'NA',
+    roles: ['reviewer'],
+    defaultRole: 'reviewer',
+    reviewer_status: 'pending',
   },
   {
     email: 'editor@usm.my',
