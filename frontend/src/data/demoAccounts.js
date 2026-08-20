@@ -1,16 +1,5 @@
-export const ROLE_HOME = {
-  author: '/author/training',
-  reviewer: '/reviewer/dashboard',
-  editor: '/editor/dashboard',
-  admin: '/admin/dashboard',
-};
-
-export const ROLE_LABELS = {
-  author: 'Author',
-  reviewer: 'Reviewer',
-  editor: 'Editor',
-  admin: 'Admin',
-};
+// Role→route and role→label live in src/auth/roles.js — the single source of
+// truth. Do not re-declare them here.
 
 export const DEMO_ACCOUNTS = [
   {
@@ -51,6 +40,15 @@ export const DEMO_ACCOUNTS = [
     name: 'Prof. James Tan',
     initials: 'JT',
     roles: ['author', 'reviewer'],
+    defaultRole: 'author',
+    reviewer_status: 'active',
+  },
+  {
+    email: 'multi@utm.edu.my',
+    password: 'Multi@123',
+    name: 'Prof. Siti Rahman',
+    initials: 'SR',
+    roles: ['author', 'reviewer', 'editor'],
     defaultRole: 'author',
     reviewer_status: 'active',
   },

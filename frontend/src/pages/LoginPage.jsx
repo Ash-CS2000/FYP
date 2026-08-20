@@ -1,17 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { saveTokens } from '../api/auth';
-import { findDemoAccount, saveDemoSession, ROLE_HOME } from '../data/demoAccounts.js';
+import { findDemoAccount, saveDemoSession } from '../data/demoAccounts.js';
+import { landingRoute } from '../auth/roles';
 import { API_URL } from '../config';
-
-const ROLE_ROUTES = {
-  student:  '/',
-  user:     '/',
-  author:   '/',
-  reviewer: '/',
-  editor:   '/',
-  admin:    '/',
-};
 
 const EyeOpen = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -57,15 +49,16 @@ export default function LoginPage() {
     const demo = findDemoAccount(email, password);
     if (demo) {
       saveDemoSession(demo, demo.defaultRole);
-      localStorage.setItem('user', JSON.stringify({
+      const demoUser = {
         name: demo.name,
         email: demo.email,
         role: demo.defaultRole,
         roles: demo.roles,
         reviewer_status: demo.reviewer_status || '',
-      }));
+      };
+      localStorage.setItem('user', JSON.stringify(demoUser));
       setLoading(false);
-      navigate(ROLE_HOME[demo.defaultRole] || '/');
+      navigate(location.state?.from?.pathname || landingRoute(demoUser));
       return;
     }
 
@@ -81,7 +74,7 @@ export default function LoginPage() {
       );
       saveTokens(data.access, data.refresh);
       localStorage.setItem('user', JSON.stringify(data.user));
-      navigate(ROLE_ROUTES[data.user?.role] || '/');
+      navigate(location.state?.from?.pathname || landingRoute(data.user));
     } catch (err) {
       setError(err.message);
     } finally {

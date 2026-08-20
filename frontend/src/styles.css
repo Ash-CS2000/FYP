@@ -471,17 +471,110 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   letter-spacing: 0.12em;
   margin-bottom: 7px;
 }
-.sidebar-role-switcher select {
+/* Custom workspace dropdown (3+ roles) */
+.ws-dd {
+  position: relative;
+}
+.ws-dd-trigger {
   width: 100%;
-  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  color: var(--white);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--t-fast), background-color var(--t-fast);
+}
+.ws-dd-trigger:hover {
+  border-color: rgba(255,255,255,0.20);
+  background: rgba(255,255,255,0.08);
+}
+.ws-dd.open .ws-dd-trigger {
+  border-color: var(--amber-500);
+  box-shadow: 0 0 0 3px rgba(239,159,39,0.18);
+}
+.ws-dd-chevron {
+  color: var(--navy-300);
+  flex-shrink: 0;
+  transition: transform var(--t-fast);
+}
+.ws-dd.open .ws-dd-chevron {
+  transform: rotate(180deg);
+}
+.ws-dd-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  list-style: none;
+  margin: 0;
+  padding: 5px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--navy-900);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.45);
+  z-index: 80;
+  animation: ws-dd-in 0.14s ease;
+}
+@keyframes ws-dd-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ws-dd-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 7px;
+  color: var(--navy-100);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.ws-dd-option:hover {
+  background: rgba(255,255,255,0.07);
+  color: var(--white);
+}
+.ws-dd-option.active {
+  color: var(--amber-500);
+  font-weight: 600;
+}
+.sidebar-role-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
   border-radius: var(--r-md);
   border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.05);
-  color: var(--white);
-  outline: none;
 }
-.sidebar-role-switcher option {
-  color: var(--ink-900);
+.sidebar-role-toggle-btn {
+  flex: 1;
+  padding: 7px 8px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--navy-300);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+.sidebar-role-toggle-btn:hover:not(.active) {
+  color: var(--white);
+  background: rgba(255,255,255,0.06);
+}
+.sidebar-role-toggle-btn.active {
+  color: var(--navy-950);
+  background: var(--amber-500);
+  cursor: default;
 }
 .sidebar-signout {
   display: flex;

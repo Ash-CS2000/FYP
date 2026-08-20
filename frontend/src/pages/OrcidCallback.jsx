@@ -1,19 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { landingRoute } from '../auth/roles';
 import { API_URL } from '../config';
-
-const WORKSPACE_ROUTES = {
-  author:   '/author/dashboard',
-  reviewer: '/reviewer/dashboard',
-  editor:   '/editor/dashboard',
-  admin:    '/admin/dashboard',
-};
-
-function landingRoute(user) {
-  const roles = user?.roles || [];
-  if (roles.length > 1) return '/select-workspace';
-  return WORKSPACE_ROUTES[roles[0] || user?.role] || '/';
-}
 
 export default function OrcidCallback() {
   const [searchParams] = useSearchParams();

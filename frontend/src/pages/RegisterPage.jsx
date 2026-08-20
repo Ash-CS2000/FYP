@@ -1,14 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { saveTokens } from '../api/auth';
+import { landingRoute } from '../auth/roles';
 import { API_URL } from '../config';
-
-const ROLE_ROUTES = {
-  user:     '/',
-  student:  '/',
-  author:   '/',
-  reviewer: '/',
-};
 
 // ── Shared icons ──────────────────────────────────────────────────────────────
 const EyeOpen = () => (
@@ -256,11 +250,12 @@ export default function RegisterPage() {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
-      const loginData = await loginRes.json();
       if (loginRes.ok) {
         saveTokens(data.access, data.refresh);
         localStorage.setItem('user', JSON.stringify(data.user));
-        navigate(ROLE_ROUTES[loginData.user?.role] || '/');
+        // Route on the same user object we persisted, so the guards in
+        // ProtectedRoute agree with where we send them.
+        navigate(landingRoute(data.user));
       } else {
         navigate('/login', { state: { registered: true } });
       }

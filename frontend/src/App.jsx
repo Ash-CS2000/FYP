@@ -27,6 +27,8 @@ import Certificate from './pages/Certificate.jsx';
 import UserSubmit from './pages/UserSubmit.jsx';
 import SearchResultsPage from './pages/SearchResultsPage.jsx';
 import OrcidCallback from './pages/OrcidCallback';
+import SelectWorkspace from './pages/SelectWorkspace.jsx';
+import ProtectedRoute from './auth/ProtectedRoute.jsx';
 
 export default function App() {
   return (
@@ -39,20 +41,27 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
+      {/* Any authenticated user (multi-role workspace picker) */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/select-workspace" element={<SelectWorkspace />} />
+      </Route>
+
       {/* Author */}
-      <Route path="/author" element={<Navigate to="/author/training" replace />} />
-      <Route path="/author/dashboard" element={<AuthorDashboard />} />
-      <Route path="/author/papers" element={<UserPapers />} />
-      <Route path="/author/submit" element={<UserSubmit />} />
-      <Route path="/author/revision" element={<Revision />} />
-      <Route path="/author/training" element={<TrainingModule />} />
-      <Route path="/author/progress" element={<StudentProgress />} />
-      <Route path="/author/assessment" element={<FinalAssessment />} />
-      <Route path="/author/certificate" element={<Certificate />} />
-      <Route path="/author/resources" element={<StudentResources />} />
-      <Route path="/author/notifications" element={<Notifications role="author" />} />
-      <Route path="/author/profile" element={<Profile role="author" />} />
-      <Route path="/author/settings" element={<Settings role="author" />} />
+      <Route element={<ProtectedRoute allow={['author']} />}>
+        <Route path="/author" element={<Navigate to="/author/dashboard" replace />} />
+        <Route path="/author/dashboard" element={<AuthorDashboard />} />
+        <Route path="/author/papers" element={<UserPapers />} />
+        <Route path="/author/submit" element={<UserSubmit />} />
+        <Route path="/author/revision" element={<Revision />} />
+        <Route path="/author/training" element={<TrainingModule />} />
+        <Route path="/author/progress" element={<StudentProgress />} />
+        <Route path="/author/assessment" element={<FinalAssessment />} />
+        <Route path="/author/certificate" element={<Certificate />} />
+        <Route path="/author/resources" element={<StudentResources />} />
+        <Route path="/author/notifications" element={<Notifications role="author" />} />
+        <Route path="/author/profile" element={<Profile role="author" />} />
+        <Route path="/author/settings" element={<Settings role="author" />} />
+      </Route>
 
       {/* Legacy student URLs → redirect to author equivalents */}
       <Route path="/student/training" element={<Navigate to="/author/training" replace />} />
@@ -65,26 +74,32 @@ export default function App() {
       <Route path="/student/*" element={<Navigate to="/author/training" replace />} />
 
       {/* Reviewer */}
-      <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />
-      <Route path="/reviewer/dashboard" element={<ReviewerDashboard />} />
-      <Route path="/reviewer/review" element={<ReviewForm />} />
-      <Route path="/reviewer/completed" element={<ReviewerCompleted />} />
-      <Route path="/reviewer/notifications" element={<Notifications role="reviewer" />} />
-      <Route path="/reviewer/profile" element={<Profile role="reviewer" />} />
+      <Route element={<ProtectedRoute allow={['reviewer']} />}>
+        <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />
+        <Route path="/reviewer/dashboard" element={<ReviewerDashboard />} />
+        <Route path="/reviewer/review" element={<ReviewForm />} />
+        <Route path="/reviewer/completed" element={<ReviewerCompleted />} />
+        <Route path="/reviewer/notifications" element={<Notifications role="reviewer" />} />
+        <Route path="/reviewer/profile" element={<Profile role="reviewer" />} />
+      </Route>
 
       {/* Editor */}
-      <Route path="/editor" element={<Navigate to="/editor/dashboard" replace />} />
-      <Route path="/editor/dashboard" element={<EditorDashboard />} />
-      <Route path="/editor/submissions" element={<EditorSubmissions />} />
-      <Route path="/editor/notifications" element={<Notifications role="editor" />} />
-      <Route path="/editor/settings" element={<Settings role="editor" />} />
+      <Route element={<ProtectedRoute allow={['editor']} />}>
+        <Route path="/editor" element={<Navigate to="/editor/dashboard" replace />} />
+        <Route path="/editor/dashboard" element={<EditorDashboard />} />
+        <Route path="/editor/submissions" element={<EditorSubmissions />} />
+        <Route path="/editor/notifications" element={<Notifications role="editor" />} />
+        <Route path="/editor/settings" element={<Settings role="editor" />} />
+      </Route>
 
       {/* Admin */}
-      <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-      <Route path="/admin/dashboard" element={<AdminDashboard />} />
-      <Route path="/admin/users" element={<AdminUsers />} />
-      <Route path="/admin/submissions" element={<EditorSubmissions role="admin" />} />
-      <Route path="/admin/settings" element={<Settings role="admin" />} />
+      <Route element={<ProtectedRoute allow={['admin']} />}>
+        <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/users" element={<AdminUsers />} />
+        <Route path="/admin/submissions" element={<EditorSubmissions role="admin" />} />
+        <Route path="/admin/settings" element={<Settings role="admin" />} />
+      </Route>
 
       <Route path="/orcid/callback" element={<OrcidCallback />} />
 

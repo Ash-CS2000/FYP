@@ -1,14 +1,30 @@
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { getMergedSidebar } from '../data/sidebarConfig.jsx';
-import { clearDemoSession, getDemoSession, ROLE_HOME, ROLE_LABELS } from '../data/demoAccounts.js';
+import { clearDemoSession, getDemoSession } from '../data/demoAccounts.js';
+import { clearSession } from '../api/auth';
+import { WORKSPACE_ROUTES, ROLE_LABELS, setActiveRole } from '../auth/roles';
 import { getStoredUser, getInitials } from '../utils/user.js';
+
+// Remember the sidebar's scroll position across route changes. Each page mounts
+// a fresh AppShell → Sidebar, which would otherwise snap scroll back to the top.
+// A module-level value survives those remounts within the SPA session.
+let savedSidebarScroll = 0;
 
 export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
   const navigate = useNavigate();
+  const asideRef = useRef(null);
+
+  // Restore the saved scroll position before paint to avoid a visible jump.
+  useLayoutEffect(() => {
+    const el = asideRef.current;
+    if (el) el.scrollTop = savedSidebarScroll;
+  }, []);
 
   const storedUser = getStoredUser();
-  const roles = storedUser?.roles?.length ? storedUser.roles : [role];
-  const cfg = getMergedSidebar(roles);
+  // Show ONLY the workspace we're currently in (the route's role), not a merge
+  // of every role. The full role list is used for the switcher options below.
+  const cfg = getMergedSidebar([role]);
   if (!cfg) return null;
 
   const session = getDemoSession();
@@ -21,22 +37,27 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
           role: storedUser.institution || cfg.role,
         }
       : cfg.user;
-  const availableRoles = session?.roles?.length ? session.roles : [role];
+  const availableRoles = storedUser?.roles?.length ? storedUser.roles : [role];
   const canSwitchRole = availableRoles.length > 1;
 
-  function handleRoleChange(e) {
-    const nextRole = e.target.value;
-    window.localStorage.setItem('paperbridge-active-role', nextRole);
-    navigate(ROLE_HOME[nextRole] || '/student/papers');
+  function switchRole(nextRole) {
+    if (nextRole === role) return;
+    setActiveRole(nextRole);
+    navigate(WORKSPACE_ROUTES[nextRole] || '/');
   }
 
   function handleSignOut() {
-    clearDemoSession();
+    clearDemoSession();      // demo-account + active-role keys
+    clearSession();          // user + access + refresh tokens
     navigate('/login');
   }
 
   return (
-    <aside className="sidebar">
+    <aside
+      className="sidebar"
+      ref={asideRef}
+      onScroll={(e) => { savedSidebarScroll = e.currentTarget.scrollTop; }}
+    >
       <div className="sidebar-brand">
         <Link to="/" className="brand sidebar-logo" title="PaperBridge home">
           <span className="brand-mark">PaperBridge</span>
@@ -82,12 +103,24 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
       <div className="sidebar-footer">
         {canSwitchRole && (
           <div className="sidebar-role-switcher">
-            <label className="sidebar-role-label" htmlFor={`role-switcher-${role}`}>Workspace</label>
-            <select id={`role-switcher-${role}`} value={role} onChange={handleRoleChange}>
-              {availableRoles.map((item) => (
-                <option key={item} value={item}>{ROLE_LABELS[item]}</option>
-              ))}
-            </select>
+            <label className="sidebar-role-label" htmlFor={availableRoles.length > 2 ? `role-switcher-${role}` : undefined}>Workspace</label>
+            {availableRoles.length === 2 ? (
+              <div className="sidebar-role-toggle" role="group" aria-label="Switch workspace">
+                {availableRoles.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`sidebar-role-toggle-btn ${item === role ? 'active' : ''}`}
+                    aria-pressed={item === role}
+                    onClick={() => switchRole(item)}
+                  >
+                    {ROLE_LABELS[item]}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <WorkspaceDropdown roles={availableRoles} current={role} onSelect={switchRole} />
+            )}
           </div>
         )}
         <div className="sidebar-user">
@@ -105,5 +138,65 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
         </button>
       </div>
     </aside>
+  );
+}
+
+// Custom, fully theme-able workspace dropdown (3+ roles). Opens upward since it
+// sits at the bottom of the sidebar; closes on outside-click or Escape.
+function WorkspaceDropdown({ roles, current, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDocClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className={`ws-dd ${open ? 'open' : ''}`} ref={ref}>
+      <button
+        type="button"
+        className="ws-dd-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="ws-dd-current">{ROLE_LABELS[current] || current}</span>
+        <svg className="ws-dd-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="ws-dd-menu" role="listbox">
+          {roles.map((r) => (
+            <li
+              key={r}
+              role="option"
+              aria-selected={r === current}
+              className={`ws-dd-option ${r === current ? 'active' : ''}`}
+              onClick={() => { setOpen(false); onSelect(r); }}
+            >
+              <span>{ROLE_LABELS[r] || r}</span>
+              {r === current && (
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

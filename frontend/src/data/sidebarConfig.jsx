@@ -20,20 +20,21 @@ const ICONS = {
 };
 
 export function getMergedSidebar(roles = []) {
-  if (roles.length <= 1) {
-    return SIDEBAR_CONFIG[roles[0]] || SIDEBAR_CONFIG.author;
+  const active = roles.filter(r => SIDEBAR_CONFIG[r]);
+  const base = SIDEBAR_CONFIG[active[0]] || SIDEBAR_CONFIG.author;
+  if (active.length <= 1) {
+    return base;
   }
-  const base = { ...SIDEBAR_CONFIG[roles[0]] };
-  const mergedSections = [...base.sections];
-  for (const r of roles.slice(1)) {
-    const cfg = SIDEBAR_CONFIG[r];
-    if (!cfg) continue;
-    for (const section of cfg.sections) {
+  // Clone sections AND their item arrays so we never mutate the shared
+  // module-level SIDEBAR_CONFIG (that pollution persists for the whole session).
+  const mergedSections = base.sections.map(s => ({ ...s, items: [...s.items] }));
+  for (const r of active.slice(1)) {
+    for (const section of SIDEBAR_CONFIG[r].sections) {
       const existing = mergedSections.find(s => s.title === section.title);
       if (existing) {
         existing.items = [...existing.items, ...section.items];
       } else {
-        mergedSections.push(section);
+        mergedSections.push({ ...section, items: [...section.items] });
       }
     }
   }
