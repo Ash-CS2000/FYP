@@ -1,18 +1,37 @@
+// The manuscript is reached only through an accepted assignment — auth/AssignmentGate
+// redirects anyone else back to the assignment list before this component renders.
+// The gate is a courtesy; the server still has to check (see api/invitations.js).
+
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import {
+  assignmentForManuscript,
+  saveResponse,
+  deadlineState,
+  formatDate,
+} from '../data/invitations.js';
 
 export default function ReviewForm() {
+  const { id } = useParams();
+  const assignment = assignmentForManuscript(id);
   const [ratings, setRatings] = useState({ originality: 4, technical: 3, clarity: 4, relevance: 5 });
   const [recommendation, setRecommendation] = useState('minor');
   const [confidential, setConfidential] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const composite = ((ratings.originality + ratings.technical + ratings.clarity + ratings.relevance) / 4).toFixed(1);
+  const due = deadlineState(assignment?.due_at);
 
-  const handleSubmit = () => {
-    alert('Review submitted successfully! Thank you for your contribution.');
-    navigate('/reviewer/dashboard');
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    // POST /api/manuscripts/:id/reviews/ — see data/reviews.js for the record
+    // shape. The endpoint does not exist yet, so the assignment is closed out
+    // locally and the editor is not notified until it does.
+    saveResponse(assignment.id, { status: 'submitted', submitted_at: new Date().toISOString() });
+    setSubmitting(false);
+    navigate('/reviewer/assignments');
   };
 
   return (
@@ -32,12 +51,43 @@ export default function ReviewForm() {
 
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">Review · MS-2026-014</span>
-          <h1 className="page-title" style={{ marginTop: 8 }}>Deep Learning Methods in <em className="serif-italic">Medical Imaging</em>.</h1>
-          <p className="page-subtitle">Evaluate the manuscript and submit your recommendation. Due 10 May 2026.</p>
+          <span className="eyebrow">Review · {assignment.manuscript_id}</span>
+          <h1 className="page-title" style={{ marginTop: 8 }}>
+            <em className="serif-italic">{assignment.title}</em>.
+          </h1>
+          <p className="page-subtitle">
+            Evaluate the manuscript and submit your recommendation.
+            {assignment.due_at
+              ? <> Due {formatDate(assignment.due_at)}.</>
+              : <> Your deadline is set once the editor registers your acceptance.</>}
+          </p>
         </div>
-        <Link to="/reviewer/dashboard" className="btn btn-ghost btn-sm">← Back to Dashboard</Link>
+        <Link to="/reviewer/assignments" className="btn btn-ghost btn-sm">← Back to assignments</Link>
       </div>
+
+      {due.tone === 'overdue' && (
+        <div className="lms-banner is-todo fade-up">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" />
+          </svg>
+          <span>
+            {due.label}. If you need longer, request an extension from your{' '}
+            <Link to="/reviewer/assignments">assignments</Link> rather than letting it run.
+          </span>
+        </div>
+      )}
+
+      {assignment.extension?.status === 'pending' && (
+        <div className="lms-banner is-todo fade-up">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+          </svg>
+          <span>
+            Extension requested ({assignment.extension.requested_days} days). The deadline
+            above has not moved — it only changes if the editor grants it.
+          </span>
+        </div>
+      )}
 
       <div className="split-grid fade-up delay-1" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
         <div className="card">
@@ -139,7 +189,9 @@ export default function ReviewForm() {
             </div>
             <div className="row">
               <button className="btn btn-ghost">Save Draft</button>
-              <button onClick={handleSubmit} className="btn btn-primary">Submit Review →</button>
+              <button onClick={handleSubmit} className="btn btn-primary" disabled={submitting}>
+                {submitting ? 'Submitting…' : 'Submit Review →'}
+              </button>
             </div>
           </div>
         </div>
@@ -162,33 +214,15 @@ export default function ReviewForm() {
           <div className="card">
             <div className="card-header"><div className="card-title">Paper Metadata</div></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div><div className="label" style={{ marginBottom: 4 }}>Category</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)', fontWeight: 500 }}>Computer Science · AI & ML</div></div>
-              <div><div className="label" style={{ marginBottom: 4 }}>Submitted</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>12 January 2026</div></div>
-              <div><div className="label" style={{ marginBottom: 4 }}>Word count</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>~7,800 words</div></div>
+              <div><div className="label" style={{ marginBottom: 4 }}>Category</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)', fontWeight: 500 }}>{assignment.category}</div></div>
+              <div><div className="label" style={{ marginBottom: 4 }}>You accepted</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>{formatDate(assignment.invited_at)}</div></div>
+              <div><div className="label" style={{ marginBottom: 4 }}>Review due</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>{formatDate(assignment.due_at)}</div></div>
             </div>
           </div>
+          {/* No co-reviewer panel here by design: a reviewer must not learn who
+              else is assigned, nor how many, nor how far along they are. Even
+              anonymised, progress leaks the size and state of the review panel. */}
 
-          <div className="card">
-            <div className="card-header"><div className="card-title">Other Reviewers</div></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className="row" style={{ padding: '8px 0' }}>
-                <div className="avatar avatar-sm">??</div>
-                <div style={{ flex: 1, marginLeft: 8 }}>
-                  <div style={{ fontSize: 13, color: 'var(--navy-900)', fontWeight: 500 }}>Reviewer 2</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>Anonymous · Submitted</div>
-                </div>
-                <span className="pill pill-approved">Done</span>
-              </div>
-              <div className="row" style={{ padding: '8px 0' }}>
-                <div className="avatar avatar-sm">??</div>
-                <div style={{ flex: 1, marginLeft: 8 }}>
-                  <div style={{ fontSize: 13, color: 'var(--navy-900)', fontWeight: 500 }}>Reviewer 3</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>Anonymous · Pending</div>
-                </div>
-                <span className="pill pill-pending">Pending</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </AppShell>

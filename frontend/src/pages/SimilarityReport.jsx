@@ -22,6 +22,21 @@ import {
   SIMILARITY_TONE,
   SOURCE_TYPE_LABELS,
 } from '../data/similarity.js';
+import {
+  SCREENING_ACTIONS,
+  screeningActionFor,
+  saveScreeningAction,
+  formatDecidedAt,
+} from '../data/editorial.js';
+import { postScreeningAction } from '../api/editorial.js';
+import { getStoredUser } from '../utils/user.js';
+
+// The editor's own name goes on the screening record, same as on a decision.
+function editorName() {
+  const u = getStoredUser();
+  const full = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim();
+  return full || u?.name || 'The Editorial Office';
+}
 
 function SourceCard({ source, rank }) {
   const [open, setOpen] = useState(rank === 1);
@@ -68,6 +83,126 @@ function SourceCard({ source, rank }) {
   );
 }
 
+// What the editor does about a flagged report. Separate from the editorial
+// decision in ManuscriptDetail: 'allow' clears the flag and lets the manuscript
+// continue to review, 'return' sends it back to the author to fix the overlap.
+// Neither accepts nor rejects the paper.
+//
+// The note is required. A cleared flag with no reasoning is the record that is
+// useless six months later when somebody asks why a 34% match went to review.
+function ScreeningActions({ manuscriptId, band, isAdmin }) {
+  const [record, setRecord] = useState(() => screeningActionFor(manuscriptId));
+  const [action, setAction] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Nothing to act on unless the report is in the flagged band — and no history
+  // to show either.
+  if (band !== 'high' && !record) return null;
+
+  if (record) {
+    const label = SCREENING_ACTIONS.find(a => a.id === record.action)?.label || record.action;
+    return (
+      <div className="card fade-up delay-2">
+        <div className="card-header">
+          <div>
+            <div className="card-title">Screening outcome</div>
+            <div className="card-meta">{record.acted_by} · {formatDecidedAt(record.acted_at)}</div>
+          </div>
+          <span className="pill pill-approved">{label}</span>
+        </div>
+        <p style={{ fontSize: 13.5, color: 'var(--navy-900)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+          {record.note}
+        </p>
+      </div>
+    );
+  }
+
+  if (isAdmin) {
+    return (
+      <div className="card fade-up delay-2">
+        <div className="card-header"><div className="card-title">Screening outcome</div></div>
+        <div className="card-meta">
+          Flagged and awaiting the editor. Acting on a flag is editorial work, so it
+          is not available here.
+        </div>
+      </div>
+    );
+  }
+
+  const save = async () => {
+    if (!note.trim()) {
+      setError('Say why. This note is the record of how the flag was resolved.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    const next = {
+      manuscript_id: manuscriptId,
+      action,
+      note: note.trim(),
+      acted_at: new Date().toISOString(),
+      acted_by: editorName(),
+    };
+    try {
+      await postScreeningAction(manuscriptId, { action, note: next.note });
+    } catch {
+      next.local_only = true;
+    }
+    saveScreeningAction(next);
+    setSaving(false);
+    setRecord(next);
+  };
+
+  return (
+    <div className="card fade-up delay-2">
+      <div className="card-header">
+        <div>
+          <div className="card-title">Act on this flag</div>
+          <div className="card-meta">
+            Read the matched passages below before choosing. Neither option decides the
+            manuscript.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        {SCREENING_ACTIONS.map(a => (
+          <button
+            key={a.id}
+            type="button"
+            className={`sim-action ${action === a.id ? 'selected' : ''}`}
+            onClick={() => { setAction(a.id); setError(''); }}
+          >
+            <span className="sim-action-title">{a.label}</span>
+            <span className="sim-action-desc">{a.blurb}</span>
+          </button>
+        ))}
+      </div>
+
+      {action && (
+        <>
+          <div className="field" style={{ marginTop: 18 }}>
+            <label className="field-label">Why <span className="req">*</span></label>
+            <textarea
+              className="field-textarea"
+              rows="3"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. Matches are the author's own conference paper, correctly cited."
+            />
+          </div>
+          {error && <div className="field-hint" style={{ color: 'var(--red-800)' }}>{error}</div>}
+          <button className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
+            {saving ? 'Recording…' : 'Record outcome'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function SimilarityReport({ role = 'editor' }) {
   const { id } = useParams();
   const isAdmin = role === 'admin';
@@ -108,6 +243,11 @@ export default function SimilarityReport({ role = 'editor' }) {
   return (
     <AppShell role={role} searchPlaceholder="Search submissions...">
       <style>{`
+        .sim-action { text-align: left; border: 1.5px solid var(--ink-200); border-radius: var(--r-md); padding: 13px 15px; background: var(--white); cursor: pointer; transition: all var(--t-fast); display: block; width: 100%; }
+        .sim-action:hover { border-color: var(--navy-700); }
+        .sim-action.selected { border-color: var(--navy-900); background: var(--navy-100); }
+        .sim-action-title { display: block; font-weight: 600; font-size: 14px; color: var(--navy-900); }
+        .sim-action-desc { display: block; font-size: 12.5px; color: var(--ink-600); margin-top: 3px; line-height: 1.5; }
         .sim-hero { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
         .sim-dial { width: 132px; height: 132px; border-radius: 50%; display: flex; flex-direction: column;
                     align-items: center; justify-content: center; flex-shrink: 0; }
@@ -242,6 +382,13 @@ export default function SimilarityReport({ role = 'editor' }) {
               below, not as a finding.
             </div>
           </div>
+
+          {/* Acting on a flagged report. Deliberately NOT a decision: allowing a
+              manuscript through does not accept it, and returning it does not
+              reject it — both leave the paper in the pipeline. Neither touches the
+              score, which is a fact about the text that an editor's disagreement
+              does not change. */}
+          <ScreeningActions manuscriptId={manuscript.id} band={band} isAdmin={isAdmin} />
 
           <div className="card fade-up delay-2">
             <div className="card-header">

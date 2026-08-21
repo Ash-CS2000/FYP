@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { API_URL } from '../config';
 import {
@@ -20,6 +20,8 @@ import {
   BAND_HINTS,
   SIMILARITY_TONE,
 } from '../data/similarity.js';
+import { draftFor, saveDraft, deleteDraft, formatSavedAt } from '../data/drafts.js';
+import { saveDraftRemote } from '../api/submissions.js';
 
 const MAX_UPLOAD_SIZE = 20 * 1024 * 1024; // 20 MB
 const TOTAL_STEPS = 5;
@@ -204,7 +206,15 @@ function OriginalitySelfCheck({ state, report, progress, error, isDemo, onRun })
 
 export default function UserSubmit() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const progress = getProgress();
+
+  // Resuming a draft. Read once, before any state is initialised, so every field
+  // below can seed from it. `d` is empty for a fresh submission, which is why
+  // every read below carries its own default.
+  const resumeId = searchParams.get('draft');
+  const resumed = resumeId ? draftFor(resumeId) : null;
+  const d = resumed?.payload || {};
   // Submission unlocks once the final assessment is passed — students need it
   // open to submit the paper that earns their certificate.
   const canSubmit = progress.assessment.passed;
@@ -213,26 +223,31 @@ export default function UserSubmit() {
   const fulfillingRequirement = progress.assessment.passed && pub.status === 'pending';
   const completedUnits = countCompletedUnits(progress);
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(resumed?.step || 1);
+  const [draftId, setDraftId] = useState(resumeId || null);
+  const [draftSavedAt, setDraftSavedAt] = useState(resumed?.updated_at || '');
+  const [draftError, setDraftError] = useState('');
 
   // Step 1 — Type & details
-  const [articleType, setArticleType] = useState(ARTICLE_TYPES[0]);
-  const [title, setTitle] = useState('');
-  const [runningTitle, setRunningTitle] = useState('');
-  const [abstract, setAbstract] = useState('');
-  const [category, setCategory] = useState('Computer Science — AI & ML');
-  const [subCategory, setSubCategory] = useState('Medical Imaging');
-  const [keywords, setKeywords] = useState('');
+  const [articleType, setArticleType] = useState(d.articleType || ARTICLE_TYPES[0]);
+  const [title, setTitle] = useState(d.title || '');
+  const [runningTitle, setRunningTitle] = useState(d.runningTitle || '');
+  const [abstract, setAbstract] = useState(d.abstract || '');
+  const [category, setCategory] = useState(d.category || 'Computer Science — AI & ML');
+  const [subCategory, setSubCategory] = useState(d.subCategory || 'Medical Imaging');
+  const [keywords, setKeywords] = useState(d.keywords || '');
 
   // Step 2 — Authors
-  const [authors, setAuthors] = useState(() => [
-    emptyAuthor({ ...splitName(getDemoSession()?.name), corresponding: true }),
-  ]);
+  const [authors, setAuthors] = useState(() =>
+    d.authors?.length
+      ? d.authors
+      : [emptyAuthor({ ...splitName(getDemoSession()?.name), corresponding: true })],
+  );
 
   // Step 3 — Files
   const [file, setFile] = useState(null);
   const [supplementary, setSupplementary] = useState([]);
-  const [coverLetter, setCoverLetter] = useState('');
+  const [coverLetter, setCoverLetter] = useState(d.coverLetter || '');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef(null);
@@ -248,14 +263,14 @@ export default function UserSubmit() {
   const [checkIsDemo, setCheckIsDemo] = useState(false);
 
   // Step 4 — Declarations
-  const [noFunding, setNoFunding] = useState(false);
-  const [funder, setFunder] = useState('');
-  const [grantNo, setGrantNo] = useState('');
-  const [noCompeting, setNoCompeting] = useState(false);
-  const [competing, setCompeting] = useState('');
-  const [ethicsNA, setEthicsNA] = useState(false);
-  const [ethics, setEthics] = useState('');
-  const [dataStatement, setDataStatement] = useState('');
+  const [noFunding, setNoFunding] = useState(d.noFunding || false);
+  const [funder, setFunder] = useState(d.funder || '');
+  const [grantNo, setGrantNo] = useState(d.grantNo || '');
+  const [noCompeting, setNoCompeting] = useState(d.noCompeting || false);
+  const [competing, setCompeting] = useState(d.competing || '');
+  const [ethicsNA, setEthicsNA] = useState(d.ethicsNA || false);
+  const [ethics, setEthics] = useState(d.ethics || '');
+  const [dataStatement, setDataStatement] = useState(d.dataStatement || '');
 
   // Step 5 — Agreement checklist
   const [agreements, setAgreements] = useState({
@@ -266,6 +281,36 @@ export default function UserSubmit() {
   });
   const allAgreed = Object.values(agreements).every(Boolean);
   const [stepError, setStepError] = useState('');
+
+  // ---- Drafts -------------------------------------------------------------
+  // Everything serialisable, and nothing else. The manuscript File is excluded
+  // deliberately — see the note at the top of data/drafts.js — so a resumed
+  // draft asks for the file again rather than silently losing it.
+  const draftPayload = () => ({
+    articleType, title, runningTitle, abstract, category, subCategory, keywords,
+    authors, coverLetter,
+    noFunding, funder, grantNo, noCompeting, competing, ethicsNA, ethics, dataStatement,
+  });
+
+  const handleSaveDraft = async () => {
+    setDraftError('');
+    const record = {
+      id: draftId,
+      kind: 'submission',
+      title,
+      step,
+      payload: draftPayload(),
+      file_name: file?.name || '',
+    };
+    try {
+      await saveDraftRemote(draftId, record);
+    } catch {
+      setDraftError('Saved on this device only — the draft service is unavailable.');
+    }
+    const saved = saveDraft(record);
+    setDraftId(saved.id);
+    setDraftSavedAt(saved.updated_at);
+  };
 
   // ---- Author helpers -----------------------------------------------------
   const updateAuthor = (index, patch) =>
@@ -499,6 +544,10 @@ export default function UserSubmit() {
       setUploading(false);
     }
 
+    // The draft has served its purpose — leaving it behind would show the author
+    // a "resume" entry for a paper they already submitted.
+    if (draftId) deleteDraft(draftId);
+
     if (fulfillingRequirement) {
       submitPublication(title, getDemoSession()?.name || 'JSRMS Student');
       alert(
@@ -526,6 +575,20 @@ export default function UserSubmit() {
           <span className="pill pill-review">Certification paper</span>
         )}
       </div>
+
+      {resumed && (
+        <div className="lms-banner is-todo fade-up" style={{ marginBottom: 18 }}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5" />
+          </svg>
+          <span>
+            Draft resumed from {formatSavedAt(resumed.updated_at)}.
+            {resumed.file_name
+              ? ` Your manuscript file was not saved with it — re-attach ${resumed.file_name} at step 3.`
+              : ' Files are not saved with a draft, so attach your manuscript at step 3.'}
+          </span>
+        </div>
+      )}
 
       {fulfillingRequirement && (
         <div className="unit-todo-banner fade-up" style={{ marginBottom: 18 }}>
@@ -946,7 +1009,15 @@ export default function UserSubmit() {
           <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--ink-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="row">
               {step > 1 && <button onClick={() => { setStepError(''); setStep(step - 1); }} className="btn btn-ghost">← Back</button>}
-              <button className="btn btn-ghost">Save as Draft</button>
+              <button className="btn btn-ghost" onClick={handleSaveDraft}>Save as Draft</button>
+              {draftSavedAt && !draftError && (
+                <span style={{ fontSize: 12.5, color: 'var(--ink-600)' }}>
+                  Saved {formatSavedAt(draftSavedAt)}
+                </span>
+              )}
+              {draftError && (
+                <span style={{ fontSize: 12.5, color: 'var(--amber-800)' }}>{draftError}</span>
+              )}
             </div>
             <div className="row">
               {(stepError || (step === TOTAL_STEPS && uploadError)) && (
