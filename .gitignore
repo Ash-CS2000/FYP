@@ -230,6 +230,8 @@ frontend/.env.local
 .DS_Store
 CLAUDE.md
 sprint3_developments.md
+development_log.md
+manuscript_submission_development.md
 
 # Claude Code local tooling artifacts (auto-downloaded skill docs, not app code)
 .agents/
