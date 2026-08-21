@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
+<<<<<<< Updated upstream
 import { TOPICS, TOPIC_AREAS } from '../data/papers.js';
 
 function StarRating({ rating }) {
@@ -20,6 +21,9 @@ function StarRating({ rating }) {
     </span>
   );
 }
+=======
+import { CATEGORIES, PAPERS } from './SearchResultsPage.jsx';
+>>>>>>> Stashed changes
 
 export default function UserPapers() {
   const [query, setQuery] = useState('');

@@ -272,6 +272,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   gap: 10px;
   align-items: center;
 }
+<<<<<<< Updated upstream
 .nav-avatar {
   display: inline-flex;
   align-items: center;
@@ -287,6 +288,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   flex-shrink: 0;
   user-select: none;
 }
+=======
+>>>>>>> Stashed changes
 .nav-search-mini {
   display: flex;
   align-items: center;

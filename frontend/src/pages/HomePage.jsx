@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+<<<<<<< Updated upstream
 import { TOPICS } from '../data/papers.js';
 import PublicNav from '../components/PublicNav.jsx';
 
@@ -7,17 +8,32 @@ const TRENDING = [...TOPICS].sort((a, b) => b.rating - a.rating).slice(0, 3);
 function getUser() {
   try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
 }
+=======
+import { PAPERS } from './SearchResultsPage.jsx';
+import PublicNav from '../components/PublicNav.jsx';
+
+const TRENDING = [...PAPERS].sort((a, b) => b.downloads - a.downloads).slice(0, 3);
+>>>>>>> Stashed changes
 
 const HOW_IT_WORKS = [
   {
     step: '01',
     title: 'Search & Discover',
+<<<<<<< Updated upstream
     desc: 'Search research topics by keyword or discipline. See what areas are being studied and find inspiration for your own work.',
   },
   {
     step: '02',
     title: 'Explore Topics',
     desc: 'Read summaries of peer-reviewed research — institution, level, year, and rating — without access to full documents, to encourage original thinking.',
+=======
+    desc: 'Find papers by title, author, keyword, or abstract. Filter by discipline to narrow your results.',
+  },
+  {
+    step: '02',
+    title: 'Access Papers',
+    desc: 'Download open-access papers for free. Purchase paid publications securely with a registered account.',
+>>>>>>> Stashed changes
   },
   {
     step: '03',
@@ -27,7 +43,10 @@ const HOW_IT_WORKS = [
 ];
 
 export default function HomePage() {
+<<<<<<< Updated upstream
   const user = getUser();
+=======
+>>>>>>> Stashed changes
   return (
     <div className="paper-portal">
       <style>{`
@@ -367,6 +386,7 @@ export default function HomePage() {
       <section className="portal-hero">
         <div className="portal-inner">
           <div className="portal-hero-inner">
+<<<<<<< Updated upstream
 
             {/* Left — text */}
             <div className="portal-heading">
@@ -378,6 +398,17 @@ export default function HomePage() {
                 : <Link to="/register" className="btn btn-primary">Join Us</Link>}
             </div>
 
+=======
+
+            {/* Left — text */}
+            <div className="portal-heading">
+              <span className="eyebrow">Public Research Library</span>
+              <h1>Find papers, learn methods, and build your <em>research skills</em>.</h1>
+              <p>Browse published papers, preview abstracts, download open access papers, and purchase paid publications.</p>
+              <Link to="/register" className="btn btn-primary">Join Us</Link>
+            </div>
+
+>>>>>>> Stashed changes
             {/* Right — floating cards */}
             <div className="hero-cards">
 
@@ -454,6 +485,7 @@ export default function HomePage() {
       <section className="trending-section">
         <div className="portal-inner">
           <div className="trending-header">
+<<<<<<< Updated upstream
             <h2>Trending Research Topics</h2>
             <span className="trending-badge">Top Rated</span>
           </div>
@@ -474,6 +506,23 @@ export default function HomePage() {
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                       </svg>
                     ))}
+=======
+            <h2>Trending This Week</h2>
+            <span className="trending-badge">Hot</span>
+          </div>
+          <div className="trending-grid">
+            {TRENDING.map((paper, i) => (
+              <div className="trending-card" key={paper.id}>
+                <span className={`trending-rank rank-${i + 1}`}>{String(i + 1).padStart(2, '0')}</span>
+                <div className="trending-info">
+                  <h3>{paper.title}</h3>
+                  <div className="trending-meta">
+                    <span>{paper.author}</span>
+                    <span>{paper.category}</span>
+                  </div>
+                  <div className="trending-downloads">
+                    ↓ {paper.downloads.toLocaleString()} downloads
+>>>>>>> Stashed changes
                   </div>
                 </div>
               </div>
@@ -515,7 +564,11 @@ export default function HomePage() {
 
             <div className="footer-col">
               <h4>Explore</h4>
+<<<<<<< Updated upstream
               <Link to="/search">Browse Topics</Link>
+=======
+              <Link to="/search">Browse Papers</Link>
+>>>>>>> Stashed changes
               <Link to="/search?category=Computer+Science">Computer Science</Link>
               <Link to="/search?category=Engineering">Engineering</Link>
               <Link to="/search?category=Physics">Physics</Link>
@@ -528,7 +581,11 @@ export default function HomePage() {
               <Link to="/resources">Resources</Link>
               <Link to="/register">Create Account</Link>
               <Link to="/login">Sign In</Link>
+<<<<<<< Updated upstream
               <Link to="/author/training">Training Modules</Link>
+=======
+              <Link to="/user/training">Training Modules</Link>
+>>>>>>> Stashed changes
             </div>
 
             <div className="footer-col">
