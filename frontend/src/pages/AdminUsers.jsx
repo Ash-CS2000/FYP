@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import AppShell from '../components/AppShell.jsx';
-import { patchReviewerStatus, patchUserRole, inviteAdmin, listAuditLog } from '../api/admin.js';
+import { patchReviewerStatus, patchUserRole, patchUserStatus, inviteAdmin, listAuditLog } from '../api/admin.js';
 import { getStoredUser } from '../auth/roles';
 
 const DEMO_USERS = [
@@ -12,6 +12,10 @@ const DEMO_USERS = [
   { id: 6, initials: 'SK', name: 'Siti Khadijah', email: 'siti.k@iium.edu.my', roles: ['author'], institution: 'IIUM', date: '18 Apr 2026', status: 'active', reviewer_status: '' },
   { id: 7, initials: 'JT', name: 'Prof. James Tan', email: 'james.t@um.edu.my', roles: ['author', 'reviewer'], institution: 'UM', date: '02 Feb 2025', status: 'active', reviewer_status: 'pending' },
   { id: 8, initials: 'WM', name: 'Wong Mei Ling', email: 'wong.ml@upm.edu.my', roles: ['author'], institution: 'UPM', date: '11 Jan 2026', status: 'active', reviewer_status: '' },
+  // The seeded administrator. Present so the protections around admin rows are
+  // visible rather than theoretical: no promotion, no demotion, and no suspending
+  // each other. See patchUserStatus in api/admin.js for why.
+  { id: 9, initials: 'SA', name: 'System Admin', email: 'admin@paperbridge.edu.my', roles: ['admin'], institution: 'PaperBridge', date: '01 Jan 2023', status: 'active', reviewer_status: '' },
 ];
 
 function getPrimaryRole(u) {
@@ -29,12 +33,13 @@ function getInitials(name = '') {
 // Shape mirrors the audit_logs row the backend is expected to write (see
 // api/admin.js). `local: true` marks entries this session invented because the
 // server was unreachable — they are never the real trail.
-function localAudit(actor, action, role, target) {
+function localAudit(actor, action, role, target, reason = '') {
   return {
     id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     actor_name: actor?.name || 'You',
     action,
     role,
+    reason,
     target_name: target?.name || target?.email || '—',
     target_email: target?.email || '',
     created_at: new Date().toISOString(),
@@ -43,11 +48,14 @@ function localAudit(actor, action, role, target) {
 }
 
 const ACTION_TEXT = {
-  grant:   { verb: 'promoted',  color: 'var(--teal-800)' },
-  revoke:  { verb: 'revoked',   color: 'var(--red-700)' },
-  approve: { verb: 'approved',  color: 'var(--teal-800)' },
-  reject:  { verb: 'rejected',  color: 'var(--red-700)' },
-  invite:  { verb: 'invited',   color: 'var(--navy-700)' },
+  grant:       { verb: 'promoted',    color: 'var(--teal-800)' },
+  revoke:      { verb: 'revoked',     color: 'var(--red-700)' },
+  approve:     { verb: 'approved',    color: 'var(--teal-800)' },
+  reject:      { verb: 'rejected',    color: 'var(--red-700)' },
+  invite:      { verb: 'invited',     color: 'var(--navy-700)' },
+  suspended:   { verb: 'suspended',   color: 'var(--red-700)' },
+  deactivated: { verb: 'deactivated', color: 'var(--red-700)' },
+  reactivate:  { verb: 'reactivated', color: 'var(--teal-800)' },
 };
 
 export default function AdminUsers() {
@@ -119,6 +127,19 @@ export default function AdminUsers() {
     });
   }
 
+  // Suspension and deactivation. Never a delete — see patchUserStatus in
+  // api/admin.js for what the server has to do about work already in flight.
+  function handleStatusAction(userId, status, reason) {
+    const target = users.find(u => u.id === userId);
+    if ((target?.roles || []).includes('admin')) return undefined;
+    return applyUserChange({
+      key: `${userId}-status-${status}`,
+      request: () => patchUserStatus(userId, status, reason),
+      fallback: (u) => (u.id === userId ? { ...u, status } : u),
+      auditRow: localAudit(actor, status === 'active' ? 'reactivate' : status, 'account', target, reason),
+    });
+  }
+
   async function handleInvite({ name, email }) {
     let record;
     try {
@@ -152,6 +173,7 @@ export default function AdminUsers() {
         .adm-menu-item:hover:not(:disabled) { background:rgba(255,255,255,0.09); }
         .adm-menu-item:disabled { color:var(--navy-300); cursor:default; }
         .adm-menu-item.danger { color:#fca5a5; }
+        .adm-menu-sep { height:1px; margin:5px 8px; background:rgba(255,255,255,0.12); }
         .adm-menu-note { padding:9px 12px; font-size:12px; color:var(--navy-200); line-height:1.5; }
         .adm-confirm { padding:10px 12px; }
         .adm-confirm p { font-size:12.5px; color:var(--navy-200); line-height:1.5; margin-bottom:10px; }
@@ -295,6 +317,7 @@ export default function AdminUsers() {
                     user={u}
                     busy={actionLoading?.startsWith(`${u.id}-`)}
                     onRoleAction={(role, action) => handleRoleAction(u.id, role, action)}
+                    onStatusAction={(status, reason) => handleStatusAction(u.id, status, reason)}
                   />
                 </td>
               </tr>
@@ -347,10 +370,12 @@ export default function AdminUsers() {
 
 // ── Row actions ───────────────────────────────────────────────────────────────
 // Promotion is a privilege change, so it takes two deliberate clicks. Admin
-// rows expose no role actions at all — admin is invite-only, never promoted.
-function RowActionsMenu({ user, busy, onRoleAction }) {
+// rows expose no actions at all — admin is invite-only and never promoted, and
+// admins cannot suspend each other (see patchUserStatus in api/admin.js for why).
+function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
   const [open, setOpen]       = useState(false);
-  const [confirm, setConfirm] = useState(null); // 'grant' | 'revoke'
+  const [confirm, setConfirm] = useState(null); // 'grant' | 'revoke' | 'suspended' | 'deactivated' | 'active'
+  const [reason, setReason]   = useState('');
   const ref = useRef(null);
 
   useEffect(() => {
@@ -365,16 +390,44 @@ function RowActionsMenu({ user, busy, onRoleAction }) {
     };
   }, [open]);
 
-  function close() { setOpen(false); setConfirm(null); }
+  function close() { setOpen(false); setConfirm(null); setReason(''); }
 
   const roles    = user.roles || [];
   const isAdmin  = roles.includes('admin');
   const isEditor = roles.includes('editor');
+  const status   = user.status || 'active';
+  const isStatusConfirm = ['suspended', 'deactivated', 'active'].includes(confirm);
 
   function apply(action) {
     onRoleAction('editor', action);
     close();
   }
+
+  function applyStatus(next) {
+    onStatusAction(next, reason.trim());
+    close();
+  }
+
+  const STATUS_COPY = {
+    suspended: {
+      title: 'Suspend',
+      body: <>Suspend <strong>{user.name}</strong>? They cannot sign in until reactivated. Nothing they own is deleted, and any review they are holding is released back to the editor.</>,
+      cta: 'Suspend',
+      danger: true,
+    },
+    deactivated: {
+      title: 'Deactivate',
+      body: <>Deactivate <strong>{user.name}</strong>? They cannot sign in, will not be invited to review, and drop out of the reviewer pool. Their submissions and submitted reviews stay on the record.</>,
+      cta: 'Deactivate',
+      danger: true,
+    },
+    active: {
+      title: 'Reactivate',
+      body: <>Reactivate <strong>{user.name}</strong>? They will be able to sign in again.</>,
+      cta: 'Reactivate',
+      danger: false,
+    },
+  };
 
   return (
     <div className="adm-menu-wrap" ref={ref}>
@@ -394,8 +447,36 @@ function RowActionsMenu({ user, busy, onRoleAction }) {
         <div className="adm-menu" role="menu">
           {isAdmin ? (
             <p className="adm-menu-note">
-              Administrator accounts cannot be promoted or demoted here.
+              Administrator accounts cannot be promoted, demoted or suspended here.
             </p>
+          ) : isStatusConfirm ? (
+            <div className="adm-confirm">
+              <p>{STATUS_COPY[confirm].body}</p>
+              <div className="field" style={{ marginBottom: 10 }}>
+                <label className="field-label">
+                  Reason {confirm !== 'active' && <span className="req">*</span>}
+                </label>
+                <input
+                  className="field-input"
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  placeholder="Recorded in the audit log"
+                />
+              </div>
+              <div className="adm-confirm-row">
+                <button
+                  className="btn btn-sm"
+                  disabled={confirm !== 'active' && !reason.trim()}
+                  style={STATUS_COPY[confirm].danger
+                    ? { background: 'var(--red-700)', color: '#fff', border: 'none' }
+                    : { background: 'var(--teal-600)', color: '#fff', border: 'none' }}
+                  onClick={() => applyStatus(confirm)}
+                >
+                  {STATUS_COPY[confirm].cta}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setConfirm(null); setReason(''); }}>Cancel</button>
+              </div>
+            </div>
           ) : confirm ? (
             <div className="adm-confirm">
               <p>
@@ -416,14 +497,35 @@ function RowActionsMenu({ user, busy, onRoleAction }) {
                 <button className="btn btn-ghost btn-sm" onClick={() => setConfirm(null)}>Cancel</button>
               </div>
             </div>
-          ) : isEditor ? (
-            <button className="adm-menu-item danger" role="menuitem" onClick={() => setConfirm('revoke')}>
-              Revoke editor access
-            </button>
           ) : (
-            <button className="adm-menu-item" role="menuitem" onClick={() => setConfirm('grant')}>
-              Promote to Editor
-            </button>
+            <>
+              {isEditor ? (
+                <button className="adm-menu-item danger" role="menuitem" onClick={() => setConfirm('revoke')}>
+                  Revoke editor access
+                </button>
+              ) : (
+                <button className="adm-menu-item" role="menuitem" onClick={() => setConfirm('grant')}>
+                  Promote to Editor
+                </button>
+              )}
+
+              <div className="adm-menu-sep" />
+
+              {status === 'active' ? (
+                <>
+                  <button className="adm-menu-item" role="menuitem" onClick={() => setConfirm('suspended')}>
+                    Suspend account
+                  </button>
+                  <button className="adm-menu-item danger" role="menuitem" onClick={() => setConfirm('deactivated')}>
+                    Deactivate account
+                  </button>
+                </>
+              ) : (
+                <button className="adm-menu-item" role="menuitem" onClick={() => setConfirm('active')}>
+                  Reactivate account
+                </button>
+              )}
+            </>
           )}
         </div>
       )}

@@ -1,5 +1,12 @@
 // Sidebar nav configurations per role
 import { REPORTS, bandFor, thresholdsFrom, loadLocalSettings } from './similarity.js';
+import { myAssignments } from './invitations.js';
+
+// Badges on the reviewer's entries. Like FLAGGED_COUNT below, these are read once
+// at module load — a response made this session shows on the next full page load.
+const MY_ASSIGNMENTS = myAssignments();
+const INVITED_COUNT = MY_ASSIGNMENTS.filter(a => a.status === 'invited').length;
+const ACCEPTED_COUNT = MY_ASSIGNMENTS.filter(a => a.status === 'accepted').length;
 
 // Badge on the editor's Screening entry: submissions sitting in the flagged band.
 // Evaluated once at module load, like the other badge numbers here — an admin
@@ -25,6 +32,7 @@ const ICONS = {
   list: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
   log: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
   award: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>,
+  search: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>,
   exam: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,
 };
 
@@ -70,6 +78,7 @@ export const SIDEBAR_CONFIG = {
         items: [
           { id: 'dashboard', label: 'Dashboard',   to: '/author/dashboard', icon: ICONS.dashboard },
           { id: 'papers',    label: 'My Papers',   to: '/author/papers',    icon: ICONS.papers },
+          { id: 'discover', label: 'Discover Topics', to: '/author/discover', icon: ICONS.search },
           { id: 'submit',    label: 'Submit Paper', to: '/author/submit',    icon: ICONS.plus },
           { id: 'revision',  label: 'Revisions',   to: '/author/revision',  icon: ICONS.refresh, badge: 1 },
         ],
@@ -92,8 +101,8 @@ export const SIDEBAR_CONFIG = {
         title: 'Reviews',
         items: [
           { id: 'dashboard', label: 'Dashboard', to: '/reviewer/dashboard', icon: ICONS.dashboard },
-          { id: 'assigned', label: 'Assigned', to: '/reviewer/assigned', icon: ICONS.check, badge: 3 },
-          { id: 'review', label: 'Submit Review', to: '/reviewer/review', icon: ICONS.edit },
+          { id: 'invitations', label: 'Invitations', to: '/reviewer/invitations', icon: ICONS.bell, badge: INVITED_COUNT },
+          { id: 'assigned', label: 'Assigned', to: '/reviewer/assigned', icon: ICONS.check, badge: ACCEPTED_COUNT },
           { id: 'completed', label: 'Completed', to: '/reviewer/completed', icon: ICONS.done },
         ],
       },
@@ -144,6 +153,7 @@ export const SIDEBAR_CONFIG = {
         title: 'Configuration',
         items: [
           { id: 'settings', label: 'System Settings', to: '/admin/settings', icon: ICONS.settings },
+          { id: 'audit', label: 'Audit Log', to: '/admin/audit', icon: ICONS.log },
         ],
       },
     ],

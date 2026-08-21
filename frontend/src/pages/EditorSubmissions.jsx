@@ -9,6 +9,7 @@ import {
   BAND_LABELS,
   SIMILARITY_TONE,
 } from '../data/similarity.js';
+import { decisionFor, DECISION_LABELS, DECISION_TONE } from '../data/editorial.js';
 
 const SUBMISSIONS = [
   { id: 'MS-2026-014', title: 'Deep Learning Methods in Medical Imaging', author: 'Ahmad Razif', cat: 'Computer Science', status: 'review', label: 'In Review' },
@@ -31,6 +32,22 @@ const FILTERS = [
   { id: 'revision', label: 'Revision',  match: s => s.status === 'revision' },
   { id: 'approved', label: 'Approved',  match: s => s.status === 'approved' },
 ];
+
+// Whether the editor has decided yet. A blank cell means live, not overlooked —
+// most rows in a healthy pipeline have no decision.
+function DecisionCell({ manuscriptId }) {
+  const decision = decisionFor(manuscriptId);
+  if (!decision) return <span className="muted">—</span>;
+  const tone = DECISION_TONE[decision.type];
+  return (
+    <span style={{
+      padding: '3px 10px', borderRadius: 'var(--r-pill)', fontSize: 12, fontWeight: 700,
+      background: tone?.bg, color: tone?.fg, whiteSpace: 'nowrap',
+    }}>
+      {DECISION_LABELS[decision.type]}
+    </span>
+  );
+}
 
 // The similarity cell. A queued or failed check must not read as 0% — an editor
 // acting on a score that was never produced is the failure mode to avoid.
@@ -121,15 +138,19 @@ export default function EditorSubmissions({ role = 'editor', initialFilter = 'al
         </div>
 
         <table className="data-table">
-          <thead><tr><th>Paper</th><th>Author</th><th>Category</th><th>Similarity</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Paper</th><th>Author</th><th>Category</th><th>Similarity</th><th>Status</th><th>Decision</th><th></th></tr></thead>
           <tbody>
             {visible.map(s => (
               <tr key={s.id}>
-                <td><div className="table-title">{s.title}</div><div className="table-meta">{s.id}</div></td>
+                <td>
+                  <Link to={`${basePath}/submissions/${s.id}`} className="table-title" style={{ color: 'var(--navy-900)', display: 'block' }}>{s.title}</Link>
+                  <div className="table-meta">{s.id}</div>
+                </td>
                 <td><span className="muted">{s.author}</span></td>
                 <td><span className="muted">{s.cat}</span></td>
                 <td><SimilarityCell manuscriptId={s.id} thresholds={thresholds} /></td>
                 <td><span className={`pill pill-${s.status}`}>{s.label}</span></td>
+                <td><DecisionCell manuscriptId={s.id} /></td>
                 <td>
                   <div style={{ display: 'flex', gap: 14, whiteSpace: 'nowrap' }}>
                     <Link

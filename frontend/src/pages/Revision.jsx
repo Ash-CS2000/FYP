@@ -1,12 +1,48 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import { loadDrafts, saveDraft, deleteDraft, formatSavedAt } from '../data/drafts.js';
+import { saveDraftRemote } from '../api/submissions.js';
+
+const MANUSCRIPT_ID = 'MS-2025-187';
+const DEFAULT_RESPONSE = `We sincerely thank the reviewers for their thorough and constructive feedback. We have addressed each comment as follows:
+
+1. Methodology (Reviewer 1, Comment 1): We have expanded Section 3.2 to include detailed criteria for IoT device selection. The new content covers device categories, geographic distribution, and rationale for representativeness across three smart city deployments...`;
 
 export default function Revision() {
   const [tab, setTab] = useState('r1');
   const navigate = useNavigate();
 
+  // One revision draft per manuscript, so saving repeatedly updates in place
+  // rather than piling up entries in My Papers.
+  const existing = loadDrafts().find(d => d.kind === 'revision' && d.payload?.manuscript_id === MANUSCRIPT_ID);
+  const [draftId, setDraftId] = useState(existing?.id || null);
+  const [response, setResponse] = useState(existing?.payload?.response ?? DEFAULT_RESPONSE);
+  const [savedAt, setSavedAt] = useState(existing?.updated_at || '');
+  const [saveError, setSaveError] = useState('');
+
+  const handleSaveDraft = async () => {
+    setSaveError('');
+    const record = {
+      id: draftId,
+      kind: 'revision',
+      title: 'A Framework for IoT Security in Smart Cities',
+      step: 1,
+      payload: { manuscript_id: MANUSCRIPT_ID, response },
+    };
+    try {
+      await saveDraftRemote(draftId, record);
+    } catch {
+      setSaveError('Saved on this device only — the draft service is unavailable.');
+    }
+    const saved = saveDraft(record);
+    setDraftId(saved.id);
+    setSavedAt(saved.updated_at);
+  };
+
   const handleSubmit = () => {
+    // The draft has served its purpose once the revision is in.
+    if (draftId) deleteDraft(draftId);
     alert('Revision submitted. Reviewers will be notified.');
     navigate('/author/dashboard');
   };
@@ -71,9 +107,12 @@ export default function Revision() {
             <div className="card-header"><div><div className="card-title">Your Response</div><div className="card-meta">Address each reviewer comment in your response letter.</div></div></div>
             <div className="field">
               <label className="field-label">Response to reviewers <span className="req">*</span></label>
-              <textarea className="field-textarea" rows="8" defaultValue="We sincerely thank the reviewers for their thorough and constructive feedback. We have addressed each comment as follows:
-
-1. Methodology (Reviewer 1, Comment 1): We have expanded Section 3.2 to include detailed criteria for IoT device selection. The new content covers device categories, geographic distribution, and rationale for representativeness across three smart city deployments..." />
+              <textarea
+                className="field-textarea"
+                rows="8"
+                value={response}
+                onChange={e => setResponse(e.target.value)}
+              />
               <div className="field-hint">Reference each comment by reviewer and number. Be specific about what you changed.</div>
             </div>
             <div className="field">
@@ -87,7 +126,15 @@ export default function Revision() {
               </div>
             </div>
             <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--ink-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <button className="btn btn-ghost">Save Draft</button>
+              <div className="row" style={{ gap: 12 }}>
+                <button className="btn btn-ghost" onClick={handleSaveDraft}>Save Draft</button>
+                {savedAt && !saveError && (
+                  <span style={{ fontSize: 12.5, color: 'var(--ink-600)' }}>Saved {formatSavedAt(savedAt)}</span>
+                )}
+                {saveError && (
+                  <span style={{ fontSize: 12.5, color: 'var(--amber-800)' }}>{saveError}</span>
+                )}
+              </div>
               <button onClick={handleSubmit} className="btn btn-accent">Submit Revision →</button>
             </div>
           </div>

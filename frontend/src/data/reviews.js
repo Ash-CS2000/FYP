@@ -115,6 +115,37 @@ export const MANUSCRIPTS = {
 };
 
 export const REVIEWS = [
+  // MS-2025-187 went to major revision, so its reviews have been released to the
+  // author. Kept in step with the seeded decision in data/editorial.js and the
+  // feedback shown in pages/Revision.jsx — this is the pair that exercises the
+  // author-facing filter, so both reviews carry confidential comments that must
+  // never reach the author's copy.
+  {
+    id: 'RV-4',
+    manuscript_id: 'MS-2025-187',
+    reviewer_label: 'Reviewer 1',
+    status: 'submitted',
+    submitted_at: '2025-11-08T11:05:00Z',
+    ratings: { originality: 4, technical: 2, clarity: 4, relevance: 5 },
+    recommendation: 'major',
+    summary: 'Proposes a layered security framework for smart-city IoT deployments and evaluates it on a testbed of 40 devices.',
+    strengths: '- The layering is a genuine contribution and is clearly explained\n- Threat model is stated explicitly, which is rare in this area\n- The testbed is real hardware, not a simulation',
+    weaknesses: '- The evaluation does not support the scalability claim: 40 devices is two orders of magnitude below a real deployment\n- No comparison against an existing framework, so the improvement is unquantified\n- Section 5 asserts formal guarantees that are never proved',
+    confidential_to_editor: 'The scalability claim in the abstract is not supported anywhere in the paper. I would not accept this without either a much larger evaluation or a rewritten abstract. Happy to re-review.',
+  },
+  {
+    id: 'RV-5',
+    manuscript_id: 'MS-2025-187',
+    reviewer_label: 'Reviewer 2',
+    status: 'submitted',
+    submitted_at: '2025-11-11T16:30:00Z',
+    ratings: { originality: 3, technical: 3, clarity: 5, relevance: 4 },
+    recommendation: 'minor',
+    summary: 'A readable systems paper. The framework is sensible and the write-up is well above average for the venue.',
+    strengths: '- Very clearly written; the figures do real work\n- Practical deployment notes will be useful to practitioners',
+    weaknesses: '- Related work treats 2023 as the state of the art and misses more recent attestation schemes\n- The threat model excludes supply-chain compromise without saying why',
+    confidential_to_editor: 'I am less negative than I expect the other reviewer to be — the evaluation is thin but the framing is honest about it. Minor revision would be defensible.',
+  },
   {
     id: 'RV-1',
     manuscript_id: 'MS-2026-014',

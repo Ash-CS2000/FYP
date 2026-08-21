@@ -1,6 +1,12 @@
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { getStoredUser, getFirstName } from '../utils/user.js';
+import {
+  myAssignments,
+  ASSIGNMENT_STATUS_LABELS,
+  ASSIGNMENT_TONE,
+  deadlineState,
+} from '../data/invitations.js';
 
 // Double-blind: a reviewer must never see who wrote the manuscript they are
 // assessing. The column stays so the masking is visible rather than silently
@@ -18,21 +24,46 @@ function AnonymousAuthor() {
 
 export default function ReviewerDashboard() {
   const firstName = getFirstName(getStoredUser()) || 'Reviewer';
+
+  // Live counts off the same store the assignments page writes to, so accepting
+  // or declining is reflected here rather than drifting from hardcoded numbers.
+  const assignments = myAssignments();
+  const invited = assignments.filter(a => a.status === 'invited');
+  const accepted = assignments.filter(a => a.status === 'accepted');
+  const overdue = accepted.filter(a => deadlineState(a.due_at).tone === 'overdue');
+  const open = [...invited, ...accepted];
+
   return (
     <AppShell role="reviewer" searchPlaceholder="Search assigned papers...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Reviewer Workspace</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Welcome, <em className="serif-italic">{firstName}</em>.</h1>
-          <p className="page-subtitle">You have 3 papers awaiting your review. One is approaching its deadline.</p>
+          <p className="page-subtitle">
+            {invited.length > 0
+              ? `${invited.length} invitation${invited.length === 1 ? '' : 's'} waiting on your response.`
+              : 'No invitations waiting on you right now.'}
+          </p>
         </div>
       </div>
 
       <div className="stat-grid">
         {[
-          { label: 'Pending Reviews', value: 3, accent: 'var(--amber-700)', trend: <>1 due in <span className="down">2 days</span></> },
-          { label: 'Completed This Year', value: 12, accent: 'var(--teal-700)', trend: <><span className="up">↑ 4</span> from last year</> },
-          { label: 'Overdue', value: 1, accent: 'var(--red-700)', trend: 'Address as soon as possible' },
+          {
+            label: 'Awaiting your response',
+            value: invited.length,
+            accent: 'var(--amber-700)',
+            trend: invited.length
+              ? <Link to="/reviewer/invitations" style={{ color: 'var(--navy-700)', fontWeight: 600 }}>Respond now →</Link>
+              : 'Nothing to decide',
+          },
+          { label: 'Reviews in progress', value: accepted.length, accent: 'var(--navy-700)', trend: 'Accepted and open' },
+          {
+            label: 'Overdue',
+            value: overdue.length,
+            accent: 'var(--red-700)',
+            trend: overdue.length ? 'Address as soon as possible' : 'All on time',
+          },
           { label: 'Reliability Score', value: '98%', accent: 'var(--navy-700)', trend: 'On-time submissions' },
         ].map((s, i) => (
           <div key={s.label} className={`stat fade-up delay-${i + 1}`} style={{ '--accent': s.accent }}>
@@ -46,45 +77,58 @@ export default function ReviewerDashboard() {
       <div className="card fade-up delay-3">
         <div className="card-header">
           <div>
-            <div className="card-title">Papers Assigned to Me</div>
-            <div className="card-meta">Click any paper to read the manuscript and submit your review. Author identities are hidden under double-blind review.</div>
+            <div className="card-title">Your open assignments</div>
+            <div className="card-meta">
+              Invitations you have not answered, and reviews you have accepted. Author
+              identities are hidden under double-blind review.
+            </div>
           </div>
-          <div className="row">
-            <button className="filter-chip active">All <span style={{ opacity: .6 }}>3</span></button>
-            <button className="filter-chip">Pending <span style={{ opacity: .6 }}>2</span></button>
-            <button className="filter-chip">Overdue <span style={{ opacity: .6 }}>1</span></button>
-          </div>
+          <Link to="/reviewer/assignments" style={{ color: 'var(--navy-700)', fontSize: 13, fontWeight: 600 }}>
+            View all →
+          </Link>
         </div>
 
-        <table className="data-table">
-          <thead><tr><th>Paper</th><th>Category</th><th>Author</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
-          <tbody>
-            <tr style={{ background: 'linear-gradient(90deg, rgba(252,235,235,0.4), transparent)' }}>
-              <td><div className="table-title">Supply Chain Blockchain Use Cases in ASEAN</div><div className="table-meta">MS-2026-021 · Assigned 2 weeks ago</div></td>
-              <td><span className="muted">Business</span></td>
-              <td><AnonymousAuthor /></td>
-              <td><span style={{ color: 'var(--red-700)', fontWeight: 600, fontSize: 13 }}>Overdue · 8 May</span></td>
-              <td><span className="pill pill-overdue">Overdue</span></td>
-              <td><Link to="/reviewer/review" className="btn btn-danger btn-sm">Review Now</Link></td>
-            </tr>
-            <tr>
-              <td><div className="table-title">Deep Learning Methods in Medical Imaging</div><div className="table-meta">MS-2026-014 · Assigned 5 days ago</div></td>
-              <td><span className="muted">Computer Science</span></td>
-              <td><AnonymousAuthor /></td>
-              <td><span style={{ color: 'var(--amber-700)', fontWeight: 600, fontSize: 13 }}>10 May 2026</span></td>
-              <td><span className="pill pill-pending">In Progress</span></td>
-              <td><Link to="/reviewer/review" className="btn btn-primary btn-sm">Continue</Link></td>
-            </tr>
-            <tr>
-              <td><div className="table-title">Renewable Energy Grid Optimization</div><div className="table-meta">MS-2026-019 · Assigned 1 week ago</div></td>
-              <td><span className="muted">Engineering</span></td>
-              <td><AnonymousAuthor /></td>
-              <td><span className="muted" style={{ fontSize: 13 }}>15 May 2026</span></td>
-              <td><span className="pill pill-pending">Not Started</span></td>
-              <td><Link to="/reviewer/review" className="btn btn-ghost btn-sm">Start</Link></td>
-            </tr>
-          </tbody>
-        </table>
+        {open.length === 0 ? (
+          <div style={{ padding: '28px 4px', color: 'var(--ink-600)', fontSize: 13.5 }}>
+            Nothing open. Anything new will appear here and in your invitations.
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead><tr><th>Paper</th><th>Category</th><th>Author</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {open.map(a => {
+                const due = deadlineState(a.status === 'invited' ? a.respond_by : a.due_at);
+                const tone = ASSIGNMENT_TONE[a.status];
+                const dueColor = { overdue: 'var(--red-700)', due: 'var(--amber-800)', ok: 'var(--ink-600)', none: 'var(--ink-600)' }[due.tone];
+                return (
+                  <tr key={a.id} style={due.tone === 'overdue'
+                    ? { background: 'linear-gradient(90deg, rgba(252,235,235,0.4), transparent)' }
+                    : undefined}>
+                    <td>
+                      <div className="table-title">{a.title}</div>
+                      <div className="table-meta">{a.manuscript_id}</div>
+                    </td>
+                    <td><span className="muted">{a.category}</span></td>
+                    <td><AnonymousAuthor /></td>
+                    <td><span style={{ color: dueColor, fontWeight: due.tone === 'ok' ? 400 : 600, fontSize: 13 }}>{due.label}</span></td>
+                    <td>
+                      <span className="pill" style={{ background: tone.bg, color: tone.fg }}>
+                        {ASSIGNMENT_STATUS_LABELS[a.status]}
+                      </span>
+                    </td>
+                    <td>
+                      {a.status === 'invited' ? (
+                        <Link to="/reviewer/invitations" className="btn btn-primary btn-sm">Respond</Link>
+                      ) : (
+                        <Link to={`/reviewer/review/${a.manuscript_id}`} className="btn btn-ghost btn-sm">Open</Link>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="split-grid fade-up delay-4" style={{ marginTop: 24 }}>

@@ -4,6 +4,122 @@ import { SIDEBAR_CONFIG } from '../data/sidebarConfig.jsx';
 import { getStoredUser, getInitials } from '../utils/user.js';
 import { API_URL } from '../config';
 
+// A reviewer's availability is theirs to set, and the editor's assignment panel
+// reads it — an "unavailable" reviewer cannot be selected there at all, and a
+// "heavy load" one is shown with a warning. That makes this the single most
+// effective thing a reviewer can do to stop being invited at a bad time, which is
+// why it sits above credentials rather than buried under them.
+//
+//   PATCH /api/users/me/reviewer-profile/
+//   body  { availability, unavailable_until, max_concurrent, credentials }
+//   200   the updated user
+//   403   caller is not a reviewer
+const AVAILABILITY_OPTIONS = [
+  { id: 'available',   label: 'Available',   blurb: 'Send me invitations as they come up.' },
+  { id: 'busy',        label: 'Heavy load',  blurb: 'Invite me only if the fit is strong.' },
+  { id: 'unavailable', label: 'Unavailable', blurb: 'Do not invite me at all for now.' },
+];
+
+function ReviewerProfileCard({ storedUser }) {
+  const [availability, setAvailability] = useState(storedUser?.availability || 'available');
+  const [until, setUntil] = useState(storedUser?.unavailable_until || '');
+  const [maxConcurrent, setMaxConcurrent] = useState(storedUser?.max_concurrent ?? 3);
+  const [credentials, setCredentials] = useState(storedUser?.credentials || '');
+  const [saved, setSaved] = useState(false);
+
+  // Persisted onto the stored user so the rest of the app reads it back the same
+  // way it reads roles and reviewer_status. The PATCH above replaces this.
+  const persist = (patch) => {
+    const next = { ...storedUser, ...patch };
+    try {
+      localStorage.setItem('user', JSON.stringify(next));
+    } catch {
+      /* storage unavailable — the field still applies for this session */
+    }
+    setSaved(true);
+  };
+
+  return (
+    <div className="card fade-up delay-2">
+      <div className="card-header">
+        <div>
+          <div className="card-title">Reviewing</div>
+          <div className="card-meta">
+            Editors see this when they pick reviewers. Keeping it current is what stops
+            invitations arriving at the wrong time.
+          </div>
+        </div>
+        {saved && <span className="pill pill-approved">Saved</span>}
+      </div>
+
+      <div className="field">
+        <label className="field-label">Availability</label>
+        <div style={{ display: 'grid', gap: 9, marginTop: 6 }}>
+          {AVAILABILITY_OPTIONS.map(o => (
+            <button
+              key={o.id}
+              type="button"
+              className={`pf-option ${availability === o.id ? 'selected' : ''}`}
+              onClick={() => { setAvailability(o.id); persist({ availability: o.id }); }}
+            >
+              <span className="pf-option-title">{o.label}</span>
+              <span className="pf-option-desc">{o.blurb}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {availability !== 'available' && (
+        <div className="field">
+          <label className="field-label">Until <span className="muted">(optional)</span></label>
+          <input
+            className="field-input"
+            type="date"
+            style={{ maxWidth: 200 }}
+            value={until}
+            onChange={e => { setUntil(e.target.value); persist({ unavailable_until: e.target.value }); }}
+          />
+          <div className="field-hint">
+            Leave blank to stay this way indefinitely. With a date set, you go back to
+            available on your own rather than having to remember.
+          </div>
+        </div>
+      )}
+
+      <div className="field">
+        <label className="field-label">Most reviews at once</label>
+        <input
+          className="field-input"
+          type="number"
+          min="0"
+          max="10"
+          style={{ maxWidth: 120 }}
+          value={maxConcurrent}
+          onChange={e => { setMaxConcurrent(e.target.value); persist({ max_concurrent: Number(e.target.value) }); }}
+        />
+        <div className="field-hint">
+          An editor sees your current load against this. It is a signal, not a hard cap.
+        </div>
+      </div>
+
+      <div className="field">
+        <label className="field-label">Credentials</label>
+        <textarea
+          className="field-textarea"
+          rows="4"
+          value={credentials}
+          onChange={e => { setCredentials(e.target.value); setSaved(false); }}
+          onBlur={() => persist({ credentials })}
+          placeholder="Degrees, position, editorial board memberships, ORCID — whatever supports your expertise claims."
+        />
+        <div className="field-hint">
+          Shown to admins when they verify reviewer applications. Not shown to authors.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Profile({ role = 'author' }) {
   const cfg = SIDEBAR_CONFIG[role];
 
@@ -42,6 +158,14 @@ export default function Profile({ role = 'author' }) {
 
   return (
     <AppShell role={role} searchPlaceholder="Search...">
+      <style>{`
+        .pf-option { text-align: left; border: 1.5px solid var(--ink-200); border-radius: var(--r-md); padding: 11px 14px; background: var(--white); cursor: pointer; transition: all var(--t-fast); display: block; width: 100%; }
+        .pf-option:hover { border-color: var(--navy-700); }
+        .pf-option.selected { border-color: var(--navy-900); background: var(--navy-100); }
+        .pf-option-title { display: block; font-weight: 600; font-size: 13.5px; color: var(--navy-900); }
+        .pf-option-desc { display: block; font-size: 12.5px; color: var(--ink-600); margin-top: 2px; }
+      `}</style>
+
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Account</span>
@@ -92,6 +216,10 @@ export default function Profile({ role = 'author' }) {
           </div>
         </div>
       </div>
+
+      {isAlreadyReviewer && reviewerStatus === 'active' && (
+        <ReviewerProfileCard storedUser={storedUser} />
+      )}
 
       {isAuthor && (
         <div className="card fade-up delay-2" style={{ marginTop: 0 }}>

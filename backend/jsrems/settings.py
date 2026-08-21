@@ -147,3 +147,10 @@ ORCID_CLIENT_ID = os.getenv('ORCID_CLIENT_ID', '')
 ORCID_CLIENT_SECRET = os.getenv('ORCID_CLIENT_SECRET', '')
 ORCID_REDIRECT_URI = os.getenv('ORCID_REDIRECT_URI', '')
 ORCID_BASE_URL = os.getenv('ORCID_BASE_URL', 'https://orcid.org')
+
+# Supabase Storage (S3-compatible) — used for manuscript file uploads
+SUPABASE_S3_ENDPOINT_URL = os.getenv('SUPABASE_S3_ENDPOINT_URL', '')
+SUPABASE_S3_REGION = os.getenv('SUPABASE_S3_REGION', 'ap-southeast-1')
+SUPABASE_S3_BUCKET = os.getenv('SUPABASE_S3_BUCKET', '')
+SUPABASE_S3_ACCESS_KEY_ID = os.getenv('SUPABASE_S3_ACCESS_KEY_ID', '')
+SUPABASE_S3_SECRET_ACCESS_KEY = os.getenv('SUPABASE_S3_SECRET_ACCESS_KEY', '')
