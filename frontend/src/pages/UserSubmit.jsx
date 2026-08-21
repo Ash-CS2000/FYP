@@ -525,8 +525,47 @@ export default function UserSubmit() {
     setUploading(true);
     setUploadError('');
     try {
+      const authorsPayload = authors.map((a) => ({
+        title: a.title,
+        given_name: a.givenName,
+        family_name: a.familyName,
+        degree: a.degree,
+        email: a.email,
+        orcid: a.orcid,
+        corresponding: a.corresponding,
+        affiliations: a.affiliations.map((af) => ({
+          department: af.department,
+          institution: af.institution,
+          city: af.city,
+          country: af.country,
+        })),
+      }));
+
       const formData = new FormData();
+      formData.append('article_type', articleType);
+      formData.append('title', title);
+      formData.append('running_title', runningTitle);
+      formData.append('abstract', abstract);
+      formData.append('category', category);
+      formData.append('sub_category', subCategory);
+      formData.append('keywords', keywords);
+      formData.append('authors', JSON.stringify(authorsPayload));
       formData.append('manuscript', file);
+      supplementary.forEach((f) => formData.append('supplementary', f));
+      formData.append('cover_letter', coverLetter);
+      formData.append('no_funding', noFunding);
+      formData.append('funder', funder);
+      formData.append('grant_no', grantNo);
+      formData.append('no_competing', noCompeting);
+      formData.append('competing', competing);
+      formData.append('ethics_na', ethicsNA);
+      formData.append('ethics', ethics);
+      formData.append('data_statement', dataStatement);
+      formData.append('agreed_original', agreements.original);
+      formData.append('agreed_not_under_review', agreements.notUnderReview);
+      formData.append('agreed_all_approve', agreements.allApprove);
+      formData.append('agreed_policies', agreements.policies);
+
       const res = await fetch(`${API_URL}/api/manuscripts/upload/`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('access')}` },

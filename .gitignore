@@ -230,3 +230,11 @@ frontend/.env.local
 .DS_Store
 CLAUDE.md
 sprint3_developments.md
+
+# Claude Code local tooling artifacts (auto-downloaded skill docs, not app code)
+.agents/
+.claude/
+skills-lock.json
+
+# Local test assets
+PaperBridge-Test-Manuscript.pdf
