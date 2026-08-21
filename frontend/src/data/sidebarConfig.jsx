@@ -1,4 +1,13 @@
 // Sidebar nav configurations per role
+import { REPORTS, bandFor, thresholdsFrom, loadLocalSettings } from './similarity.js';
+
+// Badge on the editor's Screening entry: submissions sitting in the flagged band.
+// Evaluated once at module load, like the other badge numbers here — an admin
+// threshold change shows up on the next full page load.
+const FLAGGED_COUNT = Object.values(REPORTS).filter(
+  r => r.status === 'done' && bandFor(r.overall_similarity_pct, thresholdsFrom(loadLocalSettings())) === 'high',
+).length;
+
 const ICONS = {
   dashboard: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>,
   papers: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>,
@@ -107,6 +116,7 @@ export const SIDEBAR_CONFIG = {
           { id: 'dashboard', label: 'Dashboard', to: '/editor/dashboard', icon: ICONS.dashboard },
           { id: 'submissions', label: 'All Submissions', to: '/editor/submissions', icon: ICONS.papers },
           { id: 'pending', label: 'Pending Decision', to: '/editor/pending', icon: ICONS.clock, badge: 5 },
+          { id: 'screening', label: 'Screening', to: '/editor/screening', icon: ICONS.check, badge: FLAGGED_COUNT },
         ],
       },
       {

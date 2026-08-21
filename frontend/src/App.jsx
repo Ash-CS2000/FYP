@@ -33,6 +33,7 @@ import TrainingGate from './auth/TrainingGate.jsx';
 import ReviewerActiveGate from './auth/ReviewerActiveGate.jsx';
 import ReviewerPending from './pages/ReviewerPending.jsx';
 import EditorReviews from './pages/EditorReviews.jsx';
+import SimilarityReport from './pages/SimilarityReport.jsx';
 
 export default function App() {
   return (
@@ -105,7 +106,10 @@ export default function App() {
         <Route path="/editor/dashboard" element={<EditorDashboard />} />
         <Route path="/editor/submissions" element={<EditorSubmissions />} />
         <Route path="/editor/pending" element={<EditorSubmissions initialFilter="pending" />} />
+        {/* Screening is the submissions table pre-filtered to the flagged band. */}
+        <Route path="/editor/screening" element={<EditorSubmissions initialFilter="flagged" />} />
         <Route path="/editor/submissions/:id/reviews" element={<EditorReviews />} />
+        <Route path="/editor/submissions/:id/similarity" element={<SimilarityReport />} />
         <Route path="/editor/notifications" element={<Notifications role="editor" />} />
         <Route path="/editor/settings" element={<Settings role="editor" />} />
       </Route>
@@ -118,6 +122,7 @@ export default function App() {
         <Route path="/admin/submissions" element={<EditorSubmissions role="admin" />} />
         {/* Admin oversight is read-only — decisions stay with the editor. */}
         <Route path="/admin/submissions/:id/reviews" element={<EditorReviews role="admin" />} />
+        <Route path="/admin/submissions/:id/similarity" element={<SimilarityReport role="admin" />} />
         <Route path="/admin/settings" element={<Settings role="admin" />} />
       </Route>
 

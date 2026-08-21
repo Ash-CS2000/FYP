@@ -52,6 +52,9 @@ export function compositeScore(ratings) {
   return (total / keys.length).toFixed(1);
 }
 
+// Every manuscript the editor can open. Keys must stay in step with the rows in
+// pages/EditorSubmissions.jsx and the reports in data/similarity.js — all three
+// screens look manuscripts up by this id.
 export const MANUSCRIPTS = {
   'MS-2026-014': {
     id: 'MS-2026-014',
@@ -59,6 +62,55 @@ export const MANUSCRIPTS = {
     category: 'Computer Science · AI & ML',
     submitted: '12 January 2026',
     status: 'review',
+  },
+  'MS-2026-008': {
+    id: 'MS-2026-008',
+    title: 'A Survey of Quantum Computing Applications',
+    category: 'Physics',
+    submitted: '22 December 2025',
+    status: 'pending',
+  },
+  'MS-2026-011': {
+    id: 'MS-2026-011',
+    title: 'Climate Change Impact on Agricultural Yield',
+    category: 'Environmental',
+    submitted: '18 January 2026',
+    status: 'pending',
+  },
+  'MS-2026-019': {
+    id: 'MS-2026-019',
+    title: 'Renewable Energy Grid Optimization',
+    category: 'Engineering',
+    submitted: '2 February 2026',
+    status: 'review',
+  },
+  'MS-2026-021': {
+    id: 'MS-2026-021',
+    title: 'Supply Chain Blockchain Use Cases in ASEAN',
+    category: 'Business',
+    submitted: '20 January 2026',
+    status: 'review',
+  },
+  'MS-2025-208': {
+    id: 'MS-2025-208',
+    title: 'A Survey of Natural Language Processing in 2025',
+    category: 'Linguistics',
+    submitted: '4 November 2025',
+    status: 'approved',
+  },
+  'MS-2025-187': {
+    id: 'MS-2025-187',
+    title: 'A Framework for IoT Security in Smart Cities',
+    category: 'Engineering',
+    submitted: '30 October 2025',
+    status: 'revision',
+  },
+  'MS-2025-142': {
+    id: 'MS-2025-142',
+    title: 'Blockchain Applications in Finance',
+    category: 'Finance',
+    submitted: '15 September 2025',
+    status: 'approved',
   },
 };
 

@@ -1,6 +1,143 @@
+import { useEffect, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
+import { getScreeningSettings, patchScreeningSettings } from '../api/similarity.js';
+import { loadLocalSettings, saveLocalSettings } from '../data/similarity.js';
+
+// Screening thresholds are platform policy, so only an admin sets them — see the
+// role model: editors act on the bands, admins define them. Every other screen
+// re-bands its existing reports from these numbers; changing one never re-runs a
+// check.
+function ScreeningSettingsCard() {
+  const [settings, setSettings] = useState(loadLocalSettings);
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    getScreeningSettings()
+      .then((server) => { if (!cancelled) setSettings((prev) => ({ ...prev, ...server })); })
+      // Backend not up yet — the locally persisted values stand in, so the rest of
+      // the app still re-bands correctly.
+      .catch(() => { if (!cancelled) setStatus('offline'); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const update = (patch) => {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    saveLocalSettings(next);
+    setStatus('');
+    patchScreeningSettings(patch).catch(() => setStatus('offline'));
+  };
+
+  const invalid = Number(settings.review_threshold) >= Number(settings.high_threshold);
+
+  const toggles = [
+    ['exclude_quotes', 'Exclude quotations', 'Text inside quotation marks is not counted towards the score.'],
+    ['exclude_bibliography', 'Exclude bibliography', 'Reference lists overlap heavily by nature and would inflate every score.'],
+    ['auto_flag', 'Auto-flag above the high threshold', 'Flagged manuscripts appear in the editor’s screening queue automatically.'],
+  ];
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title">Similarity screening</div>
+          <div className="card-meta">
+            Thresholds and exclusions applied to every submission.
+            {status === 'offline' && ' Saved locally — the analysis service is unavailable.'}
+          </div>
+        </div>
+      </div>
+
+      <div className="field-grid">
+        <div className="field">
+          <label className="field-label">Review threshold (%)</label>
+          <input
+            className="field-input"
+            type="number"
+            min="0"
+            max="100"
+            value={settings.review_threshold}
+            onChange={(e) => update({ review_threshold: Number(e.target.value) })}
+          />
+          <div className="field-hint">At or above this, the score is shown in amber for the editor’s attention.</div>
+        </div>
+        <div className="field">
+          <label className="field-label">Flag threshold (%)</label>
+          <input
+            className="field-input"
+            type="number"
+            min="0"
+            max="100"
+            value={settings.high_threshold}
+            onChange={(e) => update({ high_threshold: Number(e.target.value) })}
+          />
+          <div className="field-hint">At or above this, the manuscript is flagged for screening before review.</div>
+        </div>
+      </div>
+
+      {invalid && (
+        <div className="field-hint" style={{ color: 'var(--red-800)' }}>
+          The review threshold must be lower than the flag threshold.
+        </div>
+      )}
+
+      <div className="field">
+        <label className="field-label">Ignore matches shorter than</label>
+        <input
+          className="field-input"
+          type="number"
+          min="1"
+          max="60"
+          style={{ maxWidth: 140 }}
+          value={settings.min_words}
+          onChange={(e) => update({ min_words: Number(e.target.value) })}
+        />
+        <div className="field-hint">Words. Short common phrases match everywhere and are rarely meaningful.</div>
+      </div>
+
+      {toggles.map(([key, label, desc]) => (
+        <div key={key} style={{
+          display: 'flex', alignItems: 'center', gap: 16,
+          padding: '14px 0', borderBottom: '1px solid var(--ink-100)'
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--navy-900)' }}>{label}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-600)', marginTop: 2 }}>{desc}</div>
+          </div>
+          <label style={{ position: 'relative', display: 'inline-block', width: 42, height: 24 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(settings[key])}
+              onChange={(e) => update({ [key]: e.target.checked })}
+              style={{ opacity: 0, width: 0, height: 0 }}
+            />
+            <span style={{
+              position: 'absolute', cursor: 'pointer', inset: 0,
+              background: settings[key] ? 'var(--navy-900)' : 'var(--ink-300)',
+              borderRadius: 999, transition: 'all .2s',
+            }}>
+              <span style={{
+                position: 'absolute', top: 3, left: settings[key] ? 21 : 3,
+                width: 18, height: 18, background: 'var(--white)', borderRadius: '50%',
+                transition: 'all .2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+              }}></span>
+            </span>
+          </label>
+        </div>
+      ))}
+
+      <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--ink-600)', lineHeight: 1.55 }}>
+        The engine matches verbatim and near-verbatim reuse. Paraphrased and translated text is not
+        detected, so a low score is not evidence of originality and a high score is not a finding of
+        misconduct — both are prompts for an editor to read the matched passages.
+      </div>
+    </div>
+  );
+}
 
 export default function Settings({ role = 'author' }) {
+  const isAdmin = role === 'admin';
   return (
     <AppShell role={role} searchPlaceholder="Search settings...">
       <div className="page-header fade-up">
@@ -13,6 +150,8 @@ export default function Settings({ role = 'author' }) {
       </div>
 
       <div className="gap-grid fade-up delay-1">
+        {isAdmin && <ScreeningSettingsCard />}
+
         <div className="card">
           <div className="card-header">
             <div>
