@@ -22,7 +22,6 @@ import StudentProgress from './pages/StudentProgress.jsx';
 import StudentResources from './pages/StudentResources.jsx';
 import ResourcesPage from './pages/ResourcesPage.jsx';
 import UserPapers from './pages/UserPapers.jsx';
-<<<<<<< Updated upstream
 import FinalAssessment from './pages/FinalAssessment.jsx';
 import Certificate from './pages/Certificate.jsx';
 import UserSubmit from './pages/UserSubmit.jsx';
@@ -40,9 +39,6 @@ import AuthorPaper from './pages/AuthorPaper.jsx';
 import ReviewerAssignments from './pages/ReviewerAssignments.jsx';
 import AssignmentGate from './auth/AssignmentGate.jsx';
 import AdminAudit from './pages/AdminAudit.jsx';
-=======
-import SearchResultsPage from './pages/SearchResultsPage.jsx';
->>>>>>> Stashed changes
 
 export default function App() {
   return (
