@@ -12,16 +12,18 @@ import { useParams, Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { MANUSCRIPTS } from '../data/reviews.js';
 import {
-  reportFor,
   bandFor,
-  thresholdsFrom,
-  loadLocalSettings,
   formatCheckedAt,
   BAND_LABELS,
   BAND_HINTS,
   SIMILARITY_TONE,
   SOURCE_TYPE_LABELS,
 } from '../data/similarity.js';
+import {
+  reportFor,
+  thresholdsFrom,
+  loadLocalSettings,
+} from '../data/editorScreeningMock.js';
 import {
   SCREENING_ACTIONS,
   screeningActionFor,

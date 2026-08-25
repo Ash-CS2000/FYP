@@ -6,9 +6,11 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
 
-from .models import Manuscript
+from .models import Manuscript, PlagiarismCheck
 from .serializers import ManuscriptSerializer, ManuscriptSubmitSerializer
+from .services.noplag_client import get_check_status, get_check_report, NoPlagClientError
 
 logger = logging.getLogger(__name__)
 
@@ -58,3 +60,48 @@ class ManuscriptDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return Manuscript.objects.filter(owner=self.request.user)
+
+class PlagiarismCheckStatusView(APIView):
+    """
+    GET /api/manuscripts/<int:pk>/plagiarism-status/
+    Lazily polls the noplag engine (no background worker) and returns current status.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript.objects.filter(owner=request.user), pk=pk)
+        check = getattr(manuscript, 'plagiarism_check', None)
+        if check is None:
+            return Response(
+                {'detail': 'No plagiarism check found for this manuscript.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if check.status == PlagiarismCheck.Status.PENDING and check.check_id:
+            try:
+                status_result = get_check_status(check.check_id)
+            except NoPlagClientError:
+                logger.exception('Polling noplag check status failed')
+            else:
+                raw_status = (status_result.get('status') or '').lower()
+                if 'complete' in raw_status or 'done' in raw_status:
+                    try:
+                        report = get_check_report(check.check_id)
+                    except NoPlagClientError:
+                        logger.exception('Fetching noplag check report failed')
+                    else:
+                        check.status = PlagiarismCheck.Status.COMPLETED
+                        check.similarity_score = report.get('overall_similarity_pct')
+                        check.report = report
+                        check.save()
+                elif 'fail' in raw_status or 'error' in raw_status:
+                    check.status = PlagiarismCheck.Status.FAILED
+                    check.error_message = status_result.get('error_message', '')
+                    check.save()
+
+        return Response({
+            'status': check.status,
+            'similarity_score': check.similarity_score,
+            'error_message': check.error_message,
+            'report': check.report,
+        })

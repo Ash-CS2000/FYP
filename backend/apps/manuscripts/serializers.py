@@ -4,7 +4,8 @@ from django.db import transaction
 from rest_framework import serializers
 
 from . import storage
-from .models import Manuscript, ManuscriptAffiliation, ManuscriptAuthor, ManuscriptSupplementaryFile
+from .models import Manuscript, ManuscriptAffiliation, ManuscriptAuthor, ManuscriptSupplementaryFile, PlagiarismCheck
+from .services.noplag_client import submit_check, NoPlagClientError
 
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB — mirrors the frontend's MAX_UPLOAD_SIZE
 
@@ -179,6 +180,16 @@ class ManuscriptSubmitSerializer(serializers.Serializer):
                 ManuscriptSupplementaryFile.objects.create(
                     manuscript=manuscript, file_key=supp_key, file_name=name, file_size=size,
                 )
+
+        check = PlagiarismCheck.objects.create(manuscript=manuscript)
+        try:
+            result = submit_check(manuscript)
+        except NoPlagClientError as exc:
+            check.status = PlagiarismCheck.Status.FAILED
+            check.error_message = str(exc)
+        else:
+            check.check_id = result.get('check_id', '')
+        check.save()
 
         return manuscript
 

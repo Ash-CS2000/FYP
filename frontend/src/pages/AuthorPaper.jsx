@@ -1,7 +1,9 @@
 // src/pages/AuthorPaper.jsx
-// One of the author's own papers: where it stands, the decision letter if a
-// decision has been taken, and the reviewer comments once that decision releases
-// them.
+// One of the author's own papers: where it stands, and the originality check
+// result. Decision letters and reviewer comments are NOT wired to a real
+// backend yet — there is no decisions/reviews API on the Manuscript model as of
+// this writing, so that section is shown as "not available yet" rather than
+// faked from mock data.
 //
 // This screen is the author side of the double-blind boundary, so what it does
 // NOT show is as deliberate as what it does:
@@ -12,40 +14,47 @@
 //     the outcome; a reviewer who recommended accept against a reject is exactly
 //     what the confidential channel exists to keep private
 //   · no confidential comments to the editor, ever
-//   · no similarity report — the author gets their own pre-submission self-check
-//     in the wizard, never the editorial screening report, which names matched
-//     sources
+//   · similarity report: shown below, sourced live from
+//     /api/manuscripts/<id>/plagiarism-status/ — the author's own check only,
+//     scoped server-side to manuscripts they own
 //
-// The filtering is toAuthorReview() in data/editorial.js. It is an allow-list, and
-// the backend must apply the same one — see api/editorial.js getAuthorReviews.
+// Once decisions/reviews get a real endpoint: replace the placeholder card below
+// with the real fetch, following the same pattern as OriginalityCard.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-import { MANUSCRIPTS, reviewsFor } from '../data/reviews.js';
-import {
-  decisionFor,
-  toAuthorReview,
-  isFinal,
-  DECISION_LABELS,
-  DECISION_TONE,
-  formatDecidedAt,
-} from '../data/editorial.js';
+import { getManuscript } from '../api/manuscripts.js';
 import { withdrawalFor, saveWithdrawal, WITHDRAW_REASONS } from '../data/drafts.js';
 import { withdrawSubmission } from '../api/submissions.js';
+import { getPlagiarismStatus, pollPlagiarismStatus } from '../api/similarity.js';
+import { bandFor, DEFAULT_THRESHOLDS, BAND_LABELS, BAND_HINTS, SIMILARITY_TONE } from '../data/similarity.js';
 
-// A manuscript that has already reached the end of the pipeline. Checked
-// alongside the decision record because the two can disagree: manuscripts
-// predating the decision layer carry a terminal `status` and no decision, and an
-// approved paper with no decision row is still an approved paper. Trusting only
-// the decision record would offer to withdraw it.
+// A manuscript that has already reached the end of the pipeline. No decision
+// backend yet, so this only checks the manuscript's own status field.
 const TERMINAL_STATUSES = ['approved', 'rejected', 'published', 'withdrawn'];
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function normalizeSimilarityScore(check) {
+  const raw = check?.similarity_score ?? check?.report?.overall_similarity_pct;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function formatSimilarityScore(pct) {
+  return Number.isInteger(pct) ? String(pct) : pct.toFixed(1);
+}
 
 // Withdrawal, and the rule that governs it: an author may withdraw right up
 // until the paper is finally decided. After accept or reject there is nothing to
-// withdraw from. A pending revise-and-resubmit does NOT block it — an author is
-// entitled to walk away from a revision request.
-function WithdrawCard({ manuscript, decision }) {
+// withdraw from.
+function WithdrawCard({ manuscript }) {
   const [record, setRecord] = useState(() => withdrawalFor(manuscript.id));
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -59,7 +68,7 @@ function WithdrawCard({ manuscript, decision }) {
         <div className="card-header">
           <div>
             <div className="card-title">Withdrawn</div>
-            <div className="card-meta">{formatDecidedAt(record.withdrawn_at)}</div>
+            <div className="card-meta">{formatDate(record.withdrawn_at)}</div>
           </div>
           <span className="pill pill-revision">Withdrawn</span>
         </div>
@@ -75,8 +84,6 @@ function WithdrawCard({ manuscript, decision }) {
     );
   }
 
-  // Nothing to withdraw from once the paper is accepted or rejected.
-  if (decision && isFinal(decision.type)) return null;
   if (TERMINAL_STATUSES.includes(manuscript.status)) return null;
 
   const submit = async () => {
@@ -148,25 +155,168 @@ function WithdrawCard({ manuscript, decision }) {
   );
 }
 
+// Originality check result, live from the backend. No mock fallback: loading,
+// none, pending, completed and failed are the only states — each renders only
+// what the API actually returned.
+function OriginalityCard({ manuscriptId }) {
+  const [state, setState] = useState('loading'); // loading | none | pending | completed | failed
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const initial = await getPlagiarismStatus(manuscriptId);
+        if (controller.signal.aborted) return;
+        setData(initial);
+        if (initial.status === 'pending') {
+          setState('pending');
+          const final = await pollPlagiarismStatus(manuscriptId, {
+            onUpdate: (s) => !controller.signal.aborted && setData(s),
+            signal: controller.signal,
+          });
+          if (!controller.signal.aborted) { setData(final); setState(final.status); }
+        } else {
+          setState(initial.status);
+        }
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        if (err.status === 404) setState('none');
+        else { setData({ error_message: err.message }); setState('failed'); }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [manuscriptId]);
+
+  if (state === 'loading') {
+    return (
+      <div className="card">
+        <div className="card-header"><div className="card-title">Originality check</div></div>
+        <div className="card-meta">Loading…</div>
+      </div>
+    );
+  }
+
+  if (state === 'none') return null;
+
+  if (state === 'pending') {
+    return (
+      <div className="card">
+        <div className="card-header"><div className="card-title">Originality check</div></div>
+        <div className="card-meta">Still running — this can take a couple of minutes on larger PDFs.</div>
+      </div>
+    );
+  }
+
+  if (state === 'failed') {
+    return (
+      <div className="card">
+        <div className="card-header"><div className="card-title">Originality check</div></div>
+        <div className="card-meta" style={{ color: 'var(--red-800)' }}>
+          {data?.error_message || 'The check could not be completed.'}
+        </div>
+      </div>
+    );
+  }
+
+  const pct = normalizeSimilarityScore(data);
+  const band = pct != null ? bandFor(pct, DEFAULT_THRESHOLDS) : null;
+  const tone = band ? SIMILARITY_TONE[band] : null;
+  const report = data?.report || {};
+  const sources = Array.isArray(report.sources) ? report.sources : [];
+
+  return (
+    <div className="card">
+      <div className="card-header"><div className="card-title">Originality check</div></div>
+
+      {pct != null ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
+          <span style={{
+            padding: '6px 14px', borderRadius: 'var(--r-pill)', fontSize: 17, fontWeight: 700,
+            background: tone.bg, color: tone.fg,
+          }}>
+            {formatSimilarityScore(pct)}%
+          </span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--navy-900)' }}>{BAND_LABELS[band]}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-600)' }}>{BAND_HINTS[band]}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="card-meta" style={{ marginBottom: 14 }}>No score returned.</div>
+      )}
+
+      {report.coverage === 'partial' && (
+        <div className="card-meta" style={{ marginBottom: 12 }}>
+          Partial check{report.checked_chunks != null && report.total_chunks != null
+            ? ` — ${report.checked_chunks} of ${report.total_chunks} sections compared`
+            : ''}
+          {report.coverage_reason ? ` (${report.coverage_reason.replace(/_/g, ' ')})` : ''}.
+        </div>
+      )}
+
+      {sources.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--ink-100)', paddingTop: 12 }}>
+          <div className="label" style={{ marginBottom: 8 }}>Matched sources</div>
+          {sources.map((src, i) => (
+            <div key={src.id ?? i} style={{ display: 'flex', gap: 12, alignItems: 'baseline', fontSize: 13, marginBottom: 6 }}>
+              <span style={{ fontWeight: 600, color: 'var(--navy-900)', minWidth: 44 }}>
+                {src.similarity_pct ?? src.match_pct ?? '—'}%
+              </span>
+              <span style={{ color: 'var(--ink-800)' }}>{src.title ?? src.name ?? src.url ?? 'Unnamed source'}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p style={{ fontSize: 12, color: 'var(--ink-600)', lineHeight: 1.55, marginTop: 12, marginBottom: 0 }}>
+        This measures verbatim text reuse only. It is a prompt to check your citations, not a
+        finding about your work.
+      </p>
+    </div>
+  );
+}
+
 export default function AuthorPaper() {
   const { id } = useParams();
-  const manuscript = MANUSCRIPTS[id];
-  const decision = manuscript ? decisionFor(id) : null;
+  const [manuscript, setManuscript] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
-  // Reviews are released BY the decision. No decision, nothing to show — an
-  // author must not read reviews while the editor is still weighing them.
-  const released = decision
-    ? reviewsFor(id).filter(r => r.status === 'submitted').map(toAuthorReview)
-    : [];
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
+    getManuscript(id)
+      .then((m) => { if (!cancelled) setManuscript(m); })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load this paper.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [id]);
 
-  if (!manuscript) {
+  if (loading) {
+    return (
+      <AppShell role="author" searchPlaceholder="Search your papers...">
+        <div className="page-header fade-up">
+          <div>
+            <span className="eyebrow">Author Workspace</span>
+            <h1 className="page-title" style={{ marginTop: 8 }}>Loading…</h1>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (loadError || !manuscript) {
     return (
       <AppShell role="author" searchPlaceholder="Search your papers...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Author Workspace</span>
             <h1 className="page-title" style={{ marginTop: 8 }}>Paper not found.</h1>
-            <p className="page-subtitle">No submission of yours matches that reference.</p>
+            <p className="page-subtitle">{loadError || 'No submission of yours matches that reference.'}</p>
           </div>
           <Link to="/author/papers" className="btn btn-ghost btn-sm">Back to my papers</Link>
         </div>
@@ -174,19 +324,9 @@ export default function AuthorPaper() {
     );
   }
 
-  const tone = decision ? DECISION_TONE[decision.type] : null;
-
   return (
     <AppShell role="author" searchPlaceholder="Search your papers...">
       <style>{`
-        .ap-letter { white-space: pre-wrap; font-size: 13.5px; line-height: 1.7; color: var(--navy-900); background: var(--ink-50); border-radius: var(--r-md); padding: 20px 22px; }
-        .ap-rec { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
-        .ap-review { border: 1px solid var(--ink-200); border-radius: var(--r-lg); padding: 20px 22px; margin-bottom: 14px; background: var(--white); }
-        .ap-review h3 { font-size: 14.5px; font-weight: 600; color: var(--navy-900); margin-bottom: 14px; }
-        .ap-block { margin-bottom: 14px; }
-        .ap-block:last-child { margin-bottom: 0; }
-        .ap-block h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-600); font-weight: 700; margin-bottom: 5px; }
-        .ap-block p { font-size: 13.5px; color: var(--navy-900); line-height: 1.65; white-space: pre-wrap; }
         .ap-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
         .ap-meta-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-600); font-weight: 600; }
         .ap-meta-value { font-size: 13.5px; color: var(--navy-900); font-weight: 500; margin-top: 3px; }
@@ -194,11 +334,13 @@ export default function AuthorPaper() {
 
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">Author Workspace · {manuscript.id}</span>
+          <span className="eyebrow">Author Workspace · #{manuscript.id}</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>
             <em className="serif-italic">{manuscript.title}</em>.
           </h1>
-          <p className="page-subtitle">{manuscript.category} · Submitted {manuscript.submitted}</p>
+          <p className="page-subtitle">
+            {manuscript.category}{manuscript.sub_category ? ` · ${manuscript.sub_category}` : ''} · Submitted {formatDate(manuscript.submitted_at)}
+          </p>
         </div>
         <Link to="/author/papers" className="btn btn-ghost btn-sm">Back to my papers</Link>
       </div>
@@ -214,90 +356,23 @@ export default function AuthorPaper() {
               </div>
             </div>
             <div>
-              <div className="ap-meta-label">Decision</div>
-              <div className="ap-meta-value">
-                {decision
-                  ? <span className="ap-rec" style={{ background: tone?.bg, color: tone?.fg }}>
-                      {DECISION_LABELS[decision.type]}
-                    </span>
-                  : <span className="muted">Not yet decided</span>}
-              </div>
-            </div>
-            <div>
-              <div className="ap-meta-label">Decided</div>
-              <div className="ap-meta-value">
-                {decision ? formatDecidedAt(decision.decided_at) : <span className="muted">—</span>}
-              </div>
+              <div className="ap-meta-label">Last updated</div>
+              <div className="ap-meta-value">{formatDate(manuscript.updated_at)}</div>
             </div>
           </div>
         </div>
 
-        {decision ? (
-          <div className="card">
-            <div className="card-header">
-              <div>
-                <div className="card-title">Decision letter</div>
-                <div className="card-meta">From {decision.decided_by}</div>
-              </div>
-            </div>
-            <div className="ap-letter">{decision.letter}</div>
-            {!isFinal(decision.type) && (
-              <div style={{ marginTop: 16 }}>
-                <Link to="/author/revision" className="btn btn-accent btn-sm">
-                  Prepare your revision →
-                </Link>
-              </div>
-            )}
+        <OriginalityCard manuscriptId={manuscript.id} />
+
+        <div className="card">
+          <div className="card-header"><div className="card-title">Decision letter</div></div>
+          <div className="card-meta">
+            Editorial decisions and reviewer comments aren't available on this screen yet —
+            check back once your paper has moved through review.
           </div>
-        ) : (
-          <div className="card">
-            <div className="card-header"><div className="card-title">Decision letter</div></div>
-            <div className="card-meta">
-              No decision has been made yet. When the editor decides, the letter appears
-              here and the reviewer comments are released alongside it.
-            </div>
-          </div>
-        )}
+        </div>
 
-        {decision && (
-          <div className="card">
-            <div className="card-header">
-              <div>
-                <div className="card-title">Reviewer comments</div>
-                <div className="card-meta">
-                  {released.length
-                    ? `${released.length} review${released.length > 1 ? 's' : ''}, released with the decision.`
-                    : 'This decision was taken without external review.'}
-                </div>
-              </div>
-            </div>
-
-            {released.map((r, i) => (
-              <div className="ap-review" key={r.id}>
-                <h3>Reviewer {i + 1}</h3>
-                {r.summary && (
-                  <div className="ap-block"><h4>Summary</h4><p>{r.summary}</p></div>
-                )}
-                {r.strengths && (
-                  <div className="ap-block"><h4>Strengths</h4><p>{r.strengths}</p></div>
-                )}
-                {r.weaknesses && (
-                  <div className="ap-block"><h4>Weaknesses and suggestions</h4><p>{r.weaknesses}</p></div>
-                )}
-              </div>
-            ))}
-
-            {released.length > 0 && (
-              <div className="card-meta" style={{ marginTop: 4 }}>
-                Reviewers are anonymous and the numbering here does not carry across
-                papers. Scores and any confidential notes to the editor are not part of
-                what is shared with authors.
-              </div>
-            )}
-          </div>
-        )}
-
-        <WithdrawCard manuscript={manuscript} decision={decision} />
+        <WithdrawCard manuscript={manuscript} />
       </div>
     </AppShell>
   );

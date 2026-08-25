@@ -84,3 +84,20 @@ class ManuscriptSupplementaryFile(models.Model):
     file_name = models.CharField(max_length=255, blank=True)
     file_size = models.PositiveIntegerField(null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+
+class PlagiarismCheck(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        COMPLETED = 'completed', 'Completed'
+        FAILED = 'failed', 'Failed'
+
+    manuscript = models.OneToOneField(Manuscript, on_delete=models.CASCADE, related_name='plagiarism_check')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    check_id = models.CharField(max_length=64, blank=True)
+    similarity_score = models.FloatField(null=True, blank=True)
+    report = models.JSONField(null=True, blank=True)
+    error_message = models.TextField(blank=True, default='')
+    checked_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f'PlagiarismCheck(manuscript={self.manuscript_id}, status={self.status})'

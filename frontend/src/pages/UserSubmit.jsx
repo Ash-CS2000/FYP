@@ -10,16 +10,6 @@ import {
 } from '../data/trainingProgress.js';
 import { getDemoSession } from '../data/demoAccounts.js';
 import { TRAINING_UNITS, PUBLICATION_WINDOW_DAYS } from '../data/trainingContent.js';
-import { requestDraftCheck, pollCheck } from '../api/similarity.js';
-import {
-  DEMO_DRAFT_REPORT,
-  bandFor,
-  thresholdsFrom,
-  loadLocalSettings,
-  BAND_LABELS,
-  BAND_HINTS,
-  SIMILARITY_TONE,
-} from '../data/similarity.js';
 import { draftFor, saveDraft, deleteDraft, formatSavedAt } from '../data/drafts.js';
 import { saveDraftRemote } from '../api/submissions.js';
 
@@ -96,114 +86,6 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-// Author-side originality self-check shown in step 3 once a manuscript is picked.
-// Deliberately advisory: it reports, warns and links to the training unit, but it
-// never prevents the author from continuing. Editorial screening is the gate.
-function OriginalitySelfCheck({ state, report, progress, error, isDemo, onRun }) {
-  const thresholds = thresholdsFrom(loadLocalSettings());
-  const band = report ? bandFor(report.overall_similarity_pct, thresholds) : null;
-  const tone = band ? SIMILARITY_TONE[band] : null;
-
-  return (
-    <div className="field">
-      <label className="field-label">Originality check (optional)</label>
-      <div style={{ border: '1px solid var(--ink-200)', borderRadius: 'var(--r-md)', padding: 18, background: 'var(--white)' }}>
-
-        {state === 'idle' && (
-          <>
-            <p style={{ fontSize: 13.5, color: 'var(--ink-800)', lineHeight: 1.6, marginBottom: 14 }}>
-              Check your manuscript against previously published work and other PaperBridge
-              submissions before you send it. The editor runs the same check on arrival, so it is
-              better to see the result now.
-            </p>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onRun}>Run originality check</button>
-          </>
-        )}
-
-        {state === 'running' && (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 6 }}>
-              <span style={{ color: 'var(--ink-600)' }}>Comparing against the corpus…</span>
-              <span style={{ fontWeight: 600, color: 'var(--navy-900)' }}>{progress}%</span>
-            </div>
-            <div className="progress" style={{ '--accent': 'var(--navy-700)' }}>
-              <div className="progress-fill" style={{ width: `${progress}%` }}></div>
-            </div>
-          </>
-        )}
-
-        {state === 'failed' && (
-          <>
-            <p style={{ fontSize: 13.5, color: 'var(--red-800)', lineHeight: 1.6, marginBottom: 12 }}>{error}</p>
-            <p style={{ fontSize: 12.5, color: 'var(--ink-600)', marginBottom: 14 }}>
-              You can still submit — the editor will run the check on arrival.
-            </p>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onRun}>Try again</button>
-          </>
-        )}
-
-        {state === 'done' && report && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
-              <span style={{
-                padding: '6px 14px', borderRadius: 'var(--r-pill)', fontSize: 17, fontWeight: 700,
-                background: tone.bg, color: tone.fg,
-              }}>
-                {report.overall_similarity_pct}%
-              </span>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--navy-900)' }}>{BAND_LABELS[band]}</div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink-600)' }}>{BAND_HINTS[band]}</div>
-              </div>
-              {isDemo && (
-                <span className="pill pill-pending" style={{ marginLeft: 'auto' }}>
-                  Demo result — analysis service unavailable
-                </span>
-              )}
-            </div>
-
-            <div style={{ borderTop: '1px solid var(--ink-100)', paddingTop: 12, marginBottom: 12 }}>
-              <div className="label" style={{ marginBottom: 8 }}>Top matches</div>
-              {report.sources.slice(0, 3).map((src) => (
-                <div key={src.id} style={{ display: 'flex', gap: 12, alignItems: 'baseline', fontSize: 13, marginBottom: 6 }}>
-                  <span style={{ fontWeight: 600, color: 'var(--navy-900)', minWidth: 44 }}>{src.similarity_pct}%</span>
-                  <span style={{ color: 'var(--ink-800)' }}>{src.title}</span>
-                </div>
-              ))}
-              {report.sources.length === 0 && (
-                <div style={{ fontSize: 13, color: 'var(--ink-600)' }}>No matching sources found.</div>
-              )}
-            </div>
-
-            {band === 'high' && (
-              <div className="unit-todo-banner" style={{ marginBottom: 12 }}>
-                <strong>The editor will see this same score.</strong>
-                <span className="todo">
-                  Check that every reused passage is quoted and cited. Overlap is not automatically a
-                  problem — quotations and standard methods wording both count towards it.
-                </span>
-                <span className="todo">
-                  Unit 3 of the training covers paraphrasing, patchwriting and self-plagiarism.
-                </span>
-                <Link to="/author/training" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }}>
-                  Revisit Unit 3 — Academic Writing and Integrity
-                </Link>
-              </div>
-            )}
-
-            <p style={{ fontSize: 12, color: 'var(--ink-600)', lineHeight: 1.55, marginBottom: 12 }}>
-              This measures verbatim text reuse only. It is a prompt to check your citations, not a
-              finding about your work, and it does not block your submission.
-            </p>
-
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onRun}>Re-run check</button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function UserSubmit() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -252,15 +134,6 @@ export default function UserSubmit() {
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef(null);
   const suppInputRef = useRef(null);
-
-  // Step 3 — originality self-check. Advisory only: a high score never blocks
-  // submission, exactly as a journal's author-side pre-check works. The gate is
-  // the editor's screening view, not this panel.
-  const [checkState, setCheckState] = useState('idle'); // idle | running | done | failed
-  const [checkReport, setCheckReport] = useState(null);
-  const [checkProgress, setCheckProgress] = useState(0);
-  const [checkError, setCheckError] = useState('');
-  const [checkIsDemo, setCheckIsDemo] = useState(false);
 
   // Step 4 — Declarations
   const [noFunding, setNoFunding] = useState(d.noFunding || false);
@@ -369,51 +242,6 @@ export default function UserSubmit() {
     }
     setUploadError('');
     setFile(selected);
-    resetCheck();
-  };
-
-  // ---- Originality self-check --------------------------------------------
-  const resetCheck = () => {
-    setCheckState('idle');
-    setCheckReport(null);
-    setCheckProgress(0);
-    setCheckError('');
-    setCheckIsDemo(false);
-  };
-
-  const runCheck = async () => {
-    if (!file) return;
-    setCheckState('running');
-    setCheckProgress(0);
-    setCheckError('');
-    setCheckIsDemo(false);
-    let job;
-    try {
-      job = await requestDraftCheck(file);
-    } catch (err) {
-      // No `status` means the request never reached a server. The analysis service
-      // is often down in development, so fall back to a clearly labelled demo
-      // result and keep the flow walkable. An actual HTTP error is a real failure
-      // and must be shown as one.
-      if (err?.status === undefined) {
-        setCheckReport(DEMO_DRAFT_REPORT);
-        setCheckIsDemo(true);
-        setCheckState('done');
-      } else {
-        setCheckError(err.message || 'The originality check could not be started.');
-        setCheckState('failed');
-      }
-      return;
-    }
-    try {
-      const report = await pollCheck(job, { onProgress: setCheckProgress });
-      setCheckReport(report);
-      setCheckState('done');
-    } catch (err) {
-      // The check was accepted and then failed or timed out — never a demo result.
-      setCheckError(err.message || 'The originality check could not be completed.');
-      setCheckState('failed');
-    }
   };
 
   const handleDrop = (e) => {
@@ -485,17 +313,6 @@ export default function UserSubmit() {
       if (!file) return 'Please upload your manuscript PDF.';
     }
     return '';
-  };
-
-  // One-line originality result for the step 5 summary.
-  const checkSummary = () => {
-    if (checkState === 'running') return 'check in progress…';
-    if (checkState === 'failed') return 'check failed — the editor will run it on arrival';
-    if (checkState === 'done' && checkReport) {
-      const band = bandFor(checkReport.overall_similarity_pct, thresholdsFrom(loadLocalSettings()));
-      return `${checkReport.overall_similarity_pct}% · ${BAND_LABELS[band]}${checkIsDemo ? ' (demo result)' : ''}`;
-    }
-    return 'not checked';
   };
 
   const handleNext = async () => {
@@ -599,6 +416,8 @@ export default function UserSubmit() {
     alert('Paper submitted successfully! Our reviewers will be in touch.');
     navigate('/author/papers');
   };
+
+  
 
   return (
     <AppShell role="author" searchPlaceholder="Search...">
@@ -878,7 +697,6 @@ export default function UserSubmit() {
                       onClick={() => {
                         setFile(null);
                         setUploadError('');
-                        resetCheck();
                         if (fileInputRef.current) fileInputRef.current.value = '';
                       }}
                     >
@@ -903,16 +721,13 @@ export default function UserSubmit() {
                 {uploadError && (
                   <div className="field-hint" style={{ color: 'var(--red-700, #b42318)' }}>{uploadError}</div>
                 )}
+                {file && (
+                  <div className="field-hint">
+                    Your manuscript will be checked for originality automatically after you submit —
+                    you'll see the result on this paper's page.
+                  </div>
+                )}
               </div>
-
-              {file && <OriginalitySelfCheck
-                state={checkState}
-                report={checkReport}
-                progress={checkProgress}
-                error={checkError}
-                isDemo={checkIsDemo}
-                onRun={runCheck}
-              />}
 
               <div className="field">
                 <label className="field-label">Supplementary files (optional)</label>
@@ -1023,7 +838,7 @@ export default function UserSubmit() {
                   <span className="muted">Authors</span><span>{authors.map(authorDisplayName).filter(Boolean).join(', ') || <em className="muted">—</em>}</span>
                   <span className="muted">Manuscript</span><span>{file ? file.name : <em className="muted">not uploaded</em>}</span>
                   <span className="muted">Supplements</span><span>{supplementary.length ? `${supplementary.length} file(s)` : 'none'}</span>
-                  <span className="muted">Originality</span><span>{checkSummary()}</span>
+                  <span className="muted">Originality</span><span>Checked automatically after submission</span>
                 </div>
               </div>
 

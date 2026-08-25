@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import { getScreeningSettings, patchScreeningSettings } from '../api/similarity.js';
-import { loadLocalSettings, saveLocalSettings } from '../data/similarity.js';
+import { loadLocalSettings, saveLocalSettings } from '../data/editorScreeningMock.js';
 
 // Screening thresholds are platform policy, so only an admin sets them — see the
 // role model: editors act on the bands, admins define them. Every other screen

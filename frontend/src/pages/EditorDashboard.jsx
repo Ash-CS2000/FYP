@@ -1,18 +1,10 @@
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-import { REPORTS, bandFor, thresholdsFrom, loadLocalSettings } from '../data/similarity.js';
 
 export default function EditorDashboard() {
   const action = <button className="btn btn-primary btn-sm">Generate Report</button>;
 
   // Screening state, re-banded on every render so an admin threshold change is
-  // reflected here without touching any stored report.
-  const thresholds = thresholdsFrom(loadLocalSettings());
-  const done = Object.values(REPORTS).filter(r => r.status === 'done');
-  const flagged = done.filter(r => bandFor(r.overall_similarity_pct, thresholds) === 'high');
-  const awaitingCheck = Object.values(REPORTS).filter(
-    r => r.status === 'queued' || r.status === 'running' || r.status === 'failed',
-  ).length;
   return (
     <AppShell role="editor" searchPlaceholder="Search submissions, authors, reviewers..." topbarActions={action}>
       <style>{`
@@ -49,14 +41,9 @@ export default function EditorDashboard() {
           { label: 'Avg. Decision Time', value: '9d', accent: 'var(--purple-700)', trend: 'Target: under 14 days' },
           {
             label: 'Flagged for Similarity',
-            value: flagged.length,
+            value: 3,
             accent: 'var(--red-800)',
-            trend: (
-              <>
-                <Link to="/editor/screening" style={{ color: 'var(--navy-700)', fontWeight: 600 }}>Review screening →</Link>
-                {awaitingCheck > 0 && <> · {awaitingCheck} awaiting a check</>}
-              </>
-            ),
+            trend: <Link to="/editor/screening" style={{ color: 'var(--navy-700)', fontWeight: 600 }}>Review screening →</Link>,
           },
         ].map((s, i) => (
           <div key={s.label} className={`stat fade-up delay-${i + 1}`} style={{ '--accent': s.accent }}>

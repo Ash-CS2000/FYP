@@ -35,8 +35,8 @@ export function getRefreshToken() {
 }
 
 export function saveTokens(access, refresh) {
-  localStorage.setItem('access', access);
-  localStorage.setItem('refresh', refresh);
+  if (access) localStorage.setItem('access', access);
+  if (refresh) localStorage.setItem('refresh', refresh);
 }
 
 export function clearSession() {
@@ -79,7 +79,7 @@ export async function authFetch(url, options = {}) {
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
 

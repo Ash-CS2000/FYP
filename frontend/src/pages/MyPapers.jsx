@@ -1,21 +1,45 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { loadDrafts, deleteDraft, formatSavedAt } from '../data/drafts.js';
 import { deleteDraftRemote } from '../api/submissions.js';
 import { withdrawalFor } from '../data/drafts.js';
+import { listManuscripts } from '../api/manuscripts.js';
 
-const PAPERS = [
-  { id: 'MS-2026-014', title: 'Deep Learning Methods in Medical Imaging', cat: 'Computer Science', date: '12 Jan 2026', status: 'review', statusLabel: 'In Review' },
-  { id: 'MS-2025-208', title: 'A Survey of Natural Language Processing in 2025', cat: 'Linguistics', date: '04 Nov 2025', status: 'approved', statusLabel: 'Approved' },
-  { id: 'MS-2025-187', title: 'A Framework for IoT Security in Smart Cities', cat: 'Engineering', date: '22 Oct 2025', status: 'revision', statusLabel: 'Revision Needed' },
-  { id: 'MS-2025-142', title: 'Blockchain Applications in Finance', cat: 'Finance', date: '18 Aug 2025', status: 'approved', statusLabel: 'Approved' },
-];
+// Django's Manuscript.status values → the pill styling/labels this page uses.
+// Adjust the left-hand keys if your model's status choices differ.
+const STATUS_LABELS = {
+  review: 'In Review',
+  revision: 'Revision Needed',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  pending: 'Pending Decision',
+};
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export default function MyPapers() {
   const [filter, setFilter] = useState('all');
   const [drafts, setDrafts] = useState(() => loadDrafts());
-  const filtered = filter === 'all' ? PAPERS : PAPERS.filter(p => filter === 'active' ? (p.status === 'review' || p.status === 'revision') : p.status === filter);
+  const [papers, setPapers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    listManuscripts()
+      .then((data) => { if (!cancelled) setPapers(data); })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load your papers.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const filtered = filter === 'all'
+    ? papers
+    : papers.filter(p => filter === 'active' ? (p.status === 'review' || p.status === 'revision') : p.status === filter);
 
   const discard = async (id) => {
     try {
@@ -90,9 +114,9 @@ export default function MyPapers() {
           </div>
           <div className="row">
             {[
-              { id: 'all', label: 'All', count: PAPERS.length },
-              { id: 'active', label: 'Active', count: PAPERS.filter(p => p.status === 'review' || p.status === 'revision').length },
-              { id: 'approved', label: 'Approved', count: PAPERS.filter(p => p.status === 'approved').length },
+              { id: 'all', label: 'All', count: papers.length },
+              { id: 'active', label: 'Active', count: papers.filter(p => p.status === 'review' || p.status === 'revision').length },
+              { id: 'approved', label: 'Approved', count: papers.filter(p => p.status === 'approved').length },
             ].map(f => (
               <button key={f.id} className={`filter-chip ${filter === f.id ? 'active' : ''}`} onClick={() => setFilter(f.id)}>
                 {f.label} <span style={{ opacity: .6 }}>{f.count}</span>
@@ -100,40 +124,51 @@ export default function MyPapers() {
             ))}
           </div>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr><th>Paper</th><th>Category</th><th>Submitted</th><th>Status</th><th></th></tr>
-          </thead>
-          <tbody>
-            {filtered.map(p => {
-              // A withdrawal overrides the pipeline status — the paper stopped
-              // where the author stopped it.
-              const withdrawn = withdrawalFor(p.id);
-              return (
-                <tr key={p.id} style={withdrawn ? { opacity: .65 } : undefined}>
-                  <td>
-                    <Link to={`/author/papers/${p.id}`} className="table-title" style={{ color: 'var(--navy-900)', display: 'block' }}>{p.title}</Link>
-                    <div className="table-meta">{p.id}</div>
-                  </td>
-                  <td><span className="muted">{p.cat}</span></td>
-                  <td><span className="muted">{p.date}</span></td>
-                  <td>
-                    {withdrawn
-                      ? <span className="pill pill-revision">Withdrawn</span>
-                      : <span className={`pill pill-${p.status}`}>{p.statusLabel}</span>}
-                  </td>
-                  <td>
-                    {!withdrawn && p.status === 'revision' ? (
-                      <Link to="/author/revision" style={{ color: 'var(--amber-700)', fontWeight: 600, fontSize: 13 }}>Resubmit →</Link>
-                    ) : (
-                      <Link to={`/author/papers/${p.id}`} style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</Link>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+
+        {loading && <div className="card-meta" style={{ padding: 20 }}>Loading your papers…</div>}
+        {!loading && loadError && (
+          <div className="card-meta" style={{ padding: 20, color: 'var(--red-800)' }}>{loadError}</div>
+        )}
+        {!loading && !loadError && filtered.length === 0 && (
+          <div className="card-meta" style={{ padding: 20 }}>No submissions yet.</div>
+        )}
+
+        {!loading && !loadError && filtered.length > 0 && (
+          <table className="data-table">
+            <thead>
+              <tr><th>Paper</th><th>Category</th><th>Submitted</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              {filtered.map(p => {
+                // A withdrawal overrides the pipeline status — the paper stopped
+                // where the author stopped it.
+                const withdrawn = withdrawalFor(p.id);
+                return (
+                  <tr key={p.id} style={withdrawn ? { opacity: .65 } : undefined}>
+                    <td>
+                      <Link to={`/author/papers/${p.id}`} className="table-title" style={{ color: 'var(--navy-900)', display: 'block' }}>{p.title}</Link>
+                      <div className="table-meta">{p.category || p.article_type}</div>
+                    </td>
+                    <td><span className="muted">{p.category}</span></td>
+                    <td><span className="muted">{formatDate(p.submitted_at)}</span></td>
+                    <td>
+                      {withdrawn
+                        ? <span className="pill pill-revision">Withdrawn</span>
+                        : <span className={`pill pill-${p.status}`}>{STATUS_LABELS[p.status] || p.status}</span>}
+                    </td>
+                    <td>
+                      {!withdrawn && p.status === 'revision' ? (
+                        <Link to="/author/revision" style={{ color: 'var(--amber-700)', fontWeight: 600, fontSize: 13 }}>Resubmit →</Link>
+                      ) : (
+                        <Link to={`/author/papers/${p.id}`} style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</Link>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </AppShell>
   );

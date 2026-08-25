@@ -154,3 +154,7 @@ SUPABASE_S3_REGION = os.getenv('SUPABASE_S3_REGION', 'ap-southeast-1')
 SUPABASE_S3_BUCKET = os.getenv('SUPABASE_S3_BUCKET', '')
 SUPABASE_S3_ACCESS_KEY_ID = os.getenv('SUPABASE_S3_ACCESS_KEY_ID', '')
 SUPABASE_S3_SECRET_ACCESS_KEY = os.getenv('SUPABASE_S3_SECRET_ACCESS_KEY', '')
+
+# noplage engine settings
+NOPLAG_ENGINE_URL = os.environ.get("NOPLAG_ENGINE_URL", "https://noplag-engine.onrender.com")
+NOPLAG_API_KEY = os.environ.get("NOPLAG_API_KEY", "")

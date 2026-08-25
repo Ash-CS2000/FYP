@@ -1,14 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-import {
-  reportFor,
-  bandFor,
-  thresholdsFrom,
-  loadLocalSettings,
-  BAND_LABELS,
-  SIMILARITY_TONE,
-} from '../data/similarity.js';
+import { bandFor, BAND_LABELS, SIMILARITY_TONE } from '../data/similarity.js';
+import { reportFor, thresholdsFrom, loadLocalSettings } from '../data/editorScreeningMock.js';
 import { decisionFor, DECISION_LABELS, DECISION_TONE } from '../data/editorial.js';
 
 const SUBMISSIONS = [

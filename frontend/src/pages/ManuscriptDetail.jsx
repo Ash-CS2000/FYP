@@ -9,25 +9,18 @@
 // take none of the actions. See api/editorial.js for why that split exists and
 // why the server has to enforce it independently of this component.
 
-import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { getStoredUser } from '../utils/user.js';
+import { getManuscript } from '../api/manuscripts.js';
 import {
-  MANUSCRIPTS,
   reviewsFor,
   compositeScore,
   RECOMMENDATION_LABELS,
   RECOMMENDATION_TONE,
 } from '../data/reviews.js';
-import {
-  reportFor,
-  bandFor,
-  thresholdsFrom,
-  loadLocalSettings,
-  BAND_LABELS,
-  SIMILARITY_TONE,
-} from '../data/similarity.js';
+import { useEffect, useState } from 'react';
+import { getPlagiarismStatus } from '../api/similarity.js';
 import {
   availableDecisions,
   decisionFor,
@@ -55,26 +48,39 @@ function editorName() {
 }
 
 function SimilarityLine({ manuscriptId, basePath }) {
-  const report = reportFor(manuscriptId);
-  if (!report) return <span className="muted">No check on file</span>;
-  if (report.status === 'queued' || report.status === 'running') {
-    return <span className="pill pill-pending">Checking…</span>;
+  const [state, setState] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    getPlagiarismStatus(manuscriptId)
+      .then(result => { if (!cancelled) setState(result); })
+      .catch(err => { if (!cancelled) setError(err.message || 'Could not load check.'); });
+    return () => { cancelled = true; };
+  }, [manuscriptId]);
+
+  if (error) return <span className="pill pill-revision" title={error}>Check unavailable</span>;
+  if (!state) return <span className="muted">Loading…</span>;
+  if (state.status === 'pending') return <span className="pill pill-pending">Checking…</span>;
+  if (state.status === 'failed') {
+    return <span className="pill pill-revision" title={state.error_message}>Check failed</span>;
   }
-  if (report.status === 'failed') {
-    return <span className="pill pill-revision" title={report.error}>Check failed</span>;
-  }
-  const thresholds = thresholdsFrom(loadLocalSettings());
-  const band = bandFor(report.overall_similarity_pct, thresholds);
-  const tone = SIMILARITY_TONE[band];
+
+  const pct = state.similarity_score ?? 0;
+  const tone = pct >= 30
+    ? { bg: 'var(--red-100, #fde2e1)', fg: 'var(--red-800, #b3261e)' }
+    : pct >= 15
+      ? { bg: 'var(--amber-100, #fdf0d5)', fg: 'var(--amber-800, #8a5a00)' }
+      : { bg: 'var(--green-100, #e3f5e9)', fg: 'var(--green-800, #1e6b3c)' };
+
   return (
     <span className="row" style={{ gap: 10 }}>
       <span style={{
         padding: '3px 10px', borderRadius: 'var(--r-pill)', fontSize: 12, fontWeight: 700,
         background: tone.bg, color: tone.fg,
       }}>
-        {report.overall_similarity_pct}%
+        {pct}%
       </span>
-      <span className="muted" style={{ fontSize: 12.5 }}>{BAND_LABELS[band]}</span>
       <Link to={`${basePath}/submissions/${manuscriptId}/similarity`}
             style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 12.5 }}>
         Full report →
@@ -351,10 +357,36 @@ export default function ManuscriptDetail({ role = 'editor' }) {
   const { id } = useParams();
   const isAdmin = role === 'admin';
   const basePath = isAdmin ? '/admin' : '/editor';
-  const manuscript = MANUSCRIPTS[id];
+
+  const [manuscript, setManuscript] = useState(null);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    getManuscript(id)
+      .then(m => { if (!cancelled) setManuscript(m); })
+      .catch(err => { if (!cancelled) setLoadError(err.message || 'Could not load manuscript.'); });
+    return () => { cancelled = true; };
+  }, [id]);
+
   const reviews = reviewsFor(id);
   const submitted = reviews.filter(r => r.status === 'submitted');
   const [decision, setDecision] = useState(() => decisionFor(id));
+
+  if (loadError) {
+    return (
+      <AppShell role={role} searchPlaceholder="Search submissions...">
+        <div className="page-header fade-up">
+          <div>
+            <span className="eyebrow">{isAdmin ? 'Oversight' : 'Editorial'}</span>
+            <h1 className="page-title" style={{ marginTop: 8 }}>Couldn't load this manuscript.</h1>
+            <p className="page-subtitle">{loadError}</p>
+          </div>
+          <Link to={`${basePath}/submissions`} className="btn btn-ghost btn-sm">Back to submissions</Link>
+        </div>
+      </AppShell>
+    );
+  }
 
   if (!manuscript) {
     return (
@@ -362,8 +394,7 @@ export default function ManuscriptDetail({ role = 'editor' }) {
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">{isAdmin ? 'Oversight' : 'Editorial'}</span>
-            <h1 className="page-title" style={{ marginTop: 8 }}>Manuscript not found.</h1>
-            <p className="page-subtitle">No manuscript matches that reference.</p>
+            <h1 className="page-title" style={{ marginTop: 8 }}>Loading…</h1>
           </div>
           <Link to={`${basePath}/submissions`} className="btn btn-ghost btn-sm">Back to submissions</Link>
         </div>

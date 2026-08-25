@@ -2,6 +2,7 @@
 Thin wrapper around Supabase Storage's S3-compatible API (via boto3).
 Files are stored under private keys; callers get a presigned URL on read.
 """
+import io
 import uuid
 
 import boto3
@@ -19,6 +20,12 @@ def _client():
         config=Config(signature_version='s3v4', s3={'addressing_style': 'path'}),
     )
 
+def download_file(key):
+    """Downloads a file from Supabase Storage and returns its raw bytes."""
+    buffer = io.BytesIO()
+    _client().download_fileobj(settings.SUPABASE_S3_BUCKET, key, buffer)
+    buffer.seek(0)
+    return buffer.read()
 
 def build_key(owner_id, category, filename):
     safe_name = filename.replace('/', '_')
@@ -39,3 +46,4 @@ def get_file_url(key, expires_in=3600):
         Params={'Bucket': settings.SUPABASE_S3_BUCKET, 'Key': key},
         ExpiresIn=expires_in,
     )
+
