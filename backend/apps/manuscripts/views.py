@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404
 
 from .models import Manuscript, PlagiarismCheck
 from .serializers import ManuscriptSerializer, ManuscriptSubmitSerializer
-from .services.noplag_client import get_check_status, get_check_report, NoPlagClientError
+from .services.noplag_client import add_to_corpus, get_check_status, get_check_report, NoPlagClientError
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,10 @@ class PlagiarismCheckStatusView(APIView):
                         check.similarity_score = report.get('overall_similarity_pct')
                         check.report = report
                         check.save()
+                        try:
+                            add_to_corpus(manuscript)
+                        except NoPlagClientError:
+                            logger.exception('Adding completed manuscript to noplag corpus failed')
                 elif 'fail' in raw_status or 'error' in raw_status:
                     check.status = PlagiarismCheck.Status.FAILED
                     check.error_message = status_result.get('error_message', '')

@@ -23,6 +23,7 @@ function you can drive from any orchestrator.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -159,6 +160,7 @@ async def create_check_upload(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             f"upload exceeds {_MAX_UPLOAD_BYTES} bytes",
         )
+    sha256 = hashlib.sha256(data).hexdigest()
 
     try:
         mime_type = resolve_mime_type(file.content_type, file.filename)
@@ -185,6 +187,15 @@ async def create_check_upload(
     # Uploads are named by their filename — more recognizable than the first
     # line of an extracted PDF/DOCX (which is often a header or page number).
     filename_title = (file.filename or "").strip()[:_TITLE_MAX] or None
+    existing_document_id = await _find_corpus_document_by_sha(session, tenant_id, sha256)
+    if existing_document_id is not None:
+        return await _create_exact_duplicate_check(
+            session=session,
+            tenant_id=tenant_id,
+            source_document_id=existing_document_id,
+            query_text=text,
+            title=filename_title,
+        )
 
     return await _start_check(
         session=session,
@@ -193,6 +204,91 @@ async def create_check_upload(
         language=language,
         title=filename_title,
         background_tasks=background_tasks,
+    )
+
+
+async def _find_corpus_document_by_sha(
+    session: AsyncSession, tenant_id: UUID, sha256: str
+) -> UUID | None:
+    row = (
+        await session.execute(
+            sql_text(
+                "SELECT id FROM documents "
+                "WHERE sha256 = :sha256 "
+                "AND (tenant_id = :tenant_id OR tenant_id IS NULL) "
+                "AND fingerprint_status = 'fingerprinted' "
+                "ORDER BY tenant_id NULLS LAST, created_at DESC "
+                "LIMIT 1"
+            ),
+            {"sha256": sha256, "tenant_id": tenant_id},
+        )
+    ).one_or_none()
+    return row.id if row is not None else None
+
+
+async def _create_exact_duplicate_check(
+    *,
+    session: AsyncSession,
+    tenant_id: UUID,
+    source_document_id: UUID,
+    query_text: str,
+    title: str | None,
+) -> CheckCreateResponse:
+    check_id = uuid4()
+    now = datetime.now(UTC)
+    matched_chars = len(query_text)
+    await session.execute(
+        sql_text(
+            "INSERT INTO checks "
+            "(id, tenant_id, status, stage, title, query_text_length, word_count, "
+            " source_count, query_text, total_matched_chars, overall_similarity_pct, "
+            " coverage, checked_chunks, total_chunks, created_at, completed_at) "
+            "VALUES (:id, :tenant_id, 'complete', 'complete', :title, :qlen, :wc, "
+            " 1, :qtext, :matched_chars, 100.0, 'full', 1, 1, :now, :now)"
+        ),
+        {
+            "id": check_id,
+            "tenant_id": tenant_id,
+            "title": title,
+            "qlen": matched_chars,
+            "wc": len(query_text.split()),
+            "qtext": query_text,
+            "matched_chars": matched_chars,
+            "now": now,
+        },
+    )
+    await session.execute(
+        sql_text(
+            "INSERT INTO check_results "
+            "(check_id, source_document_id, matched_chars, similarity_pct, passages) "
+            "VALUES (:check_id, :doc, :matched_chars, 100.0, CAST(:passages AS jsonb))"
+        ),
+        {
+            "check_id": check_id,
+            "doc": source_document_id,
+            "matched_chars": matched_chars,
+            "passages": json.dumps(
+                [
+                    {
+                        "query_chunk_id": str(UUID(int=0)),
+                        "candidate_chunk_id": str(UUID(int=0)),
+                        "query_start": 0,
+                        "query_end": matched_chars,
+                        "candidate_start": 0,
+                        "candidate_end": matched_chars,
+                        "score": 1.0,
+                        "match_type": "verbatim",
+                    }
+                ]
+            ),
+        },
+    )
+    await session.commit()
+    return CheckCreateResponse(
+        check_id=check_id,
+        status_url=f"/v1/checks/{check_id}",
+        progress_url=f"/v1/checks/{check_id}/progress",
+        report_url=f"/v1/checks/{check_id}/report",
     )
 
 

@@ -67,7 +67,7 @@ export async function pollPlagiarismStatus(manuscriptId, { onUpdate, signal } = 
 
   while (state.status === 'pending') {
     if (signal?.aborted) throw new Error('Check cancelled.');
-    if (Date.now() > deadline) throw new Error('The originality check timed out.');
+    if (Date.now() > deadline) return { ...state, polling_timed_out: true };
     await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     if (signal?.aborted) throw new Error('Check cancelled.');
     state = await getPlagiarismStatus(manuscriptId);

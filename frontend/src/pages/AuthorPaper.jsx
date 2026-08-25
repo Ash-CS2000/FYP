@@ -205,7 +205,11 @@ function OriginalityCard({ manuscriptId }) {
     return (
       <div className="card">
         <div className="card-header"><div className="card-title">Originality check</div></div>
-        <div className="card-meta">Still running — this can take a couple of minutes on larger PDFs.</div>
+        <div className="card-meta">
+          {data?.polling_timed_out
+            ? 'Still running on the server. You can refresh this page later to pick up the result.'
+            : 'Still running — this can take a couple of minutes on larger PDFs.'}
+        </div>
       </div>
     );
   }
