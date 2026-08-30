@@ -83,7 +83,7 @@ export const SIDEBAR_CONFIG = {
       {
         title: 'Account',
         items: [
-          { id: 'notifications', label: 'Notifications', to: '/author/notifications', icon: ICONS.bell, badge: 3 },
+          { id: 'notifications', label: 'Notifications', to: '/author/notifications', icon: ICONS.bell },
           { id: 'profile',       label: 'Profile',       to: '/author/profile',       icon: ICONS.user },
           { id: 'settings',      label: 'Settings',      to: '/author/settings',      icon: ICONS.settings },
         ],

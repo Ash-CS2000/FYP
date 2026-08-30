@@ -101,3 +101,36 @@ class PlagiarismCheck(models.Model):
     
     def __str__(self):
         return f'PlagiarismCheck(manuscript={self.manuscript_id}, status={self.status})'
+
+
+class Decision(models.Model):
+    class Type(models.TextChoices):
+        DESK_REJECT = 'desk_reject', 'Desk Reject'
+        ACCEPT = 'accept', 'Accept'
+        MINOR = 'minor', 'Minor Revision'
+        MAJOR = 'major', 'Major Revision'
+        REJECT = 'reject', 'Reject'
+
+    FINAL_TYPES = {Type.DESK_REJECT, Type.ACCEPT, Type.REJECT}
+    STATUS_MAP = {
+        Type.ACCEPT: Manuscript.Status.ACCEPTED,
+        Type.REJECT: Manuscript.Status.REJECTED,
+        Type.DESK_REJECT: Manuscript.Status.REJECTED,
+        Type.MINOR: Manuscript.Status.REVISIONS_REQUESTED,
+        Type.MAJOR: Manuscript.Status.REVISIONS_REQUESTED,
+    }
+
+    manuscript = models.ForeignKey(Manuscript, on_delete=models.CASCADE, related_name='decisions')
+    type = models.CharField(max_length=20, choices=Type.choices)
+    letter = models.TextField()
+    reasons = models.JSONField(default=list, blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='decisions_made',
+    )
+    decided_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-decided_at']
+
+    def __str__(self):
+        return f'Decision(manuscript={self.manuscript_id}, type={self.type})'

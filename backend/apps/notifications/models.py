@@ -1,3 +1,23 @@
+from django.conf import settings
 from django.db import models
 
-# Create your models here.
+
+class Notification(models.Model):
+    class Category(models.TextChoices):
+        DECISION = 'decision', 'Decision'
+
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
+    category = models.CharField(max_length=30, choices=Category.choices, default=Category.DECISION)
+    title = models.CharField(max_length=255)
+    body = models.TextField(blank=True)
+    manuscript = models.ForeignKey(
+        'manuscripts.Manuscript', on_delete=models.CASCADE, null=True, blank=True, related_name='notifications',
+    )
+    read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Notification(recipient={self.recipient_id}, category={self.category}, read={self.read})'

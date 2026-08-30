@@ -4,7 +4,9 @@ from django.db import transaction
 from rest_framework import serializers
 
 from . import storage
-from .models import Manuscript, ManuscriptAffiliation, ManuscriptAuthor, ManuscriptSupplementaryFile, PlagiarismCheck
+from .models import (
+    Decision, Manuscript, ManuscriptAffiliation, ManuscriptAuthor, ManuscriptSupplementaryFile, PlagiarismCheck,
+)
 from .services.noplag_client import submit_check, NoPlagClientError
 
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB — mirrors the frontend's MAX_UPLOAD_SIZE
@@ -64,10 +66,14 @@ class ManuscriptEditorSerializer(serializers.ModelSerializer):
     """
     owner_name = serializers.SerializerMethodField()
     plagiarism_check = serializers.SerializerMethodField()
+    latest_decision = serializers.SerializerMethodField()
 
     class Meta:
         model = Manuscript
-        fields = ('id', 'title', 'article_type', 'category', 'status', 'submitted_at', 'owner_name', 'plagiarism_check')
+        fields = (
+            'id', 'title', 'article_type', 'category', 'status', 'submitted_at', 'owner_name',
+            'plagiarism_check', 'latest_decision',
+        )
 
     def get_owner_name(self, obj):
         return obj.owner.get_full_name() or obj.owner.email
@@ -77,6 +83,37 @@ class ManuscriptEditorSerializer(serializers.ModelSerializer):
         if check is None:
             return None
         return {'status': check.status, 'similarity_score': check.similarity_score}
+
+    def get_latest_decision(self, obj):
+        decision = obj.decisions.first()  # Decision.Meta.ordering = -decided_at
+        if decision is None:
+            return None
+        return {'type': decision.type, 'decided_at': decision.decided_at}
+
+
+class DecisionSerializer(serializers.ModelSerializer):
+    manuscript_id = serializers.IntegerField(read_only=True)
+    decided_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Decision
+        fields = ('manuscript_id', 'type', 'letter', 'reasons', 'decided_by', 'decided_at')
+
+    def get_decided_by(self, obj):
+        if not obj.decided_by:
+            return 'The Editorial Office'
+        return obj.decided_by.get_full_name() or obj.decided_by.email
+
+
+class DecisionCreateSerializer(serializers.Serializer):
+    type = serializers.ChoiceField(choices=Decision.Type.choices)
+    letter = serializers.CharField()
+    reasons = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+
+    def validate_letter(self, value):
+        if not value.strip():
+            raise serializers.ValidationError('The letter cannot be empty.')
+        return value.strip()
 
 
 # ── Nested input validation for the `authors` JSON blob ──────────────────────

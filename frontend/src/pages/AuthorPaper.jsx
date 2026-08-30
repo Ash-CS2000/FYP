@@ -1,9 +1,9 @@
 // src/pages/AuthorPaper.jsx
-// One of the author's own papers: where it stands, and the originality check
-// result. Decision letters and reviewer comments are NOT wired to a real
-// backend yet — there is no decisions/reviews API on the Manuscript model as of
-// this writing, so that section is shown as "not available yet" rather than
-// faked from mock data.
+// One of the author's own papers: where it stands, the decision (if one has
+// been made), and the originality check result. Reviewer comments are NOT
+// wired to a real backend yet — there is no reviews API on the Manuscript
+// model as of this writing, so that section is shown as "not available yet"
+// rather than faked from mock data.
 //
 // This screen is the author side of the double-blind boundary, so what it does
 // NOT show is as deliberate as what it does:
@@ -17,9 +17,9 @@
 //   · similarity report: shown below, sourced live from
 //     /api/manuscripts/<id>/plagiarism-status/ — the author's own check only,
 //     scoped server-side to manuscripts they own
-//
-// Once decisions/reviews get a real endpoint: replace the placeholder card below
-// with the real fetch, following the same pattern as OriginalityCard.
+//   · decision letter: shown below, sourced live from
+//     /api/manuscripts/<id>/decision/ — same double-blind allow-list the editor
+//     side reads from, see data/editorial.js
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -30,6 +30,8 @@ import { withdrawSubmission } from '../api/submissions.js';
 import { getPlagiarismStatus, pollPlagiarismStatus } from '../api/similarity.js';
 import { bandFor, DEFAULT_THRESHOLDS, BAND_LABELS, BAND_HINTS, SIMILARITY_TONE } from '../data/similarity.js';
 import { TERMINAL_STATUSES, statusLabel, statusPillClass } from '../data/manuscriptStatus.js';
+import { getDecision } from '../api/editorial.js';
+import { DECISION_LABELS, DECISION_TONE, formatDecidedAt } from '../data/editorial.js';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -280,6 +282,71 @@ function OriginalityCard({ manuscriptId }) {
   );
 }
 
+// The decision letter, live from the backend. Same state-machine shape as
+// OriginalityCard: loading, none, ready and failed are the only states.
+function DecisionCard({ manuscriptId }) {
+  const [state, setState] = useState('loading'); // loading | none | ready | failed
+  const [decision, setDecision] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getDecision(manuscriptId)
+      .then(d => { if (!controller.signal.aborted) { setDecision(d); setState('ready'); } })
+      .catch(err => {
+        if (controller.signal.aborted) return;
+        if (err.status === 404) setState('none');
+        else { setError(err.message || 'Could not load the decision.'); setState('failed'); }
+      });
+    return () => controller.abort();
+  }, [manuscriptId]);
+
+  if (state === 'loading') {
+    return (
+      <div className="card">
+        <div className="card-header"><div className="card-title">Decision letter</div></div>
+        <div className="card-meta">Loading…</div>
+      </div>
+    );
+  }
+
+  if (state === 'none') {
+    return (
+      <div className="card">
+        <div className="card-header"><div className="card-title">Decision letter</div></div>
+        <div className="card-meta">
+          No decision yet — check back once your paper has moved through review.
+        </div>
+      </div>
+    );
+  }
+
+  if (state === 'failed') {
+    return (
+      <div className="card">
+        <div className="card-header"><div className="card-title">Decision letter</div></div>
+        <div className="card-meta" style={{ color: 'var(--red-800)' }}>{error}</div>
+      </div>
+    );
+  }
+
+  const tone = DECISION_TONE[decision.type];
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title">Decision letter</div>
+          <div className="card-meta">{decision.decided_by} · {formatDecidedAt(decision.decided_at)}</div>
+        </div>
+        <span className="md-rec" style={{ background: tone?.bg, color: tone?.fg }}>
+          {DECISION_LABELS[decision.type]}
+        </span>
+      </div>
+      <div className="md-letter">{decision.letter}</div>
+    </div>
+  );
+}
+
 export default function AuthorPaper() {
   const { id } = useParams();
   const [manuscript, setManuscript] = useState(null);
@@ -331,6 +398,8 @@ export default function AuthorPaper() {
         .ap-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
         .ap-meta-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-600); font-weight: 600; }
         .ap-meta-value { font-size: 13.5px; color: var(--navy-900); font-weight: 500; margin-top: 3px; }
+        .md-rec { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
+        .md-letter { white-space: pre-wrap; font-size: 13.5px; line-height: 1.7; color: var(--navy-900); background: var(--ink-50); border-radius: var(--r-md); padding: 18px 20px; }
       `}</style>
 
       <div className="page-header fade-up">
@@ -365,13 +434,7 @@ export default function AuthorPaper() {
 
         <OriginalityCard manuscriptId={manuscript.id} />
 
-        <div className="card">
-          <div className="card-header"><div className="card-title">Decision letter</div></div>
-          <div className="card-meta">
-            Editorial decisions and reviewer comments aren't available on this screen yet —
-            check back once your paper has moved through review.
-          </div>
-        </div>
+        <DecisionCard manuscriptId={manuscript.id} />
 
         <WithdrawCard manuscript={manuscript} />
       </div>

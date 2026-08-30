@@ -85,9 +85,9 @@ export function getDecision(manuscriptId) {
  *   422     'desk_reject' on a manuscript that already has reviews
  *
  * Three things this endpoint owns, none of which the frontend can do:
- *   1. Deliver the letter to the author (email + in-app notification).
- *   2. Move the manuscript's status: accept → 'approved', reject/desk_reject →
- *      'rejected', minor/major → 'revision'.
+ *   1. Deliver the letter to the author (in-app notification).
+ *   2. Move the manuscript's status: accept → 'accepted', reject/desk_reject →
+ *      'rejected', minor/major → 'revisions_requested'.
  *   3. Release the reviews to the author, stripped to the author-visible fields.
  *      An author must not be able to read reviews before a decision exists.
  *

@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Manuscript, ManuscriptAuthor, ManuscriptSupplementaryFile
+from .models import Decision, Manuscript, ManuscriptAuthor, ManuscriptSupplementaryFile
+
+
+@admin.register(Decision)
+class DecisionAdmin(admin.ModelAdmin):
+    list_display = ('manuscript', 'type', 'decided_by', 'decided_at')
+    list_filter = ('type',)
+    search_fields = ('manuscript__title',)
 
 
 @admin.register(Manuscript)

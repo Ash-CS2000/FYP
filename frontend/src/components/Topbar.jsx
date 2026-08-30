@@ -1,6 +1,10 @@
+import { Link } from 'react-router-dom';
+
 export default function Topbar({
   searchPlaceholder = 'Search...',
   actions,
+  role,
+  unreadCount = 0,
 }) {
   return (
     <header className="topbar">
@@ -18,12 +22,12 @@ export default function Topbar({
             <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01" />
           </svg>
         </button>
-        <button className="icon-btn" title="Notifications" type="button">
+        <Link className="icon-btn" title="Notifications" to={role ? `/${role}/notifications` : '#'}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" />
           </svg>
-          <span className="badge-dot"></span>
-        </button>
+          {unreadCount > 0 && <span className="badge-dot"></span>}
+        </Link>
         {actions}
       </div>
     </header>

@@ -1,12 +1,14 @@
 // src/data/editorial.js
 //
 // The editorial decision layer: what an editor does to a manuscript, and what
-// the author is allowed to see of it afterwards. Mirrors data/similarity.js —
-// mock data plus the shape the backend is expected to serve, with a localStorage
-// fallback so the screens work before the endpoints exist.
+// the author is allowed to see of it afterwards. Decision records themselves
+// are real now — see api/editorial.js's getDecision/postDecision. This file is
+// the presentation layer that sits on top (labels, tones, letter drafting),
+// plus a couple of *other* features (screening actions, issue scheduling) that
+// still have no backend endpoint and fall back to localStorage below.
 //
-// ── Decision record ──────────────────────────────────────────────────────────
-//   manuscript_id  string
+// ── Decision record (server-side shape, see api/editorial.js) ────────────────
+//   manuscript_id  number
 //   type           'desk_reject' | 'reject' | 'major' | 'minor' | 'accept'
 //   letter         string   sent to the author verbatim — this IS the decision
 //                           letter, not a summary of one
@@ -31,7 +33,6 @@
 // confidential_to_editor in data/reviews.js, the backend must strip these fields
 // server-side; filtering here is defence in depth, not the control.
 
-const DECISIONS_KEY = 'paperbridge-editorial-decisions';
 const SCREENING_KEY = 'paperbridge-screening-actions';
 
 // `preReviewOnly` types are available before reviewers are involved and vanish
@@ -225,47 +226,6 @@ function saveMap(key, map) {
     /* storage unavailable — the in-memory value still applies this session */
   }
   return map;
-}
-
-// Seeded so the pipeline is not uniformly undecided on a fresh browser: one
-// manuscript already carries a revision decision, matching MS-2025-187's
-// 'revision' status in MANUSCRIPTS and the reviewer feedback in Revision.jsx.
-const SEED_DECISIONS = {
-  'MS-2025-187': {
-    manuscript_id: 'MS-2025-187',
-    type: 'major',
-    letter: [
-      'Dear Author,',
-      '',
-      'Re: A Framework for IoT Security in Smart Cities (MS-2025-187)',
-      '',
-      'Your manuscript has been reviewed. We are interested in it, but it requires major revisions before we can consider it further.',
-      '',
-      'The reviewers agree the framework is a genuine contribution, but the evaluation section does not yet support the claims made for it. Please address the threat-model coverage and the missing baseline comparison in particular.',
-      '',
-      'If you choose to revise, please include a point-by-point response. A revision is an invitation to resubmit, not a guarantee of acceptance.',
-      '',
-      'With best wishes,',
-      'Prof. Hassan Ibrahim',
-    ].join('\n'),
-    decided_at: '2025-11-14T09:20:00Z',
-    decided_by: 'Prof. Hassan Ibrahim',
-  },
-};
-
-export function loadDecisions() {
-  return { ...SEED_DECISIONS, ...loadMap(DECISIONS_KEY) };
-}
-
-export function decisionFor(manuscriptId) {
-  return loadDecisions()[manuscriptId] || null;
-}
-
-export function saveDecision(decision) {
-  const map = loadMap(DECISIONS_KEY);
-  map[decision.manuscript_id] = decision;
-  saveMap(DECISIONS_KEY, map);
-  return decision;
 }
 
 export function loadScreeningActions() {

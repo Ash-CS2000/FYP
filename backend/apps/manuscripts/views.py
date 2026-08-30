@@ -1,6 +1,7 @@
 import logging
 
 from botocore.exceptions import BotoCoreError, ClientError
+from django.db import transaction
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
@@ -8,9 +9,15 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
-from .models import Manuscript, PlagiarismCheck
+from apps.notifications.models import Notification
+
+from .models import Decision, Manuscript, PlagiarismCheck
+from .notifications import DECISION_NOTIFICATION_BODIES, DECISION_NOTIFICATION_TITLES
 from .permissions import IsEditorOrAdmin, is_editor_or_admin
-from .serializers import ManuscriptEditorSerializer, ManuscriptSerializer, ManuscriptSubmitSerializer
+from .serializers import (
+    DecisionCreateSerializer, DecisionSerializer, ManuscriptEditorSerializer, ManuscriptSerializer,
+    ManuscriptSubmitSerializer,
+)
 from .services.noplag_client import add_to_corpus, get_check_status, get_check_report, NoPlagClientError
 
 logger = logging.getLogger(__name__)
@@ -75,7 +82,67 @@ class ManuscriptEditorListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsEditorOrAdmin]
 
     def get_queryset(self):
-        return Manuscript.objects.select_related('owner', 'plagiarism_check').order_by('-submitted_at')
+        return (
+            Manuscript.objects
+            .select_related('owner', 'plagiarism_check')
+            .prefetch_related('decisions')
+            .order_by('-submitted_at')
+        )
+
+
+class ManuscriptDecisionView(APIView):
+    """
+    GET  /api/manuscripts/<int:pk>/decision/ → the latest Decision on this
+    manuscript, if any. Readable by the editor/admin or the manuscript's owner.
+    POST /api/manuscripts/<int:pk>/decision/ → record a decision. Editor/admin
+    only. Updates Manuscript.status and creates a Notification for the owner.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        if not (is_editor_or_admin(request.user) or manuscript.owner_id == request.user.id):
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        decision = manuscript.decisions.first()
+        if decision is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(DecisionSerializer(decision).data)
+
+    def post(self, request, pk):
+        if not is_editor_or_admin(request.user):
+            return Response(
+                {'detail': 'You do not have permission to record a decision.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+
+        if manuscript.status in (Manuscript.Status.ACCEPTED, Manuscript.Status.REJECTED, Manuscript.Status.PUBLISHED):
+            return Response(
+                {'detail': 'This manuscript already has a final decision.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # TODO(reviews-app): the frontend spec also calls for a 422 when
+        # desk-rejecting a manuscript that already has reviews, but apps.reviews
+        # has no model yet — nothing to check against server-side until it does.
+
+        serializer = DecisionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        with transaction.atomic():
+            decision = Decision.objects.create(manuscript=manuscript, decided_by=request.user, **data)
+            manuscript.status = Decision.STATUS_MAP[data['type']]
+            manuscript.save(update_fields=['status', 'updated_at'])
+            Notification.objects.create(
+                recipient=manuscript.owner,
+                category=Notification.Category.DECISION,
+                title=DECISION_NOTIFICATION_TITLES[data['type']],
+                body=DECISION_NOTIFICATION_BODIES[data['type']].format(title=manuscript.title),
+                manuscript=manuscript,
+            )
+
+        return Response(DecisionSerializer(decision).data, status=status.HTTP_201_CREATED)
 
 
 class PlagiarismCheckStatusView(APIView):

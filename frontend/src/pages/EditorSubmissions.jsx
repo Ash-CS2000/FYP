@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { bandFor, BAND_LABELS, SIMILARITY_TONE } from '../data/similarity.js';
 import { thresholdsFrom, loadLocalSettings } from '../data/editorScreeningMock.js';
-import { decisionFor, DECISION_LABELS, DECISION_TONE } from '../data/editorial.js';
+import { DECISION_LABELS, DECISION_TONE } from '../data/editorial.js';
 import { MANUSCRIPT_STATUSES, STATUS_LABELS, statusPillClass } from '../data/manuscriptStatus.js';
 import { listAllManuscripts } from '../api/manuscripts.js';
 
@@ -21,8 +21,7 @@ const FILTERS = [
 
 // Whether the editor has decided yet. A blank cell means live, not overlooked —
 // most rows in a healthy pipeline have no decision.
-function DecisionCell({ manuscriptId }) {
-  const decision = decisionFor(manuscriptId);
+function DecisionCell({ decision }) {
   if (!decision) return <span className="muted">—</span>;
   const tone = DECISION_TONE[decision.type];
   return (
@@ -158,7 +157,7 @@ export default function EditorSubmissions({ role = 'editor', initialFilter = 'al
                   <td><span className="muted">{s.category}</span></td>
                   <td><SimilarityCell plagiarismCheck={s.plagiarism_check} thresholds={thresholds} /></td>
                   <td><span className={`pill ${statusPillClass(s.status)}`}>{STATUS_LABELS[s.status] || s.status}</span></td>
-                  <td><DecisionCell manuscriptId={s.id} /></td>
+                  <td><DecisionCell decision={s.latest_decision} /></td>
                   <td>
                     <div style={{ display: 'flex', gap: 14, whiteSpace: 'nowrap' }}>
                       <Link

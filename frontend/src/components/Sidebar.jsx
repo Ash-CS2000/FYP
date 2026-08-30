@@ -11,7 +11,7 @@ import { getStoredUser, getInitials } from '../utils/user.js';
 // A module-level value survives those remounts within the SPA session.
 let savedSidebarScroll = 0;
 
-export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
+export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificationCount }) {
   const navigate = useNavigate();
   const asideRef = useRef(null);
 
@@ -79,23 +79,26 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar }) {
         <div key={section.title}>
           <div className="sidebar-section">{section.title}</div>
           <nav className="sidebar-nav">
-            {section.items.map((item) => (
-              <NavLink
-                key={item.id}
-                to={item.to}
-                end
-                title={item.label}
-                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-              >
-                {item.icon}
-                <span className="sidebar-link-label">{item.label}</span>
-                {item.badge && (
-                  <span className="sidebar-badge">
-                    {item.badge}
-                  </span>
-                )}
-              </NavLink>
-            ))}
+            {section.items.map((item) => {
+              const badge = item.id === 'notifications' ? notificationCount : item.badge;
+              return (
+                <NavLink
+                  key={item.id}
+                  to={item.to}
+                  end
+                  title={item.label}
+                  className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                >
+                  {item.icon}
+                  <span className="sidebar-link-label">{item.label}</span>
+                  {badge > 0 && (
+                    <span className="sidebar-badge">
+                      {badge}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
           </nav>
         </div>
       ))}

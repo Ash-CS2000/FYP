@@ -23,8 +23,6 @@ import { useEffect, useState } from 'react';
 import { getPlagiarismStatus } from '../api/similarity.js';
 import {
   availableDecisions,
-  decisionFor,
-  saveDecision,
   letterTemplate,
   isFinal,
   DECISION_LABELS,
@@ -36,7 +34,7 @@ import {
   issueFor,
   saveIssueAssignment,
 } from '../data/editorial.js';
-import { postDecision } from '../api/editorial.js';
+import { getDecision, postDecision } from '../api/editorial.js';
 import ReviewerPanel from '../components/ReviewerPanel.jsx';
 import { assignmentsFor } from '../data/invitations.js';
 
@@ -237,25 +235,14 @@ function DecisionPanel({ manuscript, reviews, onDecided }) {
     }
     setSaving(true);
     setError('');
-    const record = {
-      manuscript_id: manuscript.id,
-      type,
-      letter: letter.trim(),
-      reasons,
-      decided_at: new Date().toISOString(),
-      decided_by: editorName(),
-    };
     try {
-      await postDecision(manuscript.id, { type, letter: record.letter, reasons });
-    } catch {
-      // Backend not up yet. The decision still stands locally so the workflow is
-      // walkable end to end; it is not delivered to the author until the endpoint
-      // exists, and the banner on the record says so.
-      record.local_only = true;
+      const created = await postDecision(manuscript.id, { type, letter: letter.trim(), reasons });
+      onDecided(created);
+    } catch (err) {
+      setError(err.message || 'Could not record this decision. Please try again.');
+    } finally {
+      setSaving(false);
     }
-    saveDecision(record);
-    setSaving(false);
-    onDecided(record);
   };
 
   const chosen = options.find(o => o.id === type);
@@ -371,7 +358,16 @@ export default function ManuscriptDetail({ role = 'editor' }) {
 
   const reviews = reviewsFor(id);
   const submitted = reviews.filter(r => r.status === 'submitted');
-  const [decision, setDecision] = useState(() => decisionFor(id));
+  const [decision, setDecision] = useState(null);
+
+  useEffect(() => {
+    if (!manuscript) return;
+    let cancelled = false;
+    getDecision(manuscript.id)
+      .then(d => { if (!cancelled) setDecision(d); })
+      .catch(err => { if (!cancelled && err.status !== 404) console.error(err); });
+    return () => { cancelled = true; };
+  }, [manuscript]);
 
   if (loadError) {
     return (
@@ -444,18 +440,6 @@ export default function ManuscriptDetail({ role = 'editor' }) {
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
           </svg>
           <span>Oversight view, read only. Editorial decisions belong to the editor.</span>
-        </div>
-      )}
-
-      {decision?.local_only && !isAdmin && (
-        <div className="lms-banner is-todo fade-up">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" />
-          </svg>
-          <span>
-            Recorded locally — the decision service is unavailable, so the author has
-            not been notified yet.
-          </span>
         </div>
       )}
 

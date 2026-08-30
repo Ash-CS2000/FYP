@@ -1,8 +1,8 @@
 from django.urls import path
 
 from .views import (
-    ManuscriptDetailView, ManuscriptEditorListView, ManuscriptListView, ManuscriptUploadView,
-    PlagiarismCheckStatusView,
+    ManuscriptDecisionView, ManuscriptDetailView, ManuscriptEditorListView, ManuscriptListView,
+    ManuscriptUploadView, PlagiarismCheckStatusView,
 )
 
 urlpatterns = [
@@ -11,4 +11,5 @@ urlpatterns = [
     path('editor/', ManuscriptEditorListView.as_view(), name='manuscript-editor-list'),
     path('<int:pk>/', ManuscriptDetailView.as_view(), name='manuscript-detail'),
     path('<int:pk>/plagiarism-status/', PlagiarismCheckStatusView.as_view(), name='manuscript-plagiarism-status'),
+    path('<int:pk>/decision/', ManuscriptDecisionView.as_view(), name='manuscript-decision'),
 ]
