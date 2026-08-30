@@ -1,30 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { bandFor, BAND_LABELS, SIMILARITY_TONE } from '../data/similarity.js';
-import { reportFor, thresholdsFrom, loadLocalSettings } from '../data/editorScreeningMock.js';
+import { thresholdsFrom, loadLocalSettings } from '../data/editorScreeningMock.js';
 import { decisionFor, DECISION_LABELS, DECISION_TONE } from '../data/editorial.js';
-
-const SUBMISSIONS = [
-  { id: 'MS-2026-014', title: 'Deep Learning Methods in Medical Imaging', author: 'Ahmad Razif', cat: 'Computer Science', status: 'review', label: 'In Review' },
-  { id: 'MS-2026-008', title: 'A Survey of Quantum Computing Applications', author: 'Wong Mei Ling', cat: 'Physics', status: 'pending', label: 'Pending Decision' },
-  { id: 'MS-2026-011', title: 'Climate Change Impact on Agricultural Yield', author: 'Tan Boon Hock', cat: 'Environmental', status: 'pending', label: 'Pending Decision' },
-  { id: 'MS-2026-019', title: 'Renewable Energy Grid Optimization', author: 'Siti Khadijah', cat: 'Engineering', status: 'review', label: 'In Review' },
-  { id: 'MS-2026-021', title: 'Supply Chain Blockchain Use Cases in ASEAN', author: 'Roslan Tahir', cat: 'Business', status: 'review', label: 'In Review' },
-  { id: 'MS-2025-208', title: 'A Survey of Natural Language Processing in 2025', author: 'Ahmad Razif', cat: 'Linguistics', status: 'approved', label: 'Approved' },
-  { id: 'MS-2025-187', title: 'A Framework for IoT Security in Smart Cities', author: 'Ahmad Razif', cat: 'Engineering', status: 'revision', label: 'Revision' },
-  { id: 'MS-2025-142', title: 'Blockchain Applications in Finance', author: 'Ahmad Razif', cat: 'Finance', status: 'approved', label: 'Approved' },
-];
+import { MANUSCRIPT_STATUSES, STATUS_LABELS, statusPillClass } from '../data/manuscriptStatus.js';
+import { listAllManuscripts } from '../api/manuscripts.js';
 
 // Each filter carries its own predicate, so a filter doesn't have to be a status.
 // 'flagged' cuts across statuses — it is a similarity band, not a pipeline stage.
 const FILTERS = [
-  { id: 'all',      label: 'All',       match: () => true },
-  { id: 'flagged',  label: 'Flagged',   match: (s, ctx) => ctx.bandOf(s.id) === 'high' },
-  { id: 'review',   label: 'In Review', match: s => s.status === 'review' },
-  { id: 'pending',  label: 'Pending',   match: s => s.status === 'pending' },
-  { id: 'revision', label: 'Revision',  match: s => s.status === 'revision' },
-  { id: 'approved', label: 'Approved',  match: s => s.status === 'approved' },
+  { id: 'all',     label: 'All',     match: () => true },
+  { id: 'flagged', label: 'Flagged', match: (s, ctx) => ctx.bandOf(s.id) === 'high' },
+  ...MANUSCRIPT_STATUSES.map(status => ({
+    id: status,
+    label: STATUS_LABELS[status],
+    match: s => s.status === status,
+  })),
 ];
 
 // Whether the editor has decided yet. A blank cell means live, not overlooked —
@@ -43,18 +35,18 @@ function DecisionCell({ manuscriptId }) {
   );
 }
 
-// The similarity cell. A queued or failed check must not read as 0% — an editor
+// The similarity cell. A pending or failed check must not read as 0% — an editor
 // acting on a score that was never produced is the failure mode to avoid.
-function SimilarityCell({ manuscriptId, thresholds }) {
-  const report = reportFor(manuscriptId);
-  if (!report) return <span className="muted">—</span>;
-  if (report.status === 'queued' || report.status === 'running') {
+function SimilarityCell({ plagiarismCheck, thresholds }) {
+  if (!plagiarismCheck) return <span className="muted">—</span>;
+  if (plagiarismCheck.status === 'pending') {
     return <span className="pill pill-pending">Checking…</span>;
   }
-  if (report.status === 'failed') {
-    return <span className="pill pill-revision" title={report.error}>Failed</span>;
+  if (plagiarismCheck.status === 'failed') {
+    return <span className="pill pill-revision">Failed</span>;
   }
-  const band = bandFor(report.overall_similarity_pct, thresholds);
+  const pct = plagiarismCheck.similarity_score ?? 0;
+  const band = bandFor(pct, thresholds);
   const tone = SIMILARITY_TONE[band];
   return (
     <span
@@ -66,7 +58,7 @@ function SimilarityCell({ manuscriptId, thresholds }) {
       }}
       title={`${BAND_LABELS[band]} — flag threshold ${thresholds.high}%`}
     >
-      {report.overall_similarity_pct}%
+      {pct}%
     </span>
   );
 }
@@ -78,19 +70,32 @@ function SimilarityCell({ manuscriptId, thresholds }) {
 export default function EditorSubmissions({ role = 'editor', initialFilter = 'all' }) {
   const isAdmin = role === 'admin';
   const [filter, setFilter] = useState(initialFilter);
+  const [submissions, setSubmissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    listAllManuscripts()
+      .then((data) => { if (!cancelled) setSubmissions(data); })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load submissions.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Thresholds are admin policy, so re-band on every render rather than baking a
   // band into the row data — changing the threshold must re-colour this table.
   const thresholds = thresholdsFrom(loadLocalSettings());
   const bandOf = id => {
-    const report = reportFor(id);
-    return report?.status === 'done' ? bandFor(report.overall_similarity_pct, thresholds) : null;
+    const row = submissions.find(s => s.id === id);
+    const check = row?.plagiarism_check;
+    return check?.status === 'completed' ? bandFor(check.similarity_score ?? 0, thresholds) : null;
   };
   const ctx = { bandOf };
 
   const matcher = id => (FILTERS.find(f => f.id === id) || FILTERS[0]).match;
-  const counts = id => SUBMISSIONS.filter(s => matcher(id)(s, ctx)).length;
-  const visible = SUBMISSIONS.filter(s => matcher(filter)(s, ctx));
+  const counts = id => submissions.filter(s => matcher(id)(s, ctx)).length;
+  const visible = submissions.filter(s => matcher(filter)(s, ctx));
   const heading = FILTERS.find(f => f.id === filter) || FILTERS[0];
 
   const basePath = isAdmin ? '/admin' : '/editor';
@@ -131,40 +136,50 @@ export default function EditorSubmissions({ role = 'editor', initialFilter = 'al
           </div>
         </div>
 
-        <table className="data-table">
-          <thead><tr><th>Paper</th><th>Author</th><th>Category</th><th>Similarity</th><th>Status</th><th>Decision</th><th></th></tr></thead>
-          <tbody>
-            {visible.map(s => (
-              <tr key={s.id}>
-                <td>
-                  <Link to={`${basePath}/submissions/${s.id}`} className="table-title" style={{ color: 'var(--navy-900)', display: 'block' }}>{s.title}</Link>
-                  <div className="table-meta">{s.id}</div>
-                </td>
-                <td><span className="muted">{s.author}</span></td>
-                <td><span className="muted">{s.cat}</span></td>
-                <td><SimilarityCell manuscriptId={s.id} thresholds={thresholds} /></td>
-                <td><span className={`pill pill-${s.status}`}>{s.label}</span></td>
-                <td><DecisionCell manuscriptId={s.id} /></td>
-                <td>
-                  <div style={{ display: 'flex', gap: 14, whiteSpace: 'nowrap' }}>
-                    <Link
-                      to={`${basePath}/submissions/${s.id}/similarity`}
-                      style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}
-                    >
-                      Similarity →
-                    </Link>
-                    <Link
-                      to={`${basePath}/submissions/${s.id}/reviews`}
-                      style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}
-                    >
-                      Reviews →
-                    </Link>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {loading && <div className="card-meta" style={{ padding: 20 }}>Loading submissions…</div>}
+        {!loading && loadError && (
+          <div className="card-meta" style={{ padding: 20, color: 'var(--red-800)' }}>{loadError}</div>
+        )}
+        {!loading && !loadError && visible.length === 0 && (
+          <div className="card-meta" style={{ padding: 20 }}>No submissions match this filter.</div>
+        )}
+
+        {!loading && !loadError && visible.length > 0 && (
+          <table className="data-table">
+            <thead><tr><th>Paper</th><th>Author</th><th>Category</th><th>Similarity</th><th>Status</th><th>Decision</th><th></th></tr></thead>
+            <tbody>
+              {visible.map(s => (
+                <tr key={s.id}>
+                  <td>
+                    <Link to={`${basePath}/submissions/${s.id}`} className="table-title" style={{ color: 'var(--navy-900)', display: 'block' }}>{s.title}</Link>
+                    <div className="table-meta">#{s.id}</div>
+                  </td>
+                  <td><span className="muted">{s.owner_name}</span></td>
+                  <td><span className="muted">{s.category}</span></td>
+                  <td><SimilarityCell plagiarismCheck={s.plagiarism_check} thresholds={thresholds} /></td>
+                  <td><span className={`pill ${statusPillClass(s.status)}`}>{STATUS_LABELS[s.status] || s.status}</span></td>
+                  <td><DecisionCell manuscriptId={s.id} /></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 14, whiteSpace: 'nowrap' }}>
+                      <Link
+                        to={`${basePath}/submissions/${s.id}/similarity`}
+                        style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}
+                      >
+                        Similarity →
+                      </Link>
+                      <Link
+                        to={`${basePath}/submissions/${s.id}/reviews`}
+                        style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}
+                      >
+                        Reviews →
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </AppShell>
   );

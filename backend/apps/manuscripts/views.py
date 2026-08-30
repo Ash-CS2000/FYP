@@ -9,7 +9,8 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
 from .models import Manuscript, PlagiarismCheck
-from .serializers import ManuscriptSerializer, ManuscriptSubmitSerializer
+from .permissions import IsEditorOrAdmin, is_editor_or_admin
+from .serializers import ManuscriptEditorSerializer, ManuscriptSerializer, ManuscriptSubmitSerializer
 from .services.noplag_client import add_to_corpus, get_check_status, get_check_report, NoPlagClientError
 
 logger = logging.getLogger(__name__)
@@ -53,13 +54,29 @@ class ManuscriptListView(generics.ListAPIView):
 
 class ManuscriptDetailView(generics.RetrieveAPIView):
     """
-    GET /api/manuscripts/<int:pk>/ → retrieve one of the authenticated user's own submissions.
+    GET /api/manuscripts/<int:pk>/ → retrieve one of the authenticated user's own
+    submissions, or any submission if the caller is an editor/admin.
     """
     serializer_class = ManuscriptSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        if is_editor_or_admin(self.request.user):
+            return Manuscript.objects.all()
         return Manuscript.objects.filter(owner=self.request.user)
+
+
+class ManuscriptEditorListView(generics.ListAPIView):
+    """
+    GET /api/manuscripts/editor/ → list every manuscript, any owner.
+    Editor/admin only.
+    """
+    serializer_class = ManuscriptEditorSerializer
+    permission_classes = [permissions.IsAuthenticated, IsEditorOrAdmin]
+
+    def get_queryset(self):
+        return Manuscript.objects.select_related('owner', 'plagiarism_check').order_by('-submitted_at')
+
 
 class PlagiarismCheckStatusView(APIView):
     """
@@ -69,7 +86,8 @@ class PlagiarismCheckStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
-        manuscript = get_object_or_404(Manuscript.objects.filter(owner=request.user), pk=pk)
+        queryset = Manuscript.objects.all() if is_editor_or_admin(request.user) else Manuscript.objects.filter(owner=request.user)
+        manuscript = get_object_or_404(queryset, pk=pk)
         check = getattr(manuscript, 'plagiarism_check', None)
         if check is None:
             return Response(

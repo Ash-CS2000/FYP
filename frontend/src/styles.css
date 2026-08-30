@@ -213,6 +213,13 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .pill-overdue  { background: var(--red-50); color: var(--red-800); }
 .pill-active   { background: var(--green-50); color: var(--green-800); }
 
+/* Real Manuscript.status values (backend enum) */
+.pill-submitted           { background: var(--navy-100); color: var(--navy-800); }
+.pill-under_review        { background: #FAEEDA; color: var(--amber-800); }
+.pill-revisions_requested { background: var(--purple-50); color: var(--purple-800); }
+.pill-accepted             { background: var(--green-50); color: var(--green-800); }
+.pill-published            { background: var(--teal-50); color: var(--teal-800); }
+
 /* ================================================
    Public navigation
 ================================================ */

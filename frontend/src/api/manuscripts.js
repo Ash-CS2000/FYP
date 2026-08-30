@@ -44,3 +44,15 @@ export function getManuscript(id) {
 export function listManuscripts() {
   return request('/api/manuscripts/', { method: 'GET' });
 }
+
+/**
+ * List every manuscript across all owners, newest first. Editor/admin only.
+ *
+ *   GET /api/manuscripts/editor/
+ *   200  { id, title, article_type, category, status, submitted_at, owner_name,
+ *           plagiarism_check: { status, similarity_score } | null }[]
+ *   403  caller does not hold an active editor/admin role
+ */
+export function listAllManuscripts() {
+  return request('/api/manuscripts/editor/', { method: 'GET' });
+}

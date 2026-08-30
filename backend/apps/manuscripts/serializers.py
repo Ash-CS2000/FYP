@@ -56,6 +56,29 @@ class ManuscriptSerializer(serializers.ModelSerializer):
         return storage.get_file_url(obj.file_key)
 
 
+class ManuscriptEditorSerializer(serializers.ModelSerializer):
+    """
+    List-only serializer for the editor/admin "all submissions" view — flat,
+    deliberately excludes authors/affiliations/supplementary_files/full report
+    since the table never renders them.
+    """
+    owner_name = serializers.SerializerMethodField()
+    plagiarism_check = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Manuscript
+        fields = ('id', 'title', 'article_type', 'category', 'status', 'submitted_at', 'owner_name', 'plagiarism_check')
+
+    def get_owner_name(self, obj):
+        return obj.owner.get_full_name() or obj.owner.email
+
+    def get_plagiarism_check(self, obj):
+        check = getattr(obj, 'plagiarism_check', None)
+        if check is None:
+            return None
+        return {'status': check.status, 'similarity_score': check.similarity_score}
+
+
 # ── Nested input validation for the `authors` JSON blob ──────────────────────
 
 class ManuscriptAffiliationInputSerializer(serializers.Serializer):

@@ -5,16 +5,7 @@ import { loadDrafts, deleteDraft, formatSavedAt } from '../data/drafts.js';
 import { deleteDraftRemote } from '../api/submissions.js';
 import { withdrawalFor } from '../data/drafts.js';
 import { listManuscripts } from '../api/manuscripts.js';
-
-// Django's Manuscript.status values → the pill styling/labels this page uses.
-// Adjust the left-hand keys if your model's status choices differ.
-const STATUS_LABELS = {
-  review: 'In Review',
-  revision: 'Revision Needed',
-  approved: 'Approved',
-  rejected: 'Rejected',
-  pending: 'Pending Decision',
-};
+import { STATUS_LABELS, statusPillClass } from '../data/manuscriptStatus.js';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -39,7 +30,7 @@ export default function MyPapers() {
 
   const filtered = filter === 'all'
     ? papers
-    : papers.filter(p => filter === 'active' ? (p.status === 'review' || p.status === 'revision') : p.status === filter);
+    : papers.filter(p => filter === 'active' ? (p.status === 'under_review' || p.status === 'revisions_requested') : p.status === filter);
 
   const discard = async (id) => {
     try {
@@ -115,8 +106,8 @@ export default function MyPapers() {
           <div className="row">
             {[
               { id: 'all', label: 'All', count: papers.length },
-              { id: 'active', label: 'Active', count: papers.filter(p => p.status === 'review' || p.status === 'revision').length },
-              { id: 'approved', label: 'Approved', count: papers.filter(p => p.status === 'approved').length },
+              { id: 'active', label: 'Active', count: papers.filter(p => p.status === 'under_review' || p.status === 'revisions_requested').length },
+              { id: 'accepted', label: 'Approved', count: papers.filter(p => p.status === 'accepted').length },
             ].map(f => (
               <button key={f.id} className={`filter-chip ${filter === f.id ? 'active' : ''}`} onClick={() => setFilter(f.id)}>
                 {f.label} <span style={{ opacity: .6 }}>{f.count}</span>
@@ -153,11 +144,11 @@ export default function MyPapers() {
                     <td><span className="muted">{formatDate(p.submitted_at)}</span></td>
                     <td>
                       {withdrawn
-                        ? <span className="pill pill-revision">Withdrawn</span>
-                        : <span className={`pill pill-${p.status}`}>{STATUS_LABELS[p.status] || p.status}</span>}
+                        ? <span className="pill pill-revisions_requested">Withdrawn</span>
+                        : <span className={`pill ${statusPillClass(p.status)}`}>{STATUS_LABELS[p.status] || p.status}</span>}
                     </td>
                     <td>
-                      {!withdrawn && p.status === 'revision' ? (
+                      {!withdrawn && p.status === 'revisions_requested' ? (
                         <Link to="/author/revision" style={{ color: 'var(--amber-700)', fontWeight: 600, fontSize: 13 }}>Resubmit →</Link>
                       ) : (
                         <Link to={`/author/papers/${p.id}`} style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</Link>

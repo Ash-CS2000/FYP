@@ -29,10 +29,7 @@ import { withdrawalFor, saveWithdrawal, WITHDRAW_REASONS } from '../data/drafts.
 import { withdrawSubmission } from '../api/submissions.js';
 import { getPlagiarismStatus, pollPlagiarismStatus } from '../api/similarity.js';
 import { bandFor, DEFAULT_THRESHOLDS, BAND_LABELS, BAND_HINTS, SIMILARITY_TONE } from '../data/similarity.js';
-
-// A manuscript that has already reached the end of the pipeline. No decision
-// backend yet, so this only checks the manuscript's own status field.
-const TERMINAL_STATUSES = ['approved', 'rejected', 'published', 'withdrawn'];
+import { TERMINAL_STATUSES, statusLabel, statusPillClass } from '../data/manuscriptStatus.js';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -356,7 +353,7 @@ export default function AuthorPaper() {
             <div>
               <div className="ap-meta-label">Status</div>
               <div className="ap-meta-value">
-                <span className={`pill pill-${manuscript.status}`}>{manuscript.status}</span>
+                <span className={`pill ${statusPillClass(manuscript.status)}`}>{statusLabel(manuscript.status)}</span>
               </div>
             </div>
             <div>
