@@ -249,3 +249,4 @@ FYP vault/
 # Generated demo/seed data reference sheet (contains demo account password)
 PaperBridge Demo Data.xlsx
 ~$*.xlsx
+.env*
