@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import AppShell from '../components/AppShell.jsx';
-import { patchReviewerStatus, patchUserRole, patchUserStatus, inviteAdmin, listAuditLog } from '../api/admin.js';
+import { patchReviewerStatus, patchUserRole, patchUserStatus, onboardEditor, listEditorInvites, cancelEditorInvite, listUsers, listAuditLog } from '../api/admin.js';
 import { getStoredUser } from '../auth/roles';
 
 const DEMO_USERS = [
@@ -28,6 +28,24 @@ function getPrimaryRole(u) {
 
 function getInitials(name = '') {
   return name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+}
+
+// Map a server user row (see listUsers in api/admin.js) to the shape this
+// table renders.
+function toRow(u) {
+  return {
+    id: u.id,
+    name: u.name || u.email,
+    email: u.email,
+    roles: u.roles || [],
+    reviewer_status: u.reviewer_status || '',
+    institution: u.institution || '—',
+    status: u.status || (u.is_active === false ? 'deactivated' : 'active'),
+    date: u.joined
+      ? new Date(u.joined).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '—',
+    initials: getInitials(u.name || u.email),
+  };
 }
 
 // Shape mirrors the audit_logs row the backend is expected to write (see
@@ -65,9 +83,17 @@ export default function AdminUsers() {
   const [audit, setAudit]     = useState([]);
   const [auditLive, setAuditLive] = useState(false);
   const [invites, setInvites] = useState([]);
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorNotice, setEditorNotice] = useState('');
+  const [cancelling, setCancelling] = useState(null);
 
   const actor = getStoredUser();
+
+  function refreshInvites() {
+    listEditorInvites()
+      .then(rows => { if (Array.isArray(rows)) setInvites(rows); })
+      .catch(() => { /* backend unavailable */ });
+  }
 
   useEffect(() => {
     // Best effort: if the audit endpoint is live we show the real trail,
@@ -75,6 +101,10 @@ export default function AdminUsers() {
     listAuditLog({ limit: 10 })
       .then(rows => { if (Array.isArray(rows)) { setAudit(rows); setAuditLive(true); } })
       .catch(() => { /* backend unavailable — stay on local entries */ });
+    refreshInvites();
+    listUsers()
+      .then(rows => { if (Array.isArray(rows) && rows.length) setUsers(rows.map(toRow)); })
+      .catch(() => { /* backend unavailable — keep the demo rows */ });
   }, []);
 
   // One path for every user mutation: try the server, fall back to a local
@@ -140,15 +170,37 @@ export default function AdminUsers() {
     });
   }
 
-  async function handleInvite({ name, email }) {
-    let record;
+  async function handleOnboardEditor({ name, email }) {
+    setEditorNotice('');
     try {
-      record = await inviteAdmin({ name, email });
-    } catch {
-      record = { id: `local-${Date.now()}`, name, email, role: 'admin', status: 'pending', local: true };
+      const res = await onboardEditor({ name, email });
+      if (res?.status === 'invited') {
+        setEditorNotice(`Invitation sent to ${email}. The link expires in 72 hours.`);
+        refreshInvites();
+      } else if (res?.status === 'role_added') {
+        setEditorNotice(`${email} already had an account — the editor role was added and they were emailed.`);
+      } else if (res?.status === 'already_editor') {
+        setEditorNotice(`${email} already holds the editor role.`);
+      } else {
+        setEditorNotice(`Editor onboarding submitted for ${email}.`);
+      }
+      setAudit(prev => [localAudit(actor, 'invite', 'editor', { name, email }), ...prev]);
+    } catch (err) {
+      setEditorNotice(err?.message || 'Could not onboard the editor. Please try again.');
     }
-    setInvites(prev => [record, ...prev]);
-    setAudit(prev => [localAudit(actor, 'invite', 'admin', { name, email }), ...prev]);
+  }
+
+  async function handleCancelInvite(inviteId) {
+    setCancelling(inviteId);
+    try {
+      await cancelEditorInvite(inviteId);
+      setInvites(prev => prev.filter(i => i.id !== inviteId));
+      setEditorNotice('Invite cancelled.');
+    } catch (err) {
+      setEditorNotice(err?.message || 'Could not cancel the invite.');
+    } finally {
+      setCancelling(null);
+    }
   }
 
   const pendingReviewers = users.filter(u => u.reviewer_status === 'pending');
@@ -160,12 +212,12 @@ export default function AdminUsers() {
 
   const roleCounts = role => users.filter(u => (u.roles || []).includes(role)).length;
 
-  const addAdmin = (
-    <button className="btn btn-primary btn-sm" onClick={() => setInviteOpen(true)}>+ Invite Admin</button>
+  const headerActions = (
+    <button className="btn btn-primary btn-sm" onClick={() => setEditorOpen(true)}>+ Onboard Editor</button>
   );
 
   return (
-    <AppShell role="admin" searchPlaceholder="Search users..." topbarActions={addAdmin}>
+    <AppShell role="admin" searchPlaceholder="Search users..." topbarActions={headerActions}>
       <style>{`
         .adm-menu-wrap { position:relative; display:inline-block; }
         .adm-menu { position:absolute; right:0; top:34px; z-index:40; min-width:210px; background:var(--navy-950); border:1px solid rgba(255,255,255,0.12); border-radius:var(--r-md); box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,0.35)); padding:6px; }
@@ -193,9 +245,15 @@ export default function AdminUsers() {
         <div>
           <span className="eyebrow">User Management</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Manage <em className="serif-italic">Users</em>.</h1>
-          <p className="page-subtitle">Approve reviewers, promote editors, and invite administrators.</p>
+          <p className="page-subtitle">Approve reviewers and onboard editors.</p>
         </div>
       </div>
+
+      {editorNotice && (
+        <div className="card fade-up delay-1" style={{ borderLeft: '3px solid var(--teal-600)', padding: '12px 18px', fontSize: 13.5, color: 'var(--navy-900)' }}>
+          {editorNotice}
+        </div>
+      )}
 
       {pendingReviewers.length > 0 && (
         <div className="card fade-up delay-1" style={{ borderLeft: '3px solid var(--amber-500)' }}>
@@ -251,14 +309,26 @@ export default function AdminUsers() {
 
       {invites.length > 0 && (
         <div className="card fade-up delay-1">
-          <div className="card-header"><div className="card-title">Pending admin invites</div></div>
+          <div className="card-header"><div className="card-title">Pending editor invites</div></div>
           <div style={{ padding: '4px 20px 18px' }}>
             {invites.map(inv => (
               <div key={inv.id} className="adm-audit-row">
-                <span style={{ fontWeight: 600, color: 'var(--navy-900)' }}>{inv.name}</span>
+                {inv.name && <span style={{ fontWeight: 600, color: 'var(--navy-900)' }}>{inv.name}</span>}
                 <span className="muted">{inv.email}</span>
-                {inv.local && <span className="adm-tag-local">local</span>}
-                <span className="adm-audit-time">Awaiting acceptance</span>
+                {inv.expired && <span className="adm-tag-local" style={{ color: 'var(--red-700)' }}>expired</span>}
+                <span className="adm-audit-time">
+                  {inv.expired
+                    ? 'Link expired'
+                    : `Expires ${new Date(inv.expires_at).toLocaleDateString()}`}
+                </span>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: 'var(--red-700)', borderColor: 'var(--red-200)', marginLeft: 10 }}
+                  disabled={cancelling === inv.id}
+                  onClick={() => handleCancelInvite(inv.id)}
+                >
+                  {cancelling === inv.id ? '…' : 'Cancel'}
+                </button>
               </div>
             ))}
           </div>
@@ -358,10 +428,10 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      {inviteOpen && (
-        <InviteAdminModal
-          onClose={() => setInviteOpen(false)}
-          onSubmit={handleInvite}
+      {editorOpen && (
+        <OnboardEditorModal
+          onClose={() => setEditorOpen(false)}
+          onSubmit={handleOnboardEditor}
         />
       )}
     </AppShell>
@@ -416,9 +486,9 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
       danger: true,
     },
     deactivated: {
-      title: 'Deactivate',
-      body: <>Deactivate <strong>{user.name}</strong>? They cannot sign in, will not be invited to review, and drop out of the reviewer pool. Their submissions and submitted reviews stay on the record.</>,
-      cta: 'Deactivate',
+      title: 'Delete account',
+      body: <>Delete <strong>{user.name}</strong>&apos;s account? They can no longer sign in, will not be invited to review, and drop out of the reviewer pool. This is a soft delete — their submissions and submitted reviews stay on the record, and an admin can restore the account later.</>,
+      cta: 'Delete account',
       danger: true,
     },
     active: {
@@ -517,7 +587,7 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
                     Suspend account
                   </button>
                   <button className="adm-menu-item danger" role="menuitem" onClick={() => setConfirm('deactivated')}>
-                    Deactivate account
+                    Delete account
                   </button>
                 </>
               ) : (
@@ -533,11 +603,11 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
   );
 }
 
-// ── Invite admin ──────────────────────────────────────────────────────────────
-// The only route to a new admin account after the seeded first one. Token
-// generation, expiry and email delivery are all backend responsibilities — this
-// form only submits the request.
-function InviteAdminModal({ onClose, onSubmit }) {
+// ── Onboard editor ───────────────────────────────────────────────────────────
+// Editors are never self-registered. Token generation, expiry and email
+// delivery are all backend responsibilities — this form only submits the
+// request.
+function OnboardEditorModal({ onClose, onSubmit }) {
   const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -556,11 +626,12 @@ function InviteAdminModal({ onClose, onSubmit }) {
 
   return (
     <div className="adm-modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="adm-modal" role="dialog" aria-modal="true" aria-label="Invite administrator">
-        <h2>Invite an administrator</h2>
+      <div className="adm-modal" role="dialog" aria-modal="true" aria-label="Onboard an editor">
+        <h2>Onboard an editor</h2>
         <p className="sub">
-          Admin accounts are never self-registered. The invitee receives a secure
-          link and sets their own password — the invite is recorded in the audit log.
+          Enter the editor&apos;s name and email. If they already have an account the
+          editor role is added; otherwise they receive a secure link to set their
+          own password. The link expires in 72 hours.
         </p>
         <form onSubmit={submit}>
           <div className="field">

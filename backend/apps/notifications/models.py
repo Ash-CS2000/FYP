@@ -6,6 +6,7 @@ class Notification(models.Model):
     class Category(models.TextChoices):
         DECISION = 'decision', 'Decision'
         REVISION_SUBMITTED = 'revision_submitted', 'Revision Submitted'
+        ROLE = 'role', 'Role change'
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
     category = models.CharField(max_length=30, choices=Category.choices, default=Category.DECISION)

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import { getScreeningSettings, patchScreeningSettings } from '../api/similarity.js';
 import { loadLocalSettings, saveLocalSettings } from '../data/editorScreeningMock.js';
+import { deleteAccount, clearSession } from '../api/auth';
 
 // Screening thresholds are platform policy, so only an admin sets them — see the
 // role model: editors act on the bands, admins define them. Every other screen
@@ -445,7 +446,66 @@ export default function Settings({ role = 'author' }) {
             <button className="btn btn-ghost btn-sm">View sessions</button>
           </div>
         </div>
+
+        <DangerZoneCard />
       </div>
     </AppShell>
+  );
+}
+
+// Self-service account deletion. Soft delete on the server — the account is
+// deactivated (no login) but its record stays. See DELETE /api/users/me/.
+function DangerZoneCard() {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function remove() {
+    setBusy(true);
+    setError('');
+    try {
+      await deleteAccount();
+      clearSession();
+      window.location.href = '/login';
+    } catch (err) {
+      setError(err?.message || 'Could not delete your account. Please try again.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ borderColor: '#f0c9c9' }}>
+      <div className="card-header">
+        <div>
+          <div className="card-title" style={{ color: 'var(--red-700)' }}>Delete account</div>
+          <div className="card-meta">Removes your access to PaperBridge. Your submitted work stays on the record.</div>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ background: 'var(--red-50)', border: '1px solid #f0c9c9', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: 'var(--red-700)', marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
+
+      {!confirming ? (
+        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red-700)', borderColor: '#f0c9c9' }} onClick={() => setConfirming(true)}>
+          Delete my account
+        </button>
+      ) : (
+        <div>
+          <p style={{ fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 10 }}>
+            This deactivates your account — you will be signed out and can no longer log in.
+            An administrator can restore it later. Continue?
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-sm" style={{ background: 'var(--red-700)', color: '#fff', border: 'none' }} disabled={busy} onClick={remove}>
+              {busy ? 'Deleting…' : 'Yes, delete my account'}
+            </button>
+            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

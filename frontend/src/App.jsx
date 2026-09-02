@@ -39,6 +39,7 @@ import AuthorPaper from './pages/AuthorPaper.jsx';
 import ReviewerAssignments from './pages/ReviewerAssignments.jsx';
 import AssignmentGate from './auth/AssignmentGate.jsx';
 import AdminAudit from './pages/AdminAudit.jsx';
+import EditorInvite from './pages/EditorInvite.jsx';
 
 export default function App() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
       <Route path="/resources" element={<ResourcesPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/editor-invite/:token" element={<EditorInvite />} />
 
       {/* Any authenticated user. /reviewer/pending must sit OUTSIDE the
           reviewer block below, or ReviewerActiveGate would redirect into it

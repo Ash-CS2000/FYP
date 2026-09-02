@@ -109,6 +109,51 @@ export function inviteAdmin({ email, name }) {
 }
 
 /**
+ * Onboard an editor. Admin enters a name + email:
+ *   - email already has an account  → editor role added, they get an email
+ *   - new person                    → a pending invite + activation-link email
+ *
+ *   POST /api/users/editors/
+ *   body     { email, name }
+ *   201      { status: 'invited', email, expires_at }
+ *   200      { status: 'role_added' | 'already_editor', email, detail }
+ *   400      invalid email
+ *   403      caller is not an admin
+ *
+ * Token generation, expiry and email delivery are entirely server-side.
+ */
+export function onboardEditor({ email, name }) {
+  return request('/api/users/editors/', {
+    method: 'POST',
+    body: JSON.stringify({ email: String(email).trim().toLowerCase(), name: String(name).trim() }),
+  });
+}
+
+/**
+ * Pending (unaccepted) editor invites.
+ *
+ *   GET /api/users/editors/
+ *   200  { id, email, name, created_at, expires_at, expired }[]
+ *   403  caller is not an admin
+ */
+export function listEditorInvites() {
+  return request('/api/users/editors/', { method: 'GET' });
+}
+
+/**
+ * Cancel a pending editor invite (e.g. sent to the wrong address).
+ *
+ *   DELETE /api/users/editors/:id/
+ *   204  cancelled
+ *   403  caller is not an admin
+ *   404  no such invite
+ *   409  already accepted — manage the user account instead
+ */
+export function cancelEditorInvite(inviteId) {
+  return request(`/api/users/editors/${inviteId}/`, { method: 'DELETE' });
+}
+
+/**
  * Change an account's status. This is the lever that stops someone using the
  * platform without erasing what they did on it.
  *
@@ -152,6 +197,18 @@ export function patchUserStatus(userId, status, reason) {
     method: 'PATCH',
     body: JSON.stringify({ status, reason }),
   });
+}
+
+/**
+ * Every user, newest first. Admin only.
+ *
+ *   GET /api/users/
+ *   200  { id, name, email, roles, reviewer_status, institution, status,
+ *          is_active, joined }[]
+ *   403  caller is not an admin
+ */
+export function listUsers() {
+  return request('/api/users/', { method: 'GET' });
 }
 
 /**

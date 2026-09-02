@@ -59,3 +59,33 @@ class UserRole(models.Model):
 
     def __str__(self):
         return f'{self.user.email} — {self.role} ({self.status})'
+
+
+class EditorInvite(models.Model):
+    """
+    A pending editor onboarding. An admin creates one for someone not yet in the
+    system; the invitee opens the link, sets a password, and the account is
+    activated with the editor role. Single-use (accepted_at) and time-limited
+    (expires_at).
+    """
+    email = models.EmailField()
+    name = models.CharField(max_length=150, blank=True)
+    token = models.CharField(max_length=64, unique=True)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='editor_invites_sent',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def is_valid(self):
+        from django.utils import timezone
+        return self.accepted_at is None and self.expires_at > timezone.now()
+
+    def __str__(self):
+        state = 'accepted' if self.accepted_at else 'pending'
+        return f'EditorInvite({self.email}, {state})'

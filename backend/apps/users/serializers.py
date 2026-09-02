@@ -56,6 +56,36 @@ class UserSerializer(serializers.ModelSerializer):
         return instance
 
 
+class AdminUserListSerializer(serializers.ModelSerializer):
+    """Flat user rows for the admin Users table."""
+    name = serializers.SerializerMethodField()
+    roles = serializers.SerializerMethodField()
+    reviewer_status = serializers.SerializerMethodField()
+    institution = serializers.CharField(source='profile.institution', default='', read_only=True)
+    status = serializers.SerializerMethodField()
+    joined = serializers.DateTimeField(source='date_joined', read_only=True)
+
+    class Meta:
+        model = User
+        fields = (
+            'id', 'name', 'email', 'roles', 'reviewer_status',
+            'institution', 'status', 'is_active', 'joined',
+        )
+
+    def get_name(self, obj):
+        return obj.get_full_name() or obj.email
+
+    def get_roles(self, obj):
+        return list(obj.roles.filter(status=UserRole.Status.ACTIVE).values_list('role', flat=True))
+
+    def get_reviewer_status(self, obj):
+        reviewer_role = obj.roles.filter(role=UserProfile.Role.REVIEWER).first()
+        return reviewer_role.status if reviewer_role else ''
+
+    def get_status(self, obj):
+        return 'active' if obj.is_active else 'deactivated'
+
+
 class RegisterSerializer(serializers.Serializer):
     """
     Fields frontend sends:

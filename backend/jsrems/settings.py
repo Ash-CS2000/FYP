@@ -133,11 +133,38 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', '1025'))
-EMAIL_USE_TLS = False
-DEFAULT_FROM_EMAIL = 'noreply@jsrems.local'
+# Some Python builds (notably the python.org macOS installer) ship without a CA
+# bundle, which makes SMTP-over-TLS fail with CERTIFICATE_VERIFY_FAILED. Point
+# OpenSSL at certifi's bundle so outbound email (Gmail) can verify certs.
+try:
+    import certifi as _certifi
+
+    os.environ.setdefault('SSL_CERT_FILE', _certifi.where())
+    os.environ.setdefault('SSL_CERT_DIR', os.path.dirname(_certifi.where()))
+except ImportError:
+    pass
+
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+
+# Real SMTP once credentials are set; otherwise print emails to the server log
+# so local dev works without a mailbox. Override explicitly with EMAIL_BACKEND.
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.smtp.EmailBackend'
+    if EMAIL_HOST_USER
+    else 'django.core.mail.backends.console.EmailBackend',
+)
+DEFAULT_FROM_EMAIL = os.getenv(
+    'DEFAULT_FROM_EMAIL',
+    f'PaperBridge <{EMAIL_HOST_USER}>' if EMAIL_HOST_USER else 'PaperBridge <noreply@paperbridge.local>',
+)
+
+# Base URL of the frontend — used to build links in emails (e.g. editor invites).
+FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'http://localhost:5173').rstrip('/')
 
 JSREMS_MIN_REVIEWERS = 3
 JSREMS_MAX_REVIEWERS = 5

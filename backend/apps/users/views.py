@@ -1,3 +1,7 @@
+import logging
+import secrets
+from datetime import timedelta
+
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -5,19 +9,58 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
+from django.contrib.auth.password_validation import validate_password
 from django.core.cache import cache
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.utils import timezone
+
+from apps.notifications.models import Notification
 
 from . import orcid_service
+from .emails import send_editor_invite_email, send_editor_role_added_email
+from .permissions import IsAdmin, is_admin
 from .serializers import (
+    AdminUserListSerializer,
     EmailTokenObtainPairSerializer,
     RegisterSerializer,
     UserSerializer,
 )
 from .throttles import AuthRateThrottle
-from .models import UserProfile, UserRole
+from .models import EditorInvite, UserProfile, UserRole
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+# Editor invite links stay valid for three days.
+EDITOR_INVITE_TTL = timedelta(hours=72)
+
+
+# ── Account deactivation (soft delete) ───────────────────────────────────────
+
+def _active_admin_count():
+    return (
+        User.objects.filter(
+            is_active=True,
+            roles__role=UserProfile.Role.ADMIN,
+            roles__status=UserRole.Status.ACTIVE,
+        )
+        .distinct()
+        .count()
+    )
+
+
+def _set_account_active(user, active):
+    """Soft delete / restore: flips login access, keeps the row and its history."""
+    user.is_active = active
+    user.save(update_fields=['is_active'])
+    profile = getattr(user, 'profile', None)
+    if profile is not None:
+        profile.status = (
+            UserProfile.Status.ACTIVE if active else UserProfile.Status.REJECTED
+        )
+        profile.save(update_fields=['status'])
 
 
 class RegisterView(generics.CreateAPIView):
@@ -110,6 +153,18 @@ class MeView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+    def delete(self, request):
+        """Self-service account deletion — soft delete (deactivate). The row and
+        its history stay; the user can no longer sign in."""
+        user = request.user
+        if is_admin(user) and _active_admin_count() <= 1:
+            return Response(
+                {'detail': 'You are the only active admin. Assign another admin before deleting your account.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        _set_account_active(user, False)
+        return Response({'detail': 'Your account has been deleted.'}, status=status.HTTP_200_OK)
 
 
 # ── Reviewer application ──────────────────────────────────────────────────────
@@ -372,3 +427,261 @@ class OrcidCallbackView(APIView):
         )
         UserRole.objects.create(user=user, role=requested_role, status=role_status)
         return user, True
+
+
+# ── Editor onboarding ────────────────────────────────────────────────────────
+
+def _grant_editor_role(user):
+    """Give an existing user an active editor role. Returns True if newly added."""
+    role, created = UserRole.objects.get_or_create(
+        user=user,
+        role=UserProfile.Role.EDITOR,
+        defaults={'status': UserRole.Status.ACTIVE},
+    )
+    if not created and role.status != UserRole.Status.ACTIVE:
+        role.status = UserRole.Status.ACTIVE
+        role.save(update_fields=['status'])
+        created = True
+    return created
+
+
+def _tokens_for(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+        'user': UserSerializer(user).data,
+    }
+
+
+def _invite_dict(invite):
+    return {
+        'id': invite.id,
+        'email': invite.email,
+        'name': invite.name,
+        'created_at': invite.created_at,
+        'expires_at': invite.expires_at,
+        'expired': not invite.is_valid(),
+    }
+
+
+class EditorOnboardView(APIView):
+    """
+    GET  /api/users/editors/   (admin only) → pending (unaccepted) editor invites
+    POST /api/users/editors/   (admin only)
+    Body: { email, name }
+
+    - email already has an account → add the editor role, email them.
+    - otherwise → create a pending invite and email an activation link.
+    """
+    permission_classes = [IsAdmin]
+    throttle_classes = [UserRateThrottle]
+
+    def get(self, request):
+        invites = EditorInvite.objects.filter(accepted_at__isnull=True)
+        return Response([_invite_dict(i) for i in invites])
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        name = (request.data.get('name') or '').strip()
+        if not email or '@' not in email:
+            return Response({'detail': 'A valid email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing = User.objects.filter(email__iexact=email).first()
+        if existing is not None:
+            added = _grant_editor_role(existing)
+            if added:
+                Notification.objects.create(
+                    recipient=existing,
+                    category=Notification.Category.ROLE,
+                    title='You are now an editor',
+                    body='An administrator granted your account the editor role.',
+                )
+                try:
+                    send_editor_role_added_email(existing)
+                except Exception:
+                    logger.exception('editor role-added email failed for %s', email)
+                return Response(
+                    {'status': 'role_added', 'email': email,
+                     'detail': 'Editor role added to the existing account.'},
+                    status=status.HTTP_200_OK,
+                )
+            return Response(
+                {'status': 'already_editor', 'email': email,
+                 'detail': 'This account already holds the editor role.'},
+                status=status.HTTP_200_OK,
+            )
+
+        # New person → issue a fresh single-use invite (supersede any pending one).
+        EditorInvite.objects.filter(email__iexact=email, accepted_at__isnull=True).delete()
+        invite = EditorInvite.objects.create(
+            email=email,
+            name=name,
+            token=secrets.token_urlsafe(32),
+            invited_by=request.user,
+            expires_at=timezone.now() + EDITOR_INVITE_TTL,
+        )
+        try:
+            send_editor_invite_email(invite)
+        except Exception:
+            logger.exception('editor invite email failed for %s', email)
+            invite.delete()
+            return Response(
+                {'detail': 'Could not send the invitation email. Please try again.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {'status': 'invited', **_invite_dict(invite)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EditorInviteDetailView(APIView):
+    """
+    DELETE /api/users/editors/<invite_id>/   (admin only)
+    Cancel a pending editor invite — e.g. it was sent to the wrong address. An
+    already-accepted invite cannot be cancelled here (the account exists; manage
+    the user instead).
+    """
+    permission_classes = [IsAdmin]
+    throttle_classes = [UserRateThrottle]
+
+    def delete(self, request, invite_id):
+        invite = EditorInvite.objects.filter(pk=invite_id).first()
+        if invite is None:
+            return Response({'detail': 'Invite not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if invite.accepted_at is not None:
+            return Response(
+                {'detail': 'This invite has already been accepted and cannot be cancelled.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        invite.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Admin user management ────────────────────────────────────────────────────
+
+class AdminUserListView(generics.ListAPIView):
+    """GET /api/users/  (admin only) → every user, newest first."""
+    permission_classes = [IsAdmin]
+    throttle_classes = [UserRateThrottle]
+    serializer_class = AdminUserListSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return (
+            User.objects.select_related('profile')
+            .prefetch_related('roles')
+            .order_by('-date_joined')
+        )
+
+
+class AdminUserStatusView(APIView):
+    """
+    PATCH /api/users/<pk>/status/   (admin only)
+    Body: { status: 'active' | 'deactivated' | 'suspended', reason? }
+
+    'deactivated'/'suspended' → soft delete (no login, hidden from pools, history
+    kept). 'active' → restore. Admins cannot deactivate themselves or each other.
+    """
+    permission_classes = [IsAdmin]
+    throttle_classes = [UserRateThrottle]
+
+    def patch(self, request, pk):
+        target = User.objects.filter(pk=pk).first()
+        if target is None:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if target.pk == request.user.pk:
+            return Response(
+                {'detail': 'Use your account settings to delete your own account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if is_admin(target):
+            return Response(
+                {'detail': 'Administrator accounts cannot be deactivated here.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        new_status = (request.data.get('status') or '').lower()
+        if new_status == 'active':
+            _set_account_active(target, True)
+        elif new_status in ('deactivated', 'suspended'):
+            _set_account_active(target, False)
+        else:
+            return Response(
+                {'detail': "status must be 'active', 'deactivated' or 'suspended'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(AdminUserListSerializer(target).data)
+
+
+class EditorInviteView(APIView):
+    """
+    GET  /api/users/editor-invite/<token>/  → { email, name } if the invite is live
+    POST /api/users/editor-invite/<token>/  → body { password }; activates the
+         editor account and returns { access, refresh, user }
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [AnonRateThrottle]
+
+    def _load(self, token):
+        return EditorInvite.objects.filter(token=token).first()
+
+    def get(self, request, token):
+        invite = self._load(token)
+        if invite is None or not invite.is_valid():
+            return Response(
+                {'detail': 'This invitation link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({'email': invite.email, 'name': invite.name})
+
+    def post(self, request, token):
+        invite = self._load(token)
+        if invite is None or not invite.is_valid():
+            return Response(
+                {'detail': 'This invitation link is invalid or has expired.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        password = request.data.get('password') or ''
+        try:
+            validate_password(password)
+        except DjangoValidationError as exc:
+            return Response({'detail': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Someone may have registered with this email between invite and accept.
+        existing = User.objects.filter(email__iexact=invite.email).first()
+        if existing is not None:
+            _grant_editor_role(existing)
+            invite.accepted_at = timezone.now()
+            invite.save(update_fields=['accepted_at'])
+            return Response(
+                {'status': 'existing_account',
+                 'detail': 'An account with this email already exists. Please log in instead.'},
+                status=status.HTTP_200_OK,
+            )
+
+        name = (invite.name or '').split(maxsplit=1)
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=invite.email,
+                email=invite.email,
+                first_name=name[0] if name else '',
+                last_name=name[1] if len(name) > 1 else '',
+                password=password,
+            )
+            UserProfile.objects.update_or_create(
+                user=user,
+                defaults={'role': UserProfile.Role.EDITOR, 'status': UserProfile.Status.ACTIVE},
+            )
+            UserRole.objects.update_or_create(
+                user=user,
+                role=UserProfile.Role.EDITOR,
+                defaults={'status': UserRole.Status.ACTIVE},
+            )
+            invite.accepted_at = timezone.now()
+            invite.save(update_fields=['accepted_at'])
+
+        return Response(_tokens_for(user), status=status.HTTP_201_CREATED)

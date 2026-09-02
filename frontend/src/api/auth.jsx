@@ -100,6 +100,20 @@ export async function authFetch(url, options = {}) {
   return response;
 }
 
+// Self-service account deletion (soft — the account is deactivated, history
+// kept). On success the caller should clear the session and redirect.
+export async function deleteAccount() {
+  const res = await authFetch(`${API_URL}/api/users/me/`, { method: 'DELETE' });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json())?.detail || ''; } catch { /* non-JSON */ }
+    const err = new Error(detail || `Request failed (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json().catch(() => ({}));
+}
+
 export async function logout() {
   const refresh = getRefreshToken();
   const access = getAccessToken();
