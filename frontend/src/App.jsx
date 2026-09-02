@@ -73,7 +73,7 @@ export default function App() {
             training routes themselves — that would deadlock the gate. */}
         <Route element={<TrainingGate />}>
           <Route path="/author/submit" element={<UserSubmit />} />
-          <Route path="/author/revision" element={<Revision />} />
+          <Route path="/author/papers/:id/revision" element={<Revision />} />
         </Route>
 
         <Route path="/author/training" element={<TrainingModule />} />

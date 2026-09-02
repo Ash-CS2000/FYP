@@ -5,11 +5,21 @@ from rest_framework import serializers
 
 from . import storage
 from .models import (
-    Decision, Manuscript, ManuscriptAffiliation, ManuscriptAuthor, ManuscriptSupplementaryFile, PlagiarismCheck,
+    Decision, Manuscript, ManuscriptAffiliation, ManuscriptAuthor, ManuscriptRevision,
+    ManuscriptSupplementaryFile, PlagiarismCheck,
 )
 from .services.noplag_client import submit_check, NoPlagClientError
 
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB — mirrors the frontend's MAX_UPLOAD_SIZE
+
+
+def validate_pdf_file(value):
+    is_pdf = value.content_type == 'application/pdf' or value.name.lower().endswith('.pdf')
+    if not is_pdf:
+        raise serializers.ValidationError('File must be a PDF.')
+    if value.size > MAX_UPLOAD_SIZE:
+        raise serializers.ValidationError('File exceeds the 20MB size limit.')
+    return value
 
 
 # ── Output (read) ────────────────────────────────────────────────────────────
@@ -97,7 +107,7 @@ class DecisionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Decision
-        fields = ('manuscript_id', 'type', 'letter', 'reasons', 'decided_by', 'decided_at')
+        fields = ('id', 'manuscript_id', 'type', 'letter', 'reasons', 'decided_by', 'decided_at')
 
     def get_decided_by(self, obj):
         if not obj.decided_by:
@@ -197,12 +207,7 @@ class ManuscriptSubmitSerializer(serializers.Serializer):
         return serializer.validated_data
 
     def validate_manuscript(self, value):
-        is_pdf = value.content_type == 'application/pdf' or value.name.lower().endswith('.pdf')
-        if not is_pdf:
-            raise serializers.ValidationError('Manuscript must be a PDF file.')
-        if value.size > MAX_UPLOAD_SIZE:
-            raise serializers.ValidationError('Manuscript exceeds the 20MB size limit.')
-        return value
+        return validate_pdf_file(value)
 
     # ── Create ───────────────────────────────────────────────────────────────
 
@@ -260,3 +265,59 @@ class ManuscriptSubmitSerializer(serializers.Serializer):
 
     def to_representation(self, instance):
         return ManuscriptSerializer(instance, context=self.context).data
+
+
+# ── Revisions ─────────────────────────────────────────────────────────────
+
+class ManuscriptRevisionSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ManuscriptRevision
+        fields = ('id', 'round', 'file_name', 'file_size', 'file_url', 'response_letter', 'submitted_at')
+
+    def get_file_url(self, obj):
+        return storage.get_file_url(obj.file_key)
+
+
+class ManuscriptRevisionCreateSerializer(serializers.Serializer):
+    """
+    POST /api/manuscripts/<pk>/revision/ — multipart/form-data fields:
+      manuscript (file, required, PDF, <=20MB), response_letter (optional)
+    Expects context={'manuscript': <Manuscript instance>}.
+    """
+    manuscript = serializers.FileField(write_only=True)
+    response_letter = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate_manuscript(self, value):
+        return validate_pdf_file(value)
+
+    def create(self, validated_data):
+        target = self.context['manuscript']
+        owner = target.owner
+        file = validated_data['manuscript']
+        response_letter = validated_data.get('response_letter', '')
+
+        key = storage.build_key(owner.id, 'revision', file.name)
+        storage.upload_file(file, key, content_type=file.content_type)
+
+        with transaction.atomic():
+            round_number = target.revisions.count() + 1
+            revision = ManuscriptRevision.objects.create(
+                manuscript=target,
+                round=round_number,
+                file_key=key,
+                file_name=file.name,
+                file_size=file.size,
+                response_letter=response_letter,
+            )
+            target.file_key = key
+            target.file_name = file.name
+            target.file_size = file.size
+            target.status = Manuscript.Status.UNDER_REVIEW
+            target.save(update_fields=['file_key', 'file_name', 'file_size', 'status', 'updated_at'])
+
+        return revision
+
+    def to_representation(self, instance):
+        return ManuscriptRevisionSerializer(instance, context=self.context).data

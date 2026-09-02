@@ -25,17 +25,16 @@ import {
   availableDecisions,
   letterTemplate,
   isFinal,
-  DECISION_LABELS,
-  DECISION_TONE,
   DESK_REJECT_REASONS,
-  formatDecidedAt,
   ISSUES,
   openIssues,
   issueFor,
   saveIssueAssignment,
 } from '../data/editorial.js';
 import { getDecision, postDecision } from '../api/editorial.js';
+import { TERMINAL_STATUSES } from '../data/manuscriptStatus.js';
 import ReviewerPanel from '../components/ReviewerPanel.jsx';
+import DecisionHistory from '../components/DecisionHistory.jsx';
 import { assignmentsFor } from '../data/invitations.js';
 
 // The editor's own name goes on the letter, so the author sees who decided.
@@ -84,33 +83,6 @@ function SimilarityLine({ manuscriptId, basePath }) {
         Full report →
       </Link>
     </span>
-  );
-}
-
-// The decision itself, once taken. Rendered for both roles — an admin must be
-// able to read what was decided and on what grounds.
-function DecisionRecord({ decision }) {
-  const tone = DECISION_TONE[decision.type];
-  return (
-    <div className="card">
-      <div className="card-header">
-        <div>
-          <div className="card-title">Decision</div>
-          <div className="card-meta">
-            {decision.decided_by} · {formatDecidedAt(decision.decided_at)}
-          </div>
-        </div>
-        <span className="md-rec" style={{ background: tone?.bg, color: tone?.fg }}>
-          {DECISION_LABELS[decision.type]}
-        </span>
-      </div>
-      <div className="md-letter">{decision.letter}</div>
-      <div className="card-meta" style={{ marginTop: 12 }}>
-        {isFinal(decision.type)
-          ? 'This decision is final. The manuscript is closed.'
-          : 'The author has been invited to revise and resubmit.'}
-      </div>
-    </div>
   );
 }
 
@@ -367,7 +339,16 @@ export default function ManuscriptDetail({ role = 'editor' }) {
       .then(d => { if (!cancelled) setDecision(d); })
       .catch(err => { if (!cancelled && err.status !== 404) console.error(err); });
     return () => { cancelled = true; };
-  }, [manuscript]);
+  }, [manuscript?.id]);
+
+  // A fresh decision may have reopened the manuscript for another round (if
+  // the author resubmits) or closed it for good — refetch rather than
+  // hand-rolling the status transition here, so this stays in sync with
+  // whatever Decision.STATUS_MAP actually did server-side.
+  const handleDecided = (created) => {
+    setDecision(created);
+    getManuscript(id).then(m => setManuscript(m)).catch(() => {});
+  };
 
   if (loadError) {
     return (
@@ -523,19 +504,17 @@ export default function ManuscriptDetail({ role = 'editor' }) {
         </div>
 
         <div className="gap-grid">
-          {decision && <DecisionRecord decision={decision} />}
-
           <IssueCard manuscriptId={manuscript.id} decision={decision} isAdmin={isAdmin} />
 
-          {!isAdmin && !decision && (
+          {!isAdmin && !TERMINAL_STATUSES.includes(manuscript.status) && manuscript.status !== 'revisions_requested' && (
             <DecisionPanel
               manuscript={manuscript}
               reviews={reviews}
-              onDecided={setDecision}
+              onDecided={handleDecided}
             />
           )}
 
-          {!isAdmin && decision && !isFinal(decision.type) && (
+          {!isAdmin && manuscript.status === 'revisions_requested' && (
             <div className="card">
               <div className="card-header"><div className="card-title">Next round</div></div>
               <div className="card-meta">
@@ -544,6 +523,8 @@ export default function ManuscriptDetail({ role = 'editor' }) {
               </div>
             </div>
           )}
+
+          <DecisionHistory manuscriptId={manuscript.id} />
         </div>
       </div>
     </AppShell>

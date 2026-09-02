@@ -20,3 +20,6 @@ DECISION_NOTIFICATION_BODIES = {
     Decision.Type.MINOR: '"{title}" needs minor revisions before it can be accepted. See the decision letter for details.',
     Decision.Type.MAJOR: '"{title}" needs major revisions and a second review round. See the decision letter for details.',
 }
+
+REVISION_SUBMITTED_NOTIFICATION_TITLE = 'A revision has been submitted'
+REVISION_SUBMITTED_NOTIFICATION_BODY = '"{title}" has a new revision from the author, ready for a decision.'

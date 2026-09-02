@@ -149,7 +149,7 @@ export default function MyPapers() {
                     </td>
                     <td>
                       {!withdrawn && p.status === 'revisions_requested' ? (
-                        <Link to="/author/revision" style={{ color: 'var(--amber-700)', fontWeight: 600, fontSize: 13 }}>Resubmit →</Link>
+                        <Link to={`/author/papers/${p.id}/revision`} style={{ color: 'var(--amber-700)', fontWeight: 600, fontSize: 13 }}>Resubmit →</Link>
                       ) : (
                         <Link to={`/author/papers/${p.id}`} style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</Link>
                       )}

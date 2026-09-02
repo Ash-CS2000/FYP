@@ -32,6 +32,7 @@ import { bandFor, DEFAULT_THRESHOLDS, BAND_LABELS, BAND_HINTS, SIMILARITY_TONE }
 import { TERMINAL_STATUSES, statusLabel, statusPillClass } from '../data/manuscriptStatus.js';
 import { getDecision } from '../api/editorial.js';
 import { DECISION_LABELS, DECISION_TONE, formatDecidedAt } from '../data/editorial.js';
+import DecisionHistory from '../components/DecisionHistory.jsx';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -347,6 +348,39 @@ function DecisionCard({ manuscriptId }) {
   );
 }
 
+// A resubmit prompt while the paper is awaiting a revision — the entry
+// point into Revision.jsx.
+function ResubmitCallout({ manuscript }) {
+  if (manuscript.status !== 'revisions_requested') return null;
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title">Revision needed</div>
+          <div className="card-meta">The editor is waiting on a revised manuscript before deciding again.</div>
+        </div>
+        <Link to={`/author/papers/${manuscript.id}/revision`} className="btn btn-primary btn-sm">
+          Resubmit →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// Minimal terminal-state closure — no further action is possible once the
+// manuscript has been accepted, rejected, or published.
+function ClosedNotice({ manuscript }) {
+  if (!TERMINAL_STATUSES.includes(manuscript.status)) return null;
+  return (
+    <div className="card">
+      <div className="card-header"><div className="card-title">Closed</div></div>
+      <div className="card-meta">
+        This manuscript has been {statusLabel(manuscript.status).toLowerCase()}. No further action is available.
+      </div>
+    </div>
+  );
+}
+
 export default function AuthorPaper() {
   const { id } = useParams();
   const [manuscript, setManuscript] = useState(null);
@@ -435,6 +469,12 @@ export default function AuthorPaper() {
         <OriginalityCard manuscriptId={manuscript.id} />
 
         <DecisionCard manuscriptId={manuscript.id} />
+
+        <ResubmitCallout manuscript={manuscript} />
+
+        <DecisionHistory manuscriptId={manuscript.id} />
+
+        <ClosedNotice manuscript={manuscript} />
 
         <WithdrawCard manuscript={manuscript} />
       </div>

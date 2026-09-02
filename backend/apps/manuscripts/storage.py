@@ -47,3 +47,23 @@ def get_file_url(key, expires_in=3600):
         ExpiresIn=expires_in,
     )
 
+
+def list_all_keys(prefix='manuscripts/'):
+    """List every object key under a prefix in the bucket."""
+    client = _client()
+    paginator = client.get_paginator('list_objects_v2')
+    keys = []
+    for page in paginator.paginate(Bucket=settings.SUPABASE_S3_BUCKET, Prefix=prefix):
+        keys.extend(obj['Key'] for obj in page.get('Contents', []))
+    return keys
+
+
+def delete_files(keys):
+    """Delete objects by key. One request per key — Supabase Storage's
+    S3-compatible endpoint doesn't support the batch DeleteObjects operation."""
+    if not keys:
+        return
+    client = _client()
+    for key in keys:
+        client.delete_object(Bucket=settings.SUPABASE_S3_BUCKET, Key=key)
+

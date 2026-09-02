@@ -63,6 +63,21 @@ export function getDecision(manuscriptId) {
 }
 
 /**
+ * Every decision ever taken on this manuscript, newest first — the full
+ * audit trail across every revision round.
+ *
+ *   GET /api/manuscripts/:id/decisions/
+ *   200   Decision[]
+ *   403   caller may not read this manuscript
+ *
+ * Readable by the editor, an admin, and the manuscript's own author — same
+ * audience as getDecision().
+ */
+export function listDecisions(manuscriptId) {
+  return request(`/api/manuscripts/${encodeURIComponent(manuscriptId)}/decisions/`);
+}
+
+/**
  * Record the editorial decision and send the letter to the author.
  *
  *   POST /api/manuscripts/:id/decision/

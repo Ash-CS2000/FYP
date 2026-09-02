@@ -138,3 +138,19 @@ class Decision(models.Model):
 
     def __str__(self):
         return f'Decision(manuscript={self.manuscript_id}, type={self.type})'
+
+
+class ManuscriptRevision(models.Model):
+    manuscript = models.ForeignKey(Manuscript, on_delete=models.CASCADE, related_name='revisions')
+    round = models.PositiveSmallIntegerField()
+    file_key = models.CharField(max_length=1024)
+    file_name = models.CharField(max_length=255, blank=True)
+    file_size = models.PositiveIntegerField(null=True, blank=True)
+    response_letter = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
+
+    def __str__(self):
+        return f'ManuscriptRevision(manuscript={self.manuscript_id}, round={self.round})'

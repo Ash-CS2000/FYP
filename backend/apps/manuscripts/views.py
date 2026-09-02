@@ -3,6 +3,7 @@ import logging
 from botocore.exceptions import BotoCoreError, ClientError
 from django.db import transaction
 from rest_framework import generics, permissions, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
@@ -12,10 +13,14 @@ from django.shortcuts import get_object_or_404
 from apps.notifications.models import Notification
 
 from .models import Decision, Manuscript, PlagiarismCheck
-from .notifications import DECISION_NOTIFICATION_BODIES, DECISION_NOTIFICATION_TITLES
+from .notifications import (
+    DECISION_NOTIFICATION_BODIES, DECISION_NOTIFICATION_TITLES, REVISION_SUBMITTED_NOTIFICATION_BODY,
+    REVISION_SUBMITTED_NOTIFICATION_TITLE,
+)
 from .permissions import IsEditorOrAdmin, is_editor_or_admin
 from .serializers import (
-    DecisionCreateSerializer, DecisionSerializer, ManuscriptEditorSerializer, ManuscriptSerializer,
+    DecisionCreateSerializer, DecisionSerializer, ManuscriptEditorSerializer,
+    ManuscriptRevisionCreateSerializer, ManuscriptRevisionSerializer, ManuscriptSerializer,
     ManuscriptSubmitSerializer,
 )
 from .services.noplag_client import get_check_status, get_check_report, NoPlagClientError
@@ -117,6 +122,11 @@ class ManuscriptDecisionView(APIView):
             )
         manuscript = get_object_or_404(Manuscript, pk=pk)
 
+        if manuscript.status == Manuscript.Status.REVISIONS_REQUESTED:
+            return Response(
+                {'detail': 'This manuscript is awaiting the author\'s revision — a new decision cannot be recorded yet.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         if manuscript.status in (Manuscript.Status.ACCEPTED, Manuscript.Status.REJECTED, Manuscript.Status.PUBLISHED):
             return Response(
                 {'detail': 'This manuscript already has a final decision.'},
@@ -150,6 +160,74 @@ class ManuscriptDecisionView(APIView):
             sync_accepted_manuscript_to_corpus(manuscript)
 
         return Response(DecisionSerializer(decision).data, status=status.HTTP_201_CREATED)
+
+
+class ManuscriptDecisionHistoryView(generics.ListAPIView):
+    """
+    GET /api/manuscripts/<int:pk>/decisions/ → every Decision on this
+    manuscript, newest first. Readable by the editor/admin or the
+    manuscript's owner.
+    """
+    serializer_class = DecisionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        manuscript = get_object_or_404(Manuscript, pk=self.kwargs['pk'])
+        if not (is_editor_or_admin(self.request.user) or manuscript.owner_id == self.request.user.id):
+            raise PermissionDenied('You may not view this manuscript.')
+        return manuscript.decisions.all()
+
+
+class ManuscriptRevisionView(APIView):
+    """
+    GET  /api/manuscripts/<int:pk>/revision/ → every ManuscriptRevision on
+    this manuscript, newest first. Readable by the editor/admin or the
+    manuscript's owner.
+    POST /api/manuscripts/<int:pk>/revision/ → the owner uploads a revised
+    file (multipart/form-data: manuscript file, optional response_letter).
+    Only allowed while the manuscript is awaiting a revision. Repoints the
+    manuscript's file, flips its status back to under_review, and notifies
+    the editor who requested the revision.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    throttle_classes = [UserRateThrottle]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        if not (is_editor_or_admin(request.user) or manuscript.owner_id == request.user.id):
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        revisions = manuscript.revisions.all()
+        return Response(ManuscriptRevisionSerializer(revisions, many=True).data)
+
+    def post(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        if manuscript.owner_id != request.user.id:
+            return Response(
+                {'detail': 'You do not have permission to revise this manuscript.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if manuscript.status != Manuscript.Status.REVISIONS_REQUESTED:
+            return Response(
+                {'detail': 'This manuscript is not awaiting a revision.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        serializer = ManuscriptRevisionCreateSerializer(data=request.data, context={'manuscript': manuscript})
+        serializer.is_valid(raise_exception=True)
+        revision = serializer.save()
+
+        previous_decision = manuscript.decisions.first()
+        if previous_decision and previous_decision.decided_by_id:
+            Notification.objects.create(
+                recipient=previous_decision.decided_by,
+                category=Notification.Category.REVISION_SUBMITTED,
+                title=REVISION_SUBMITTED_NOTIFICATION_TITLE,
+                body=REVISION_SUBMITTED_NOTIFICATION_BODY.format(title=manuscript.title),
+                manuscript=manuscript,
+            )
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class PlagiarismCheckStatusView(APIView):
