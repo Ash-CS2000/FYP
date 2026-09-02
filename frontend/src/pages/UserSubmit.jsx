@@ -12,6 +12,7 @@ import { getDemoSession } from '../data/demoAccounts.js';
 import { TRAINING_UNITS, PUBLICATION_WINDOW_DAYS } from '../data/trainingContent.js';
 import { draftFor, saveDraft, deleteDraft, formatSavedAt } from '../data/drafts.js';
 import { saveDraftRemote } from '../api/submissions.js';
+import { authFetch } from '../api/auth';
 
 const MAX_UPLOAD_SIZE = 20 * 1024 * 1024; // 20 MB
 const TOTAL_STEPS = 5;
@@ -383,9 +384,8 @@ export default function UserSubmit() {
       formData.append('agreed_all_approve', agreements.allApprove);
       formData.append('agreed_policies', agreements.policies);
 
-      const res = await fetch(`${API_URL}/api/manuscripts/upload/`, {
+      const res = await authFetch(`${API_URL}/api/manuscripts/upload/`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('access')}` },
         body: formData,
       });
       if (!res.ok) {

@@ -73,11 +73,16 @@ export async function refreshAccessToken() {
 export async function authFetch(url, options = {}) {
   const access = getAccessToken();
 
+  // Let the browser set the multipart boundary for FormData bodies; forcing
+  // application/json here would corrupt file uploads.
+  const isFormData =
+    typeof FormData !== 'undefined' && options.body instanceof FormData;
+
   const makeRequest = (token) =>
     fetch(url, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...options.headers,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },

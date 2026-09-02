@@ -15,21 +15,14 @@
 // call below — assume this file can be bypassed.
 
 import { API_URL } from '../config';
+import { authFetch } from './auth';
 
 // Roles an admin may grant/revoke through the roles endpoint. 'admin' is
 // deliberately excluded: it is invite-only, never a promotion.
 export const PROMOTABLE_ROLES = ['editor'];
 
-function authHeaders() {
-  const access = localStorage.getItem('access');
-  return {
-    'Content-Type': 'application/json',
-    ...(access ? { Authorization: `Bearer ${access}` } : {}),
-  };
-}
-
 async function request(path, options) {
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers: authHeaders() });
+  const res = await authFetch(`${API_URL}${path}`, options);
   if (!res.ok) {
     let detail = '';
     try {

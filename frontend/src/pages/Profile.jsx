@@ -3,6 +3,7 @@ import AppShell from '../components/AppShell.jsx';
 import { SIDEBAR_CONFIG } from '../data/sidebarConfig.jsx';
 import { getStoredUser, getInitials } from '../utils/user.js';
 import { API_URL } from '../config';
+import { authFetch } from '../api/auth';
 
 // A reviewer's availability is theirs to set, and the editor's assignment panel
 // reads it — an "unavailable" reviewer cannot be selected there at all, and a
@@ -139,10 +140,8 @@ export default function Profile({ role = 'author' }) {
     setApplyError('');
     setApplyLoading(true);
     try {
-      const access = localStorage.getItem('access');
-      const res = await fetch(`${API_URL}/api/users/apply-reviewer/`, {
+      const res = await authFetch(`${API_URL}/api/users/apply-reviewer/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${access}` },
         body: JSON.stringify({ expertise_areas: expertiseInput }),
       });
       const data = await res.json();

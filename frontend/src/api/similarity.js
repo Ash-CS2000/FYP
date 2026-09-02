@@ -8,20 +8,13 @@
 // file only polls for the result — there is no separate "start check" call yet.
 
 import { API_URL } from '../config';
+import { authFetch } from './auth';
 
 export const POLL_INTERVAL_MS = 3000;
 export const POLL_TIMEOUT_MS = 180000; // noplag can take a couple minutes on large PDFs
 
-function authHeaders() {
-  const access = localStorage.getItem('access');
-  return {
-    'Content-Type': 'application/json',
-    ...(access ? { Authorization: `Bearer ${access}` } : {}),
-  };
-}
-
 async function request(path, options = {}) {
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers: authHeaders() });
+  const res = await authFetch(`${API_URL}${path}`, options);
   if (!res.ok) {
     let detail = '';
     try {

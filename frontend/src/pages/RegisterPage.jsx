@@ -273,13 +273,14 @@ export default function RegisterPage() {
         body:    JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
       if (loginRes.ok) {
-        saveTokens(data.access, data.refresh);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        const loginData = await loginRes.json();
+        saveTokens(loginData.access, loginData.refresh);
+        localStorage.setItem('user', JSON.stringify(loginData.user));
         // A reviewer registration is an application, not an activation — hold
         // them on the pending screen regardless of what the backend echoes
         // back. Everyone else routes on the same user object we persisted, so
         // the guards in ProtectedRoute agree with where we send them.
-        navigate(role === 'reviewer' ? '/reviewer/pending' : landingRoute(data.user));
+        navigate(role === 'reviewer' ? '/reviewer/pending' : landingRoute(loginData.user));
       } else {
         navigate('/login', { state: { registered: true } });
       }

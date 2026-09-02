@@ -18,7 +18,8 @@ from .serializers import (
     DecisionCreateSerializer, DecisionSerializer, ManuscriptEditorSerializer, ManuscriptSerializer,
     ManuscriptSubmitSerializer,
 )
-from .services.noplag_client import add_to_corpus, get_check_status, get_check_report, NoPlagClientError
+from .services.noplag_client import get_check_status, get_check_report, NoPlagClientError
+from .services.plagiarism import sync_accepted_manuscript_to_corpus
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,12 @@ class ManuscriptDecisionView(APIView):
                 manuscript=manuscript,
             )
 
+        # An accepted paper becomes prior art for future checks. Deferred to
+        # here rather than check-completion so a revise-and-resubmit is never
+        # scored against the author's own earlier draft. Best-effort.
+        if data['type'] == Decision.Type.ACCEPT:
+            sync_accepted_manuscript_to_corpus(manuscript)
+
         return Response(DecisionSerializer(decision).data, status=status.HTTP_201_CREATED)
 
 
@@ -179,10 +186,6 @@ class PlagiarismCheckStatusView(APIView):
                         check.similarity_score = report.get('overall_similarity_pct')
                         check.report = report
                         check.save()
-                        try:
-                            add_to_corpus(manuscript)
-                        except NoPlagClientError:
-                            logger.exception('Adding completed manuscript to noplag corpus failed')
                 elif 'fail' in raw_status or 'error' in raw_status:
                     check.status = PlagiarismCheck.Status.FAILED
                     check.error_message = status_result.get('error_message', '')

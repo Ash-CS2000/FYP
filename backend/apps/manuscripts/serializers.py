@@ -212,6 +212,11 @@ class ManuscriptSubmitSerializer(serializers.Serializer):
         manuscript_file = validated_data.pop('manuscript')
         supplementary_files = validated_data.pop('supplementary', [])
 
+        # Read the bytes once, here, so the plagiarism submit below can reuse
+        # them instead of re-downloading the file we just pushed to storage.
+        manuscript_bytes = manuscript_file.read()
+        manuscript_file.seek(0)
+
         key = storage.build_key(owner.id, 'manuscript', manuscript_file.name)
         storage.upload_file(manuscript_file, key, content_type=manuscript_file.content_type)
 
@@ -243,7 +248,7 @@ class ManuscriptSubmitSerializer(serializers.Serializer):
 
         check = PlagiarismCheck.objects.create(manuscript=manuscript)
         try:
-            result = submit_check(manuscript)
+            result = submit_check(manuscript, file_bytes=manuscript_bytes)
         except NoPlagClientError as exc:
             check.status = PlagiarismCheck.Status.FAILED
             check.error_message = str(exc)

@@ -51,7 +51,13 @@ class ProgressiveAuthThrottle(SimpleRateThrottle):
         now = time.time()
         elapsed = now - last_attempt_time
 
-        if elapsed < wait_seconds:
+        # Stage 1 is a burst allowance: the first few attempts pass with no
+        # spacing (matches the "3 per minute" intent). Spacing is only enforced
+        # from stage 2 on, once repeated attempts look like real hammering.
+        # Without this, a quick logout/login or a single password typo — or the
+        # register → auto-login round-trip — trips the 20s gate.
+        burst_allowance = self.STAGES[0][0]
+        if attempts >= burst_allowance and elapsed < wait_seconds:
             # Too soon — calculate wait time
             self.wait_time = wait_seconds - elapsed
             return False

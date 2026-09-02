@@ -25,17 +25,10 @@
 // SECURITY: nothing in this file is enforcement. Assume it can be bypassed.
 
 import { API_URL } from '../config';
-
-function authHeaders() {
-  const access = localStorage.getItem('access');
-  return {
-    'Content-Type': 'application/json',
-    ...(access ? { Authorization: `Bearer ${access}` } : {}),
-  };
-}
+import { authFetch } from './auth';
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers: authHeaders() });
+  const res = await authFetch(`${API_URL}${path}`, options);
   if (!res.ok) {
     let detail = '';
     try {

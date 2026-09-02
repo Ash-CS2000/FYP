@@ -94,6 +94,10 @@ class PlagiarismCheck(models.Model):
     manuscript = models.OneToOneField(Manuscript, on_delete=models.CASCADE, related_name='plagiarism_check')
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     check_id = models.CharField(max_length=64, blank=True)
+    # noplag corpus document id — set only once the manuscript is accepted and
+    # added to the corpus as prior art. Lets a later resubmission remove the
+    # superseded version before its new check runs.
+    corpus_document_id = models.CharField(max_length=64, blank=True)
     similarity_score = models.FloatField(null=True, blank=True)
     report = models.JSONField(null=True, blank=True)
     error_message = models.TextField(blank=True, default='')

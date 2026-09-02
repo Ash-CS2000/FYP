@@ -8,17 +8,10 @@
 // author by session, never by a parameter; assume this file can be bypassed.
 
 import { API_URL } from '../config';
-
-function authHeaders() {
-  const access = localStorage.getItem('access');
-  return {
-    'Content-Type': 'application/json',
-    ...(access ? { Authorization: `Bearer ${access}` } : {}),
-  };
-}
+import { authFetch } from './auth';
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers: authHeaders() });
+  const res = await authFetch(`${API_URL}${path}`, options);
   if (!res.ok) {
     let detail = '';
     try {

@@ -29,6 +29,19 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
     throttle_classes = [AuthRateThrottle]  # 5/minute
 
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+
+        # A completed registration resets the progressive auth counter, the same
+        # way a successful login does — so the client's immediate auto-login
+        # call isn't blocked by the spacing rule.
+        if response.status_code == status.HTTP_201_CREATED:
+            for throttle in self.get_throttles():
+                if hasattr(throttle, 'on_success'):
+                    throttle.on_success(request)
+
+        return response
+
 
 class EmailTokenObtainPairView(TokenObtainPairView):
     """
