@@ -11,6 +11,11 @@ import { listAllManuscripts } from '../api/manuscripts.js';
 // 'flagged' cuts across statuses — it is a similarity band, not a pipeline stage.
 const FILTERS = [
   { id: 'all',     label: 'All',     match: () => true },
+  {
+    id: 'pending',
+    label: 'Pending Decision',
+    match: s => s.latest_decision === null && (s.status === 'submitted' || s.status === 'under_review'),
+  },
   { id: 'flagged', label: 'Flagged', match: (s, ctx) => ctx.bandOf(s.id) === 'high' },
   ...MANUSCRIPT_STATUSES.map(status => ({
     id: status,

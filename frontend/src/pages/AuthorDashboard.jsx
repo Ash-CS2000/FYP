@@ -1,11 +1,54 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { getStoredUser, getFirstName } from '../utils/user.js';
 import { isTrained } from '../data/trainingProgress.js';
+import { listManuscripts } from '../api/manuscripts.js';
+import { statusLabel, statusPillClass } from '../data/manuscriptStatus.js';
+import { useNotifications } from '../hooks/useNotifications.js';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const ACCEPTED_LIKE = ['accepted', 'published'];
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function oldest(papers) {
+  return papers.reduce((a, b) => (new Date(a.submitted_at) < new Date(b.submitted_at) ? a : b));
+}
+
+function mostRecentlyUpdated(papers) {
+  return papers.reduce((a, b) => (new Date(a.updated_at) > new Date(b.updated_at) ? a : b));
+}
 
 export default function AuthorDashboard() {
   const firstName = getFirstName(getStoredUser()) || 'Author';
   const trained = isTrained();
+
+  const [manuscripts, setManuscripts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [filter, setFilter] = useState('all');
+
+  useEffect(() => {
+    let cancelled = false;
+    listManuscripts()
+      .then((data) => { if (!cancelled) setManuscripts(data); })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load your papers.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const { notifications, loading: notifLoading } = useNotifications();
 
   // Submission is gated on the final assessment (see auth/TrainingGate.jsx).
   // Point the untrained straight at training rather than at a dead end.
@@ -14,6 +57,65 @@ export default function AuthorDashboard() {
   ) : (
     <Link to="/author/training" className="btn btn-ghost btn-sm">Training required</Link>
   );
+
+  const underReviewPapers = manuscripts.filter(p => p.status === 'under_review');
+  const revisionPapers = manuscripts.filter(p => p.status === 'revisions_requested');
+  const acceptedLikePapers = manuscripts.filter(p => ACCEPTED_LIKE.includes(p.status));
+  const rejectedPapers = manuscripts.filter(p => p.status === 'rejected');
+  const activeCount = underReviewPapers.length + revisionPapers.length;
+  const recentCount = manuscripts.filter(p => Date.now() - new Date(p.submitted_at).getTime() <= 30 * DAY_MS).length;
+
+  const oldestUnderReviewDays = underReviewPapers.length
+    ? Math.floor((Date.now() - new Date(oldest(underReviewPapers).submitted_at).getTime()) / DAY_MS)
+    : null;
+  const latestAccepted = acceptedLikePapers.length ? mostRecentlyUpdated(acceptedLikePapers) : null;
+  const firstRevisionPaper = revisionPapers[0] || null;
+
+  const decidedCount = acceptedLikePapers.length + rejectedPapers.length;
+  const acceptanceRatePct = decidedCount > 0 ? Math.round((acceptedLikePapers.length / decidedCount) * 100) : null;
+
+  const stats = [
+    {
+      label: 'Total Submitted',
+      value: manuscripts.length,
+      accent: 'var(--navy-700)',
+      trend: recentCount > 0 ? <><span className="up">↑ {recentCount}</span> in the last 30 days</> : 'No submissions in the last 30 days',
+    },
+    {
+      label: 'Under Review',
+      value: underReviewPapers.length,
+      accent: 'var(--amber-700)',
+      trend: oldestUnderReviewDays != null ? `Oldest: ${oldestUnderReviewDays} day${oldestUnderReviewDays === 1 ? '' : 's'}` : 'None right now',
+    },
+    {
+      label: 'Accepted',
+      value: acceptedLikePapers.length,
+      accent: 'var(--teal-700)',
+      trend: latestAccepted ? <>Latest: <span style={{ color: 'var(--navy-900)', fontWeight: 600 }}>{latestAccepted.title}</span></> : 'None yet',
+    },
+    {
+      label: 'Revision Required',
+      value: revisionPapers.length,
+      accent: 'var(--purple-700)',
+      trend: firstRevisionPaper
+        ? <Link to={`/author/papers/${firstRevisionPaper.id}/revision`} style={{ color: 'var(--navy-700)', fontWeight: 600 }}>Resubmit now →</Link>
+        : 'None right now',
+    },
+  ];
+
+  const filteredPapers = filter === 'all'
+    ? manuscripts
+    : filter === 'active'
+      ? manuscripts.filter(p => p.status === 'under_review' || p.status === 'revisions_requested')
+      : manuscripts.filter(p => ACCEPTED_LIKE.includes(p.status));
+  const previewPapers = filteredPapers.slice(0, 5);
+
+  const subtitleDate = new Date().toLocaleDateString(undefined, {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const subtitleTail = underReviewPapers.length > 0
+    ? `You have ${underReviewPapers.length} paper${underReviewPapers.length === 1 ? '' : 's'} awaiting reviewer feedback.`
+    : 'No papers awaiting reviewer feedback right now.';
 
   return (
     <AppShell role="author" searchPlaceholder="Search papers, reviewers, categories..." topbarActions={newSubmission}>
@@ -34,21 +136,16 @@ export default function AuthorDashboard() {
         <div>
           <span className="eyebrow">Author Workspace</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Welcome back, <em className="serif-italic">{firstName}</em>.</h1>
-          <p className="page-subtitle">Sunday, 3 May 2026 · You have 1 paper awaiting reviewer feedback.</p>
+          <p className="page-subtitle">{subtitleDate} · {subtitleTail}</p>
         </div>
       </div>
 
       <div className="stat-grid">
-        {[
-          { label: 'Total Submitted', value: 4, accent: 'var(--navy-700)', trend: <><span className="up">↑ 1</span> in the last 30 days</> },
-          { label: 'Under Review', value: 1, accent: 'var(--amber-700)', trend: '2 of 3 reviewers responded' },
-          { label: 'Published', value: 2, accent: 'var(--teal-700)', trend: <>Latest: <span style={{ color: 'var(--navy-900)', fontWeight: 600 }}>NLP Survey 2025</span></> },
-          { label: 'Revision Required', value: 1, accent: 'var(--purple-700)', trend: <Link to="/author/revision" style={{ color: 'var(--navy-700)', fontWeight: 600 }}>Resubmit now →</Link> },
-        ].map((s, i) => (
+        {stats.map((s, i) => (
           <div className={`stat fade-up delay-${i + 1}`} key={s.label} style={{ '--accent': s.accent }}>
             <div className="stat-label">{s.label}</div>
-            <div className="stat-value">{s.value}</div>
-            <div className="stat-trend">{s.trend}</div>
+            <div className="stat-value">{loading ? '—' : s.value}</div>
+            <div className="stat-trend">{loading ? '' : s.trend}</div>
           </div>
         ))}
       </div>
@@ -61,77 +158,85 @@ export default function AuthorDashboard() {
               <div className="card-meta">Track every paper you've sent to PaperBridge.</div>
             </div>
             <div className="row">
-              <button className="filter-chip active">All <span style={{ opacity: .6 }}>4</span></button>
-              <button className="filter-chip">Active <span style={{ opacity: .6 }}>2</span></button>
-              <button className="filter-chip">Published <span style={{ opacity: .6 }}>2</span></button>
+              <button className={`filter-chip ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
+                All <span style={{ opacity: .6 }}>{manuscripts.length}</span>
+              </button>
+              <button className={`filter-chip ${filter === 'active' ? 'active' : ''}`} onClick={() => setFilter('active')}>
+                Active <span style={{ opacity: .6 }}>{activeCount}</span>
+              </button>
+              <button className={`filter-chip ${filter === 'accepted' ? 'active' : ''}`} onClick={() => setFilter('accepted')}>
+                Accepted <span style={{ opacity: .6 }}>{acceptedLikePapers.length}</span>
+              </button>
             </div>
           </div>
 
-          <table className="data-table">
-            <thead>
-              <tr><th>Paper</th><th>Category</th><th>Submitted</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div className="table-title">Deep Learning Methods in Medical Imaging</div>
-                  <div className="table-meta">3 reviewers · MS-2026-014</div>
-                </td>
-                <td><span className="muted">Computer Science</span></td>
-                <td><span className="muted">12 Jan 2026</span></td>
-                <td><span className="pill pill-review">In Review</span></td>
-                <td><Link to="/author/papers" style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</Link></td>
-              </tr>
-              <tr>
-                <td>
-                  <div className="table-title">A Survey of Natural Language Processing in 2025</div>
-                  <div className="table-meta">3 reviewers · MS-2025-208</div>
-                </td>
-                <td><span className="muted">Linguistics</span></td>
-                <td><span className="muted">04 Nov 2025</span></td>
-                <td><span className="pill pill-approved">Approved</span></td>
-                <td><Link to="/author/papers" style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</Link></td>
-              </tr>
-              <tr>
-                <td>
-                  <div className="table-title">A Framework for IoT Security in Smart Cities</div>
-                  <div className="table-meta">3 reviewers · MS-2025-187</div>
-                </td>
-                <td><span className="muted">Engineering</span></td>
-                <td><span className="muted">22 Oct 2025</span></td>
-                <td><span className="pill pill-revision">Revision Needed</span></td>
-                <td><Link to="/author/revision" style={{ color: 'var(--amber-700)', fontWeight: 600, fontSize: 13 }}>Resubmit →</Link></td>
-              </tr>
-              <tr>
-                <td>
-                  <div className="table-title">Blockchain Applications in Finance</div>
-                  <div className="table-meta">3 reviewers · MS-2025-142</div>
-                </td>
-                <td><span className="muted">Finance</span></td>
-                <td><span className="muted">18 Aug 2025</span></td>
-                <td><span className="pill pill-approved">Approved</span></td>
-                <td><Link to="/author/papers" style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</Link></td>
-              </tr>
-            </tbody>
-          </table>
+          {loading && <div className="card-meta" style={{ padding: 20 }}>Loading your papers…</div>}
+          {!loading && loadError && (
+            <div className="card-meta" style={{ padding: 20, color: 'var(--red-800)' }}>{loadError}</div>
+          )}
+          {!loading && !loadError && previewPapers.length === 0 && (
+            <div className="card-meta" style={{ padding: 20 }}>No submissions yet.</div>
+          )}
+
+          {!loading && !loadError && previewPapers.length > 0 && (
+            <>
+              <table className="data-table">
+                <thead>
+                  <tr><th>Paper</th><th>Category</th><th>Submitted</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {previewPapers.map(p => (
+                    <tr key={p.id}>
+                      <td>
+                        <div className="table-title">{p.title}</div>
+                        <div className="table-meta">{p.article_type || p.category}</div>
+                      </td>
+                      <td><span className="muted">{p.category}</span></td>
+                      <td><span className="muted">{formatDate(p.submitted_at)}</span></td>
+                      <td><span className={`pill ${statusPillClass(p.status)}`}>{statusLabel(p.status)}</span></td>
+                      <td>
+                        {p.status === 'revisions_requested' ? (
+                          <Link to={`/author/papers/${p.id}/revision`} style={{ color: 'var(--amber-700)', fontWeight: 600, fontSize: 13 }}>Resubmit →</Link>
+                        ) : (
+                          <Link to={`/author/papers/${p.id}`} style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</Link>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredPapers.length > previewPapers.length && (
+                <div className="card-meta" style={{ padding: '12px 4px 0' }}>
+                  Showing {previewPapers.length} of {filteredPapers.length}.{' '}
+                  <Link to="/author/papers" style={{ color: 'var(--navy-700)', fontWeight: 600 }}>View all in My Papers →</Link>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="gap-grid">
           <div className="card fade-up delay-4">
-            <div className="card-header"><div className="card-title">Recent Activity</div></div>
-            {[
-              { color: '', text: <><strong>Dr. Lim Wei Ping</strong> was assigned to review your paper "Deep Learning Methods in Medical Imaging".</>, time: '2 hours ago' },
-              { color: 'amber', text: <>Revision requested for <strong>"IoT Security Framework"</strong>. Please address reviewer comments.</>, time: 'Yesterday at 4:32 PM' },
-              { color: 'teal', text: <><strong>"NLP Survey 2025"</strong> was approved for publication by all three reviewers.</>, time: '3 days ago' },
-              { color: 'purple', text: 'New paper draft saved automatically.', time: '5 days ago' },
-            ].map((a, i) => (
-              <div className="activity-item" key={i}>
-                <div className={`activity-dot ${a.color}`}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <div className="card-header">
+              <div>
+                <div className="card-title">Recent Activity</div>
+              </div>
+              <Link to="/author/notifications" style={{ color: 'var(--navy-700)', fontSize: 13, fontWeight: 600 }}>
+                View all →
+              </Link>
+            </div>
+            {notifLoading && <div className="card-meta" style={{ padding: '12px 0' }}>Loading…</div>}
+            {!notifLoading && notifications.length === 0 && (
+              <div className="card-meta" style={{ padding: '12px 0' }}>No notifications yet.</div>
+            )}
+            {!notifLoading && notifications.slice(0, 4).map((n) => (
+              <div className="activity-item" key={n.id}>
+                <div className="activity-dot">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
                 </div>
                 <div>
-                  <div className="activity-text">{a.text}</div>
-                  <div className="activity-time">{a.time}</div>
+                  <div className="activity-text"><strong>{n.title}</strong>{n.body ? ` — ${n.body}` : ''}</div>
+                  <div className="activity-time">{formatDateTime(n.created_at)}</div>
                 </div>
               </div>
             ))}
@@ -139,22 +244,22 @@ export default function AuthorDashboard() {
 
           <div className="card fade-up delay-5">
             <div className="card-header"><div className="card-title">Submission Health</div></div>
-            {[
-              { label: 'Acceptance rate', value: '75%', width: 75, color: 'var(--teal-500)', valColor: 'var(--teal-700)' },
-              { label: 'Avg. review time', value: '12 days', width: 60, color: 'var(--navy-700)', valColor: 'var(--navy-900)' },
-              { label: 'First-round acceptance', value: '50%', width: 50, color: 'var(--amber-500)', valColor: 'var(--amber-700)' },
-            ].map((m) => (
-              <div key={m.label} style={{ marginBottom: 18 }}>
+            {loading ? (
+              <div className="card-meta" style={{ padding: '12px 0' }}>Loading…</div>
+            ) : acceptanceRatePct == null ? (
+              <div className="card-meta" style={{ padding: '12px 0' }}>No decisions yet.</div>
+            ) : (
+              <div>
                 <div className="row" style={{ marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, color: 'var(--ink-700)', fontWeight: 500 }}>{m.label}</span>
+                  <span style={{ fontSize: 13, color: 'var(--ink-700)', fontWeight: 500 }}>Acceptance rate</span>
                   <span className="spacer"></span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: m.valColor }}>{m.value}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--teal-700)' }}>{acceptanceRatePct}%</span>
                 </div>
-                <div className="progress" style={{ '--accent': m.color }}>
-                  <div className="progress-fill" style={{ width: `${m.width}%` }}></div>
+                <div className="progress" style={{ '--accent': 'var(--teal-500)' }}>
+                  <div className="progress-fill" style={{ width: `${acceptanceRatePct}%` }}></div>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
