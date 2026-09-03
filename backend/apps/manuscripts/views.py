@@ -10,7 +10,18 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+
 from apps.notifications.models import Notification
+from apps.reviews.matching import compute_conflict, rank_candidates
+from apps.reviews.models import ReviewAssignment
+from apps.reviews.notifications import (
+    REVIEW_INVITE_BODY, REVIEW_INVITE_TITLE, REVIEW_REMINDER_BODY, REVIEW_REMINDER_TITLE,
+    REVIEW_EXTENSION_GRANTED_BODY, REVIEW_EXTENSION_GRANTED_TITLE, REVIEW_EXTENSION_REFUSED_BODY,
+    REVIEW_EXTENSION_REFUSED_TITLE,
+)
+from apps.reviews.serializers import InviteReviewersSerializer, ManuscriptAssignmentSerializer
 
 from .models import Decision, Manuscript, PlagiarismCheck, ScreeningAction
 from .notifications import (
@@ -339,3 +350,155 @@ class ManuscriptScreeningView(APIView):
             )
 
         return Response(ScreeningActionSerializer(screening).data, status=status.HTTP_201_CREATED)
+
+
+class ManuscriptReviewerCandidatesView(APIView):
+    """
+    GET /api/manuscripts/<int:pk>/reviewer-candidates/ → every active
+    reviewer, ranked by specialty-tag overlap. Editor/admin only.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsEditorOrAdmin]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        return Response(rank_candidates(manuscript))
+
+
+class ManuscriptAssignmentListCreateView(APIView):
+    """
+    GET  /api/manuscripts/<int:pk>/assignments/ → who is currently invited to
+    or reviewing this manuscript. Editor/admin only.
+    POST /api/manuscripts/<int:pk>/assignments/ → invite reviewers. Editor
+    only — unlike a decision, an admin must not be able to do this by hand.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        if not is_editor_or_admin(request.user):
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        rows = manuscript.review_assignments.select_related('reviewer').all()
+        return Response(ManuscriptAssignmentSerializer(rows, many=True).data)
+
+    def post(self, request, pk):
+        if not is_editor(request.user):
+            return Response(
+                {'detail': 'You do not have permission to invite reviewers.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+
+        serializer = InviteReviewersSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        reviewer_ids = data['reviewer_ids']
+
+        already_assigned = set(
+            manuscript.review_assignments.filter(reviewer_id__in=reviewer_ids).values_list('reviewer_id', flat=True)
+        )
+        if already_assigned:
+            return Response(
+                {'detail': 'One or more of these reviewers is already assigned to this manuscript.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        User = get_user_model()
+        reviewers = list(User.objects.filter(pk__in=reviewer_ids).select_related('profile'))
+        if not data['force']:
+            conflicted = [u for u in reviewers if compute_conflict(manuscript, u)]
+            if conflicted:
+                return Response(
+                    {'detail': 'One or more reviewers have a recorded conflict and were not force-overridden.'},
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+
+        respond_by = timezone.now() + timezone.timedelta(days=data['respond_by_days'])
+        created = []
+        with transaction.atomic():
+            for reviewer in reviewers:
+                assignment = ReviewAssignment.objects.create(
+                    manuscript=manuscript,
+                    reviewer=reviewer,
+                    invited_by=request.user,
+                    respond_by=respond_by,
+                    due_days=data['due_days'],
+                )
+                created.append(assignment)
+                Notification.objects.create(
+                    recipient=reviewer,
+                    category=Notification.Category.REVIEW_INVITE,
+                    title=REVIEW_INVITE_TITLE,
+                    body=REVIEW_INVITE_BODY.format(
+                        title=manuscript.title, respond_by=respond_by.strftime('%d %b %Y'),
+                    ),
+                    manuscript=manuscript,
+                )
+
+        return Response(ManuscriptAssignmentSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
+
+
+class ManuscriptAssignmentRemindView(APIView):
+    """
+    POST /api/manuscripts/<int:pk>/assignments/<assignment_id>/remind/
+    Editor-only. 409 if reminded within the last 24h.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk, assignment_id):
+        if not is_editor(request.user):
+            return Response({'detail': 'You do not have permission to send reminders.'}, status=status.HTTP_403_FORBIDDEN)
+        assignment = get_object_or_404(ReviewAssignment, pk=assignment_id, manuscript_id=pk)
+
+        if assignment.reminded_at and timezone.now() - assignment.reminded_at < timezone.timedelta(hours=24):
+            return Response(
+                {'detail': 'A reminder was already sent within the last 24 hours.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        assignment.reminded_at = timezone.now()
+        assignment.save(update_fields=['reminded_at'])
+        Notification.objects.create(
+            recipient=assignment.reviewer,
+            category=Notification.Category.REVIEW_INVITE,
+            title=REVIEW_REMINDER_TITLE,
+            body=REVIEW_REMINDER_BODY.format(title=assignment.manuscript.title),
+            manuscript=assignment.manuscript,
+        )
+        return Response({'reminded_at': assignment.reminded_at})
+
+
+class ManuscriptAssignmentExtensionDecideView(APIView):
+    """
+    PATCH /api/manuscripts/<int:pk>/assignments/<assignment_id>/extension/
+    body {status: 'granted'|'refused'}. Editor-only.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk, assignment_id):
+        if not is_editor(request.user):
+            return Response({'detail': 'You do not have permission to decide on an extension.'}, status=status.HTTP_403_FORBIDDEN)
+        assignment = get_object_or_404(ReviewAssignment, pk=assignment_id, manuscript_id=pk)
+
+        if assignment.extension_status != ReviewAssignment.ExtensionStatus.PENDING:
+            return Response({'detail': 'No pending extension request.'}, status=status.HTTP_404_NOT_FOUND)
+
+        new_status = request.data.get('status')
+        if new_status not in (ReviewAssignment.ExtensionStatus.GRANTED, ReviewAssignment.ExtensionStatus.REFUSED):
+            return Response({'detail': "status must be 'granted' or 'refused'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            assignment.extension_status = new_status
+            if new_status == ReviewAssignment.ExtensionStatus.GRANTED and assignment.due_at:
+                assignment.due_at = assignment.due_at + timezone.timedelta(days=assignment.extension_requested_days)
+            assignment.save()
+            Notification.objects.create(
+                recipient=assignment.reviewer,
+                category=Notification.Category.REVIEW_EXTENSION,
+                title=REVIEW_EXTENSION_GRANTED_TITLE if new_status == ReviewAssignment.ExtensionStatus.GRANTED else REVIEW_EXTENSION_REFUSED_TITLE,
+                body=(REVIEW_EXTENSION_GRANTED_BODY if new_status == ReviewAssignment.ExtensionStatus.GRANTED else REVIEW_EXTENSION_REFUSED_BODY).format(
+                    title=assignment.manuscript.title,
+                ),
+                manuscript=assignment.manuscript,
+            )
+
+        return Response(ManuscriptAssignmentSerializer(assignment).data)

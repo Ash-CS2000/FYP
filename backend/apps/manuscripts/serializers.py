@@ -3,6 +3,8 @@ import json
 from django.db import transaction
 from rest_framework import serializers
 
+from apps.users.taxonomy import SPECIALTY_TAG_SLUGS
+
 from . import storage
 from .models import (
     Decision, Manuscript, ManuscriptAffiliation, ManuscriptAuthor, ManuscriptRevision,
@@ -58,7 +60,7 @@ class ManuscriptSerializer(serializers.ModelSerializer):
         model = Manuscript
         fields = (
             'id', 'article_type', 'title', 'running_title', 'abstract', 'category', 'sub_category',
-            'keywords', 'file_name', 'file_size', 'file_url', 'cover_letter',
+            'keywords', 'specialty_tags', 'file_name', 'file_size', 'file_url', 'cover_letter',
             'no_funding', 'funder', 'grant_no', 'no_competing', 'competing',
             'ethics_na', 'ethics', 'data_statement', 'status', 'submitted_at', 'updated_at',
             'authors', 'supplementary_files',
@@ -189,6 +191,7 @@ class ManuscriptSubmitSerializer(serializers.Serializer):
     category = serializers.CharField(required=False, allow_blank=True, max_length=255)
     sub_category = serializers.CharField(required=False, allow_blank=True, max_length=255)
     keywords = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    specialty_tags = serializers.CharField(required=False, allow_blank=True, default='[]')
 
     authors = serializers.CharField(write_only=True)
 
@@ -232,6 +235,18 @@ class ManuscriptSubmitSerializer(serializers.Serializer):
 
     def validate_manuscript(self, value):
         return validate_pdf_file(value)
+
+    def validate_specialty_tags(self, value):
+        try:
+            parsed = json.loads(value) if value else []
+        except (TypeError, ValueError):
+            raise serializers.ValidationError('specialty_tags must be valid JSON.')
+        if not isinstance(parsed, list):
+            raise serializers.ValidationError('specialty_tags must be a list.')
+        unknown = sorted(set(parsed) - SPECIALTY_TAG_SLUGS)
+        if unknown:
+            raise serializers.ValidationError(f'Unknown specialty tag(s): {", ".join(unknown)}')
+        return parsed
 
     # ── Create ───────────────────────────────────────────────────────────────
 

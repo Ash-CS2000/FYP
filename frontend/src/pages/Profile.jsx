@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
+import TagPicker from '../components/TagPicker.jsx';
 import { SIDEBAR_CONFIG } from '../data/sidebarConfig.jsx';
 import { getStoredUser, getInitials } from '../utils/user.js';
 import { API_URL } from '../config';
 import { authFetch } from '../api/auth';
+import { updateProfile } from '../api/users.js';
 
 // A reviewer's availability is theirs to set, and the editor's assignment panel
 // reads it — an "unavailable" reviewer cannot be selected there at all, and a
@@ -21,16 +23,25 @@ const AVAILABILITY_OPTIONS = [
   { id: 'unavailable', label: 'Unavailable', blurb: 'Do not invite me at all for now.' },
 ];
 
+// Local field name -> real backend field name, for the subset of this card
+// that has a real column behind it today. `unavailable_until`/`max_concurrent`/
+// `credentials` don't yet — those stay localStorage-only until a real reviewer
+// capacity/credentials model exists.
+const REAL_PROFILE_FIELDS = { availability: 'availability_status', specialty_tags: 'specialty_tags' };
+
 function ReviewerProfileCard({ storedUser }) {
-  const [availability, setAvailability] = useState(storedUser?.availability || 'available');
+  const [availability, setAvailability] = useState(storedUser?.availability_status || storedUser?.availability || 'available');
   const [until, setUntil] = useState(storedUser?.unavailable_until || '');
   const [maxConcurrent, setMaxConcurrent] = useState(storedUser?.max_concurrent ?? 3);
   const [credentials, setCredentials] = useState(storedUser?.credentials || '');
+  const [specialtyTags, setSpecialtyTags] = useState(storedUser?.specialty_tags || []);
   const [saved, setSaved] = useState(false);
 
   // Persisted onto the stored user so the rest of the app reads it back the same
-  // way it reads roles and reviewer_status. The PATCH above replaces this.
-  const persist = (patch) => {
+  // way it reads roles and reviewer_status. Fields with a real backend column
+  // (availability, specialty_tags) also PATCH /api/users/me/ for real —
+  // best-effort, the local copy still applies immediately either way.
+  const persist = async (patch) => {
     const next = { ...storedUser, ...patch };
     try {
       localStorage.setItem('user', JSON.stringify(next));
@@ -38,6 +49,18 @@ function ReviewerProfileCard({ storedUser }) {
       /* storage unavailable — the field still applies for this session */
     }
     setSaved(true);
+
+    const realPatch = {};
+    for (const [local, real] of Object.entries(REAL_PROFILE_FIELDS)) {
+      if (local in patch) realPatch[real] = patch[local];
+    }
+    if (Object.keys(realPatch).length > 0) {
+      try {
+        await updateProfile(realPatch);
+      } catch {
+        /* offline or the field failed server-side validation — the local copy still applies */
+      }
+    }
   };
 
   return (
@@ -104,6 +127,17 @@ function ReviewerProfileCard({ storedUser }) {
       </div>
 
       <div className="field">
+        <label className="field-label">Specialty tags</label>
+        <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+          What drives manuscript matching. Keep this current as your interests change.
+        </div>
+        <TagPicker
+          value={specialtyTags}
+          onChange={(tags) => { setSpecialtyTags(tags); setSaved(false); persist({ specialty_tags: tags }); }}
+        />
+      </div>
+
+      <div className="field">
         <label className="field-label">Credentials</label>
         <textarea
           className="field-textarea"
@@ -134,6 +168,7 @@ export default function Profile({ role = 'author' }) {
   const [applyError, setApplyError]       = useState('');
   const [applySuccess, setApplySuccess]   = useState(false);
   const [expertiseInput, setExpertiseInput] = useState(storedUser?.expertise_areas || '');
+  const [applyTags, setApplyTags] = useState(storedUser?.specialty_tags || []);
 
   async function handleApplyReviewer(e) {
     e.preventDefault();
@@ -142,7 +177,7 @@ export default function Profile({ role = 'author' }) {
     try {
       const res = await authFetch(`${API_URL}/api/users/apply-reviewer/`, {
         method: 'POST',
-        body: JSON.stringify({ expertise_areas: expertiseInput }),
+        body: JSON.stringify({ expertise_areas: expertiseInput, specialty_tags: applyTags }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.detail || 'Failed to submit application.');
@@ -262,7 +297,14 @@ export default function Profile({ role = 'author' }) {
                 <label className="field-label">Expertise areas</label>
                 <input className="field-input" type="text" placeholder="e.g. Machine Learning, Biomedical Engineering"
                   value={expertiseInput} onChange={e => setExpertiseInput(e.target.value)} />
-                <div className="field-hint">Help us match you with relevant manuscripts.</div>
+                <div className="field-hint">A short description admins can read when they review your application.</div>
+              </div>
+              <div className="field">
+                <label className="field-label">Specialty tags</label>
+                <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+                  This is what actually drives manuscript matching.
+                </div>
+                <TagPicker value={applyTags} onChange={setApplyTags} />
               </div>
               {applyError && (
                 <div style={{ padding: '10px 14px', background: 'var(--red-50)', border: '1px solid #f5c6c6', borderRadius: 'var(--r-md)', fontSize: 13, color: 'var(--red-700)', marginBottom: 12 }}>{applyError}</div>

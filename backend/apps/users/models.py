@@ -25,6 +25,7 @@ class UserProfile(models.Model):
     research_areas = models.TextField(blank=True)
     expertise_areas = models.TextField(blank=True)
     availability_status = models.CharField(max_length=50, blank=True)
+    specialty_tags = models.JSONField(default=list, blank=True)
 
     # Registration-form fields (added by teammate, restored here)
     affiliation_type = models.CharField(max_length=20, blank=True)

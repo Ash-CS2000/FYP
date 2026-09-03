@@ -11,7 +11,7 @@ urlpatterns = [
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='refresh'),
     path('api/users/', include('apps.users.urls')),
     path('api/manuscripts/', include('apps.manuscripts.urls')),
-    path('api/reviews/', include('apps.reviews.urls')),
+    path('api/reviewer/', include('apps.reviews.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/analysis/', include('apps.analysis.urls')),
     path('api/publications/', include('apps.publications.urls')),

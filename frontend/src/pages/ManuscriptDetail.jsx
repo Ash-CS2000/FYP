@@ -35,7 +35,7 @@ import { getDecision, postDecision } from '../api/editorial.js';
 import { TERMINAL_STATUSES } from '../data/manuscriptStatus.js';
 import ReviewerPanel from '../components/ReviewerPanel.jsx';
 import DecisionHistory from '../components/DecisionHistory.jsx';
-import { assignmentsFor } from '../data/invitations.js';
+import { listManuscriptAssignments } from '../api/invitations.js';
 
 // The editor's own name goes on the letter, so the author sees who decided.
 function editorName() {
@@ -160,9 +160,11 @@ function IssueCard({ manuscriptId, decision, isAdmin }) {
 // `hasReviewers` counts INVITATIONS, not submitted reviews. Desk rejection means
 // "rejected without troubling a reviewer", so the moment anyone has been asked —
 // even if they have not replied — that description is no longer true and the
-// option has to go.
-function DecisionPanel({ manuscript, reviews, onDecided }) {
-  const hasReviewers = reviews.length > 0 || assignmentsFor(manuscript.id).length > 0;
+// option has to go. `assignmentCount` is fetched real by the parent (see
+// ManuscriptDetail below) rather than read from ReviewerPanel's local store,
+// so this gate reflects invitations sent by any editor, not just this tab.
+function DecisionPanel({ manuscript, reviews, assignmentCount, onDecided }) {
+  const hasReviewers = reviews.length > 0 || assignmentCount > 0;
   const options = availableDecisions({ hasReviews: hasReviewers });
   const [type, setType] = useState('');
   const [reasons, setReasons] = useState([]);
@@ -331,6 +333,19 @@ export default function ManuscriptDetail({ role = 'editor' }) {
   const reviews = reviewsFor(id);
   const submitted = reviews.filter(r => r.status === 'submitted');
   const [decision, setDecision] = useState(null);
+  const [assignmentCount, setAssignmentCount] = useState(0);
+
+  // Real, not ReviewerPanel's local store — the desk-reject gate below must
+  // reflect an invitation the moment it's sent, by any editor, not just what
+  // this tab optimistically wrote to localStorage.
+  useEffect(() => {
+    if (!manuscript) return;
+    let cancelled = false;
+    listManuscriptAssignments(manuscript.id)
+      .then(rows => { if (!cancelled) setAssignmentCount(rows.length); })
+      .catch(() => { /* left at 0 — worst case the gate is briefly too permissive */ });
+    return () => { cancelled = true; };
+  }, [manuscript?.id]);
 
   useEffect(() => {
     if (!manuscript) return;
@@ -510,6 +525,7 @@ export default function ManuscriptDetail({ role = 'editor' }) {
             <DecisionPanel
               manuscript={manuscript}
               reviews={reviews}
+              assignmentCount={assignmentCount}
               onDecided={handleDecided}
             />
           )}

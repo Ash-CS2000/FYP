@@ -1,9 +1,10 @@
 from django.urls import path
 
 from .views import (
+    ManuscriptAssignmentExtensionDecideView, ManuscriptAssignmentListCreateView, ManuscriptAssignmentRemindView,
     ManuscriptDecisionHistoryView, ManuscriptDecisionView, ManuscriptDetailView, ManuscriptEditorListView,
-    ManuscriptListView, ManuscriptRevisionView, ManuscriptScreeningView, ManuscriptUploadView,
-    PlagiarismCheckStatusView,
+    ManuscriptListView, ManuscriptRevisionView, ManuscriptReviewerCandidatesView, ManuscriptScreeningView,
+    ManuscriptUploadView, PlagiarismCheckStatusView,
 )
 
 urlpatterns = [
@@ -16,4 +17,8 @@ urlpatterns = [
     path('<int:pk>/decisions/', ManuscriptDecisionHistoryView.as_view(), name='manuscript-decision-history'),
     path('<int:pk>/revision/', ManuscriptRevisionView.as_view(), name='manuscript-revision'),
     path('<int:pk>/screening/', ManuscriptScreeningView.as_view(), name='manuscript-screening'),
+    path('<int:pk>/reviewer-candidates/', ManuscriptReviewerCandidatesView.as_view(), name='manuscript-reviewer-candidates'),
+    path('<int:pk>/assignments/', ManuscriptAssignmentListCreateView.as_view(), name='manuscript-assignment-list-create'),
+    path('<int:pk>/assignments/<int:assignment_id>/remind/', ManuscriptAssignmentRemindView.as_view(), name='manuscript-assignment-remind'),
+    path('<int:pk>/assignments/<int:assignment_id>/extension/', ManuscriptAssignmentExtensionDecideView.as_view(), name='manuscript-assignment-extension-decide'),
 ]

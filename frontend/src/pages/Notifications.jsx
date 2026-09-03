@@ -4,6 +4,10 @@ import { useNotifications } from '../hooks/useNotifications.js';
 const CATEGORY_ICONS = {
   decision: '⚖️',
   revision_submitted: '📝',
+  screening: '🔍',
+  review_invite: '✉️',
+  review_response: '👤',
+  review_extension: '⏳',
 };
 
 function formatDateTime(iso) {

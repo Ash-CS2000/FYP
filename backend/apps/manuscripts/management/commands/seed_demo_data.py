@@ -371,6 +371,34 @@ MANUSCRIPTS = [
     ),
 ]
 
+# Specialty tags per title, kept in sync by hand with MANUSCRIPT_TAGS in
+# seed_demo_reviewers.py (that command backfills these onto rows already in
+# the DB; this dict is what a *fresh* full reseed gets instead). Two titles
+# are deliberately absent — no clean specialty-tag fit, left to demonstrate
+# the free-text matching fallback from the manuscript side.
+SPECIALTY_TAGS_BY_TITLE = {
+    'Field-Realistic Evaluation of Low-Power Sensor Fusion Algorithms': ['signal-processing', 'robotics'],
+    'Revisiting Sensor Fusion Baselines Under Field Conditions': ['signal-processing', 'robotics'],
+    'A Winnowing-Based Approach to Cross-Lingual Plagiarism Detection': ['nlp', 'cybersecurity', 'data-mining'],
+    'Thermal Stability of Perovskite Solar Cells Under Cyclic Humidity Stress': ['materials-science', 'condensed-matter'],
+    'Fjord Bathymetry Estimation from Sparse Sonar Transects Using Gaussian Processes': ['climate-science', 'applied-mathematics', 'statistics'],
+    'Attention Bottlenecks in Long-Document Transformers: A Diagnostic Study': ['nlp', 'deep-learning', 'machine-learning'],
+    'Heat-Tolerant Wheat Cultivars: A Multi-Site Field Trial Across the Arabian Peninsula': ['agriculture', 'sustainability'],
+    'Explaining Reviewer Disagreement in Peer Review Using Topic-Level Confidence': ['data-mining', 'machine-learning'],
+    'Post-Apartheid Spatial Segregation and Access to Primary Healthcare in Cape Town': ['public-health', 'health-informatics'],
+    'Code-Switching Detection in Low-Resource Malay-English Social Media Text': ['computational-linguistics', 'nlp'],
+    'Byzantine Fault Tolerance Overhead in Permissioned Blockchain Consensus at Scale': ['distributed-systems', 'cybersecurity', 'blockchain-business'],
+    'Azulejo Motif Classification Using Convolutional Neural Networks for Heritage Digitization': ['computer-vision', 'machine-learning'],
+    'Energy-Aware Task Scheduling for Heterogeneous Edge Computing Clusters': ['distributed-systems', 'software-engineering'],
+    'Microplastic Accumulation Gradients in Great Barrier Reef Sediment Cores': ['climate-science', 'sustainability'],
+    'Transfer Learning from Protein Language Models to Enzyme Thermostability Prediction': ['machine-learning', 'biomedical-engineering'],
+    'Informal Settlement Growth Detection from Satellite Imagery Using Change-Point Segmentation': ['computer-vision', 'climate-science'],
+    'Consumer Trust Recovery Strategies Following Data Breach Disclosure: A Field Experiment': ['marketing', 'cybersecurity'],
+    'Anxiety Symptom Trajectories in First-Generation University Students: A Longitudinal Cohort Study': ['psychology', 'education'],
+}
+for _spec in MANUSCRIPTS:
+    _spec['specialty_tags'] = SPECIALTY_TAGS_BY_TITLE.get(_spec['title'], [])
+
 STORY_HOURS_AGO_BY_STATUS = {
     'submitted': (0, 4),
     'under_review': (6, 12),
@@ -490,6 +518,7 @@ class Command(BaseCommand):
                     title=spec['title'],
                     abstract=spec['abstract'] + ' ' + ' '.join(spec['body']),
                     category=spec['category'],
+                    specialty_tags=spec.get('specialty_tags', []),
                     file_key=key,
                     file_name=pdf_name,
                     file_size=len(pdf_bytes),

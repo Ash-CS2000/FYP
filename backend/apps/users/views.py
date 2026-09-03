@@ -21,6 +21,7 @@ from apps.notifications.models import Notification
 from . import orcid_service
 from .emails import send_editor_invite_email, send_editor_role_added_email
 from .permissions import IsAdmin, is_admin
+from .taxonomy import SPECIALTY_TAG_SLUGS
 from .serializers import (
     AdminUserListSerializer,
     EmailTokenObtainPairSerializer,
@@ -179,7 +180,14 @@ class ApplyReviewerView(APIView):
     throttle_classes = [UserRateThrottle]
 
     def post(self, request):
-        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        # Reuse request.user.profile (creating it if missing) rather than a
+        # separate get_or_create() query — see the same fix/comment in
+        # RegisterSerializer.create() for why a separately-fetched object can
+        # leave a stale cached profile behind for the response serializer.
+        try:
+            profile = request.user.profile
+        except UserProfile.DoesNotExist:
+            profile = UserProfile.objects.create(user=request.user)
 
         existing_role = UserRole.objects.filter(user=request.user, role=UserProfile.Role.REVIEWER).first()
         if existing_role and existing_role.status == UserRole.Status.ACTIVE:
@@ -197,6 +205,17 @@ class ApplyReviewerView(APIView):
         if expertise:
             profile.expertise_areas = expertise
             profile.save(update_fields=['expertise_areas'])
+
+        tags = request.data.get('specialty_tags')
+        if tags is not None:
+            unknown = sorted(set(tags) - SPECIALTY_TAG_SLUGS)
+            if unknown:
+                return Response(
+                    {'detail': f'Unknown specialty tag(s): {", ".join(unknown)}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            profile.specialty_tags = tags
+            profile.save(update_fields=['specialty_tags'])
 
         UserRole.objects.update_or_create(
             user=request.user, role=UserProfile.Role.REVIEWER,

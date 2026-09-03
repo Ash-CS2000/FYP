@@ -1,12 +1,15 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { getStoredUser, getFirstName } from '../utils/user.js';
 import {
-  myAssignments,
   ASSIGNMENT_STATUS_LABELS,
   ASSIGNMENT_TONE,
   deadlineState,
 } from '../data/invitations.js';
+import { listAssignments } from '../api/invitations.js';
+import { getMe } from '../api/users.js';
+import { SPECIALTY_TAG_LABELS } from '../data/specialtyTags.js';
 
 // Double-blind: a reviewer must never see who wrote the manuscript they are
 // assessing. The column stays so the masking is visible rather than silently
@@ -25,9 +28,20 @@ function AnonymousAuthor() {
 export default function ReviewerDashboard() {
   const firstName = getFirstName(getStoredUser()) || 'Reviewer';
 
-  // Live counts off the same store the assignments page writes to, so accepting
-  // or declining is reflected here rather than drifting from hardcoded numbers.
-  const assignments = myAssignments();
+  const [assignments, setAssignments] = useState([]);
+  const [specialtyTags, setSpecialtyTags] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listAssignments()
+      .then((data) => { if (!cancelled) setAssignments(data); })
+      .catch(() => { /* left empty — the dashboard still renders with zero counts */ });
+    getMe()
+      .then((me) => { if (!cancelled) setSpecialtyTags(me.specialty_tags || []); })
+      .catch(() => { /* left empty */ });
+    return () => { cancelled = true; };
+  }, []);
+
   const invited = assignments.filter(a => a.status === 'invited');
   const accepted = assignments.filter(a => a.status === 'accepted');
   const overdue = accepted.filter(a => deadlineState(a.due_at).tone === 'overdue');
@@ -158,10 +172,20 @@ export default function ReviewerDashboard() {
         </div>
 
         <div className="card">
-          <div className="card-header"><div className="card-title">Your Expertise Areas</div></div>
+          <div className="card-header">
+            <div className="card-title">Your Expertise Areas</div>
+            <Link to="/reviewer/profile" style={{ color: 'var(--navy-700)', fontSize: 13, fontWeight: 600 }}>Edit →</Link>
+          </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-            {['Computer Science', 'Machine Learning', 'Medical Imaging', 'Cryptography', '+ 4 more'].map(t => (
-              <span key={t} style={{ padding: '6px 12px', background: 'var(--navy-100)', color: 'var(--navy-800)', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 500 }}>{t}</span>
+            {specialtyTags.length === 0 && (
+              <span className="muted" style={{ fontSize: 13 }}>
+                No specialty tags set yet — add some so manuscripts can be matched to you.
+              </span>
+            )}
+            {specialtyTags.map(slug => (
+              <span key={slug} style={{ padding: '6px 12px', background: 'var(--navy-100)', color: 'var(--navy-800)', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 500 }}>
+                {SPECIALTY_TAG_LABELS[slug] || slug}
+              </span>
             ))}
           </div>
           <div style={{ paddingTop: 16, borderTop: '1px solid var(--ink-200)' }}>

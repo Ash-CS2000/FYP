@@ -7,6 +7,9 @@ class Notification(models.Model):
         DECISION = 'decision', 'Decision'
         REVISION_SUBMITTED = 'revision_submitted', 'Revision Submitted'
         SCREENING = 'screening', 'Screening'
+        REVIEW_INVITE = 'review_invite', 'Review Invitation'
+        REVIEW_RESPONSE = 'review_response', 'Review Response'
+        REVIEW_EXTENSION = 'review_extension', 'Review Extension'
         ROLE = 'role', 'Role change'
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')

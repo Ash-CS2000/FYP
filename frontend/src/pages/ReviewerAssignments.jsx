@@ -12,11 +12,10 @@
 // No manuscript file, no author, and nothing at all about the other reviewers.
 // See api/invitations.js for the contract the backend must hold up.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import {
-  myAssignments,
   saveResponse,
   DECLINE_REASONS,
   ASSIGNMENT_STATUS_LABELS,
@@ -27,6 +26,7 @@ import {
 import {
   acceptAssignment,
   declineAssignment,
+  listAssignments,
   recuseAssignment,
   requestExtension,
 } from '../api/invitations.js';
@@ -75,7 +75,7 @@ function AcceptPanel({ assignment, onDone, onCancel }) {
     setError('');
     // due_at is the server's to set. Offline, fall back to the invitation's own
     // due_at rather than inventing one.
-    const patch = {
+    let patch = {
       status: 'accepted',
       coi_declared: coi,
       coi_note: note.trim(),
@@ -83,13 +83,14 @@ function AcceptPanel({ assignment, onDone, onCancel }) {
       responded_at: new Date().toISOString(),
     };
     try {
-      await acceptAssignment(assignment.id, { coi_declared: coi, coi_note: note.trim() });
+      const updated = await acceptAssignment(assignment.id, { coi_declared: coi, coi_note: note.trim() });
+      patch = { ...patch, ...updated };
     } catch {
       patch.local_only = true;
     }
     saveResponse(assignment.id, patch);
     setSaving(false);
-    onDone();
+    onDone(patch);
   };
 
   return (
@@ -149,20 +150,21 @@ function DeclinePanel({ assignment, onDone, onCancel }) {
     }
     setSaving(true);
     setError('');
-    const patch = {
+    let patch = {
       status: 'declined',
       decline_reason: reason,
       decline_note: note.trim(),
       responded_at: new Date().toISOString(),
     };
     try {
-      await declineAssignment(assignment.id, { reason, note: note.trim() });
+      const updated = await declineAssignment(assignment.id, { reason, note: note.trim() });
+      patch = { ...patch, ...updated };
     } catch {
       patch.local_only = true;
     }
     saveResponse(assignment.id, patch);
     setSaving(false);
-    onDone();
+    onDone(patch);
   };
 
   return (
@@ -222,7 +224,7 @@ function RecusePanel({ assignment, onDone, onCancel }) {
     }
     setSaving(true);
     setError('');
-    const patch = {
+    let patch = {
       status: 'declined',
       decline_reason: 'conflict',
       decline_note: note.trim(),
@@ -230,13 +232,14 @@ function RecusePanel({ assignment, onDone, onCancel }) {
       responded_at: new Date().toISOString(),
     };
     try {
-      await recuseAssignment(assignment.id, { note: note.trim() });
+      const updated = await recuseAssignment(assignment.id, { note: note.trim() });
+      patch = { ...patch, ...updated, recused: true };
     } catch {
       patch.local_only = true;
     }
     saveResponse(assignment.id, patch);
     setSaving(false);
-    onDone();
+    onDone(patch);
   };
 
   return (
@@ -283,17 +286,18 @@ function ExtensionPanel({ assignment, onDone, onCancel }) {
     }
     setSaving(true);
     setError('');
-    const patch = {
+    let patch = {
       extension: { requested_days: Number(days), reason: reason.trim(), status: 'pending' },
     };
     try {
-      await requestExtension(assignment.id, { days: Number(days), reason: reason.trim() });
+      const updated = await requestExtension(assignment.id, { days: Number(days), reason: reason.trim() });
+      patch = { ...patch, ...updated };
     } catch {
       patch.local_only = true;
     }
     saveResponse(assignment.id, patch);
     setSaving(false);
-    onDone();
+    onDone(patch);
   };
 
   return (
@@ -337,7 +341,7 @@ function AssignmentCard({ assignment, onChanged }) {
   const [panel, setPanel] = useState('');
   const tone = ASSIGNMENT_TONE[assignment.status];
   const close = () => setPanel('');
-  const done = () => { setPanel(''); onChanged(); };
+  const done = (patch) => { setPanel(''); onChanged(patch); };
 
   const declineReasonLabel = DECLINE_REASONS.find(r => r.id === assignment.decline_reason)?.label;
 
@@ -460,9 +464,25 @@ function AssignmentCard({ assignment, onChanged }) {
 
 export default function ReviewerAssignments({ initialFilter = 'all' }) {
   const [filter, setFilter] = useState(initialFilter);
-  // Bumped after every response so the list re-reads the local store.
-  const [version, setVersion] = useState(0);
-  const assignments = myAssignments();
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    listAssignments()
+      .then((data) => { if (!cancelled) setAssignments(data); })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load your assignments.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // A panel's onDone hands back the patch (real server response merged with
+  // any local fields) for the one row it acted on — merge it in place rather
+  // than refetching the whole list.
+  const handleChanged = (id, patch) => {
+    setAssignments(prev => prev.map(a => (a.id === id ? { ...a, ...patch } : a)));
+  };
 
   const matcher = id => (FILTERS.find(f => f.id === id) || FILTERS[0]).match;
   const counts = id => assignments.filter(matcher(id)).length;
@@ -531,14 +551,19 @@ export default function ReviewerAssignments({ initialFilter = 'all' }) {
       </div>
 
       <div className="fade-up delay-2">
-        {visible.length === 0 ? (
+        {loading && <div className="card"><div className="asg-empty">Loading…</div></div>}
+        {!loading && loadError && (
+          <div className="card"><div className="asg-empty" style={{ color: 'var(--red-800)' }}>{loadError}</div></div>
+        )}
+        {!loading && !loadError && visible.length === 0 && (
           <div className="card"><div className="asg-empty">Nothing here right now.</div></div>
-        ) : (
+        )}
+        {!loading && !loadError && visible.length > 0 && (
           visible.map(a => (
             <AssignmentCard
-              key={`${a.id}-${version}`}
+              key={a.id}
               assignment={a}
-              onChanged={() => setVersion(v => v + 1)}
+              onChanged={(patch) => handleChanged(a.id, patch)}
             />
           ))
         )}
