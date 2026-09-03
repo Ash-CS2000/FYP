@@ -110,6 +110,22 @@ export function postDecision(manuscriptId, { type, letter, reasons = [] }) {
 }
 
 /**
+ * The screening outcome on one manuscript, if one has been recorded.
+ *
+ *   GET /api/manuscripts/:id/screening/
+ *   200   { manuscript_id, action, note, acted_at, acted_by }
+ *   403   caller is not an editor or admin
+ *   404   no screening outcome yet — NOT an error, the normal state for a
+ *         paper that hasn't been flagged or hasn't been screened yet
+ *
+ * Readable by the editor and an admin (oversight). Unlike postScreeningAction,
+ * this is not editor-only — reading the outcome is not editorial judgement.
+ */
+export function getScreeningAction(manuscriptId) {
+  return request(`/api/manuscripts/${encodeURIComponent(manuscriptId)}/screening/`);
+}
+
+/**
  * Act on a flagged similarity report.
  *
  *   POST /api/manuscripts/:id/screening/

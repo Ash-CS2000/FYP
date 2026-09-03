@@ -140,6 +140,23 @@ class Decision(models.Model):
         return f'Decision(manuscript={self.manuscript_id}, type={self.type})'
 
 
+class ScreeningAction(models.Model):
+    class Action(models.TextChoices):
+        ALLOW = 'allow', 'Allow through'
+        RETURN = 'return', 'Return to author'
+
+    manuscript = models.OneToOneField(Manuscript, on_delete=models.CASCADE, related_name='screening_action')
+    action = models.CharField(max_length=20, choices=Action.choices)
+    note = models.TextField()
+    acted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='screening_actions',
+    )
+    acted_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'ScreeningAction(manuscript={self.manuscript_id}, action={self.action})'
+
+
 class ManuscriptRevision(models.Model):
     manuscript = models.ForeignKey(Manuscript, on_delete=models.CASCADE, related_name='revisions')
     round = models.PositiveSmallIntegerField()

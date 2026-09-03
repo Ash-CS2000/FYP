@@ -2,7 +2,8 @@ from django.urls import path
 
 from .views import (
     ManuscriptDecisionHistoryView, ManuscriptDecisionView, ManuscriptDetailView, ManuscriptEditorListView,
-    ManuscriptListView, ManuscriptRevisionView, ManuscriptUploadView, PlagiarismCheckStatusView,
+    ManuscriptListView, ManuscriptRevisionView, ManuscriptScreeningView, ManuscriptUploadView,
+    PlagiarismCheckStatusView,
 )
 
 urlpatterns = [
@@ -14,4 +15,5 @@ urlpatterns = [
     path('<int:pk>/decision/', ManuscriptDecisionView.as_view(), name='manuscript-decision'),
     path('<int:pk>/decisions/', ManuscriptDecisionHistoryView.as_view(), name='manuscript-decision-history'),
     path('<int:pk>/revision/', ManuscriptRevisionView.as_view(), name='manuscript-revision'),
+    path('<int:pk>/screening/', ManuscriptScreeningView.as_view(), name='manuscript-screening'),
 ]

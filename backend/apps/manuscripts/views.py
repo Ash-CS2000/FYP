@@ -12,16 +12,16 @@ from django.shortcuts import get_object_or_404
 
 from apps.notifications.models import Notification
 
-from .models import Decision, Manuscript, PlagiarismCheck
+from .models import Decision, Manuscript, PlagiarismCheck, ScreeningAction
 from .notifications import (
     DECISION_NOTIFICATION_BODIES, DECISION_NOTIFICATION_TITLES, REVISION_SUBMITTED_NOTIFICATION_BODY,
-    REVISION_SUBMITTED_NOTIFICATION_TITLE,
+    REVISION_SUBMITTED_NOTIFICATION_TITLE, SCREENING_NOTIFICATION_BODIES, SCREENING_NOTIFICATION_TITLES,
 )
-from .permissions import IsEditorOrAdmin, is_editor_or_admin
+from .permissions import IsEditorOrAdmin, is_editor, is_editor_or_admin
 from .serializers import (
     DecisionCreateSerializer, DecisionSerializer, ManuscriptEditorSerializer,
     ManuscriptRevisionCreateSerializer, ManuscriptRevisionSerializer, ManuscriptSerializer,
-    ManuscriptSubmitSerializer,
+    ManuscriptSubmitSerializer, ScreeningActionCreateSerializer, ScreeningActionSerializer,
 )
 from .services.noplag_client import get_check_status, get_check_report, NoPlagClientError
 from .services.plagiarism import sync_accepted_manuscript_to_corpus
@@ -273,5 +273,69 @@ class PlagiarismCheckStatusView(APIView):
             'status': check.status,
             'similarity_score': check.similarity_score,
             'error_message': check.error_message,
+            'checked_at': check.checked_at,
             'report': check.report,
         })
+
+
+class ManuscriptScreeningView(APIView):
+    """
+    GET  /api/manuscripts/<int:pk>/screening/ → the ScreeningAction on this
+    manuscript, if any. Editor/admin only (oversight) — same audience as the
+    similarity report page.
+    POST /api/manuscripts/<int:pk>/screening/ → record 'allow' or 'return' on
+    a flagged similarity report. Editor only — unlike a decision, an admin
+    must not be able to do this by hand. Not a decision: does not touch
+    Manuscript.status. Notifies the manuscript's owner.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        if not is_editor_or_admin(request.user):
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        screening = getattr(manuscript, 'screening_action', None)
+        if screening is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(ScreeningActionSerializer(screening).data)
+
+    def post(self, request, pk):
+        if not is_editor(request.user):
+            return Response(
+                {'detail': 'You do not have permission to act on a screening flag.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+
+        check = getattr(manuscript, 'plagiarism_check', None)
+        if check is None:
+            return Response(
+                {'detail': 'No similarity report exists for this manuscript.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if check.status != PlagiarismCheck.Status.COMPLETED:
+            return Response(
+                {'detail': 'The similarity report is not ready yet.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if getattr(manuscript, 'screening_action', None) is not None:
+            return Response(
+                {'detail': 'A screening outcome is already recorded for this manuscript.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        serializer = ScreeningActionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        with transaction.atomic():
+            screening = ScreeningAction.objects.create(manuscript=manuscript, acted_by=request.user, **data)
+            Notification.objects.create(
+                recipient=manuscript.owner,
+                category=Notification.Category.SCREENING,
+                title=SCREENING_NOTIFICATION_TITLES[data['action']],
+                body=SCREENING_NOTIFICATION_BODIES[data['action']].format(title=manuscript.title),
+                manuscript=manuscript,
+            )
+
+        return Response(ScreeningActionSerializer(screening).data, status=status.HTTP_201_CREATED)

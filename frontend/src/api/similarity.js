@@ -37,8 +37,18 @@ async function request(path, options = {}) {
  *   200  { status: 'pending' | 'completed' | 'failed',
  *           similarity_score: number | null,
  *           error_message: string,
+ *           checked_at: string,
  *           report: object | null }
  *   404  no plagiarism check exists for this manuscript
+ *
+ * `report`, when present, is noplag's own CheckReportResponse shape verbatim
+ * (title, query_text, total_matched_chars, overall_similarity_pct, sources,
+ * coverage, ...) — see noplag-engine/src/noplag_engine/api/v1/schemas.py.
+ * Each source is { source_document_id, matched_chars, similarity_pct,
+ * source_filename, source_url, passages: [{ overlap_text_preview,
+ * query_start, query_end, candidate_start, candidate_end, score,
+ * match_type }] }. There is no query-side excerpt on a passage — slice
+ * report.query_text[query_start:query_end] for it.
  */
 export function getPlagiarismStatus(manuscriptId) {
   return request(`/api/manuscripts/${manuscriptId}/plagiarism-status/`, { method: 'GET' });

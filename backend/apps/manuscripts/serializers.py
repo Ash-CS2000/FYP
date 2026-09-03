@@ -6,7 +6,7 @@ from rest_framework import serializers
 from . import storage
 from .models import (
     Decision, Manuscript, ManuscriptAffiliation, ManuscriptAuthor, ManuscriptRevision,
-    ManuscriptSupplementaryFile, PlagiarismCheck,
+    ManuscriptSupplementaryFile, PlagiarismCheck, ScreeningAction,
 )
 from .services.noplag_client import submit_check, NoPlagClientError
 
@@ -123,6 +123,30 @@ class DecisionCreateSerializer(serializers.Serializer):
     def validate_letter(self, value):
         if not value.strip():
             raise serializers.ValidationError('The letter cannot be empty.')
+        return value.strip()
+
+
+class ScreeningActionSerializer(serializers.ModelSerializer):
+    manuscript_id = serializers.IntegerField(read_only=True)
+    acted_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ScreeningAction
+        fields = ('manuscript_id', 'action', 'note', 'acted_at', 'acted_by')
+
+    def get_acted_by(self, obj):
+        if not obj.acted_by:
+            return 'The Editorial Office'
+        return obj.acted_by.get_full_name() or obj.acted_by.email
+
+
+class ScreeningActionCreateSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=ScreeningAction.Action.choices)
+    note = serializers.CharField()
+
+    def validate_note(self, value):
+        if not value.strip():
+            raise serializers.ValidationError('The note cannot be empty.')
         return value.strip()
 
 

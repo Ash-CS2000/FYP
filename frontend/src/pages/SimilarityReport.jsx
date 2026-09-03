@@ -5,32 +5,31 @@
 // sources, which would break double-blind.
 //
 // The report shape and the endpoints live in data/similarity.js and
-// api/similarity.js. Nothing here recomputes a percentage.
+// api/similarity.js. Nothing here recomputes a percentage. The manuscript and
+// the report itself are real (getManuscript / getPlagiarismStatus); only the
+// similarity thresholds and exclusion policy remain client-local for now (see
+// data/screeningSettings.js).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-import { MANUSCRIPTS } from '../data/reviews.js';
+import { getManuscript } from '../api/manuscripts.js';
+import { getPlagiarismStatus } from '../api/similarity.js';
 import {
   bandFor,
   formatCheckedAt,
   BAND_LABELS,
   BAND_HINTS,
   SIMILARITY_TONE,
-  SOURCE_TYPE_LABELS,
 } from '../data/similarity.js';
-import {
-  reportFor,
-  thresholdsFrom,
-  loadLocalSettings,
-} from '../data/editorScreeningMock.js';
+import { thresholdsFrom, loadLocalSettings } from '../data/screeningSettings.js';
 import {
   SCREENING_ACTIONS,
   screeningActionFor,
   saveScreeningAction,
   formatDecidedAt,
 } from '../data/editorial.js';
-import { postScreeningAction } from '../api/editorial.js';
+import { getScreeningAction, postScreeningAction } from '../api/editorial.js';
 import { getStoredUser } from '../utils/user.js';
 
 // The editor's own name goes on the screening record, same as on a decision.
@@ -40,18 +39,27 @@ function editorName() {
   return full || u?.name || 'The Editorial Office';
 }
 
-function SourceCard({ source, rank }) {
+// Real passages carry offsets into query_text plus a preview of the matched
+// source text — there is no precomputed query-side excerpt, so it's sliced
+// here from the report's own query_text.
+function querySide(passage, queryText) {
+  if (!queryText) return '';
+  return queryText.slice(passage.query_start, passage.query_end);
+}
+
+function SourceCard({ source, rank, queryText }) {
   const [open, setOpen] = useState(rank === 1);
+  const title = source.source_filename || source.source_url || 'Untitled source';
+  const passages = source.passages || [];
   return (
     <div className="sim-source">
       <button className="sim-source-head" onClick={() => setOpen(o => !o)} aria-expanded={open}>
         <span className="sim-rank">{rank}</span>
         <span className="sim-source-main">
-          <span className="sim-source-title">{source.title}</span>
+          <span className="sim-source-title">{title}</span>
           <span className="sim-source-meta">
-            {SOURCE_TYPE_LABELS[source.source_type] || source.source_type}
-            {source.url && <> · <span className="sim-url">{source.url}</span></>}
-            {' · '}{source.matched_chars.toLocaleString()} characters matched
+            {source.source_url && <><span className="sim-url">{source.source_url}</span>{' · '}</>}
+            {source.matched_chars.toLocaleString()} characters matched
           </span>
         </span>
         <span className="sim-source-pct">{source.similarity_pct}%</span>
@@ -64,18 +72,18 @@ function SourceCard({ source, rank }) {
 
       {open && (
         <div className="sim-passages">
-          {source.passages.length === 0 && (
+          {passages.length === 0 && (
             <p className="sim-muted">No passages available for this source.</p>
           )}
-          {source.passages.map((p, i) => (
+          {passages.map((p, i) => (
             <div className="sim-passage" key={i}>
               <div className="sim-side">
                 <h5>This manuscript</h5>
-                <p>{p.query_excerpt}</p>
+                <p>{querySide(p, queryText)}</p>
               </div>
               <div className="sim-side sim-side-source">
                 <h5>Matched source</h5>
-                <p>{p.source_excerpt}</p>
+                <p>{p.overlap_text_preview}</p>
               </div>
             </div>
           ))}
@@ -92,12 +100,14 @@ function SourceCard({ source, rank }) {
 //
 // The note is required. A cleared flag with no reasoning is the record that is
 // useless six months later when somebody asks why a 34% match went to review.
-function ScreeningActions({ manuscriptId, band, isAdmin }) {
-  const [record, setRecord] = useState(() => screeningActionFor(manuscriptId));
+function ScreeningActions({ manuscriptId, band, isAdmin, initialRecord }) {
+  const [record, setRecord] = useState(initialRecord);
   const [action, setAction] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setRecord(initialRecord); }, [initialRecord]);
 
   // Nothing to act on unless the report is in the flagged band — and no history
   // to show either.
@@ -148,7 +158,8 @@ function ScreeningActions({ manuscriptId, band, isAdmin }) {
       acted_by: editorName(),
     };
     try {
-      await postScreeningAction(manuscriptId, { action, note: next.note });
+      const saved = await postScreeningAction(manuscriptId, { action, note: next.note });
+      Object.assign(next, saved);
     } catch {
       next.local_only = true;
     }
@@ -210,26 +221,67 @@ export default function SimilarityReport({ role = 'editor' }) {
   const isAdmin = role === 'admin';
   const backTo = isAdmin ? '/admin/submissions' : '/editor/submissions';
 
-  const manuscript = MANUSCRIPTS[id];
-  const report = reportFor(id);
+  const [manuscript, setManuscript] = useState(null);
+  const [plagCheck, setPlagCheck] = useState(null); // { status, similarity_score, error_message, checked_at, report } | 'not_found'
+  const [screeningRecord, setScreeningRecord] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
+
+    Promise.all([
+      getManuscript(id),
+      getPlagiarismStatus(id).catch(err => (err.status === 404 ? 'not_found' : Promise.reject(err))),
+      getScreeningAction(id).catch(err => (err.status === 404 ? null : Promise.reject(err))),
+    ])
+      .then(([m, check, screening]) => {
+        if (cancelled) return;
+        setManuscript(m);
+        setPlagCheck(check);
+        setScreeningRecord(screening ?? screeningActionFor(id));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadError(err.message || 'Could not load this manuscript.');
+        setScreeningRecord(screeningActionFor(id));
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [id]);
+
   const settings = loadLocalSettings();
+  const thresholds = thresholdsFrom(settings);
 
   // Exclusions start from what the server already applied to this report. Changing
   // one re-requests the report server-side (getReport takes them as query params);
   // until /api/analysis/ exists they only reflect intent in the UI.
-  const [exclusions, setExclusions] = useState(() => ({
-    quotes: report?.exclusions?.quotes ?? settings.exclude_quotes,
-    bibliography: report?.exclusions?.bibliography ?? settings.exclude_bibliography,
-    minWords: report?.exclusions?.min_words ?? settings.min_words,
-  }));
+  const [exclusions, setExclusions] = useState({
+    quotes: settings.exclude_quotes,
+    bibliography: settings.exclude_bibliography,
+    minWords: settings.min_words,
+  });
 
-  if (!manuscript) {
+  if (loading) {
+    return (
+      <AppShell role={role} searchPlaceholder="Search submissions...">
+        <div className="card fade-up"><div className="sim-empty">Loading…</div></div>
+      </AppShell>
+    );
+  }
+
+  if (loadError || !manuscript) {
     return (
       <AppShell role={role} searchPlaceholder="Search submissions...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">{isAdmin ? 'Oversight' : 'Editorial'}</span>
-            <h1 className="page-title" style={{ marginTop: 8 }}>Manuscript not found.</h1>
+            <h1 className="page-title" style={{ marginTop: 8 }}>
+              {loadError || 'Manuscript not found.'}
+            </h1>
             <p className="page-subtitle">No manuscript matches that reference.</p>
           </div>
           <Link to={backTo} className="btn btn-ghost btn-sm">Back to submissions</Link>
@@ -238,8 +290,9 @@ export default function SimilarityReport({ role = 'editor' }) {
     );
   }
 
-  const thresholds = thresholdsFrom(settings);
-  const band = report?.status === 'done' ? bandFor(report.overall_similarity_pct, thresholds) : null;
+  const noplagReport = plagCheck && plagCheck !== 'not_found' ? plagCheck.report : null;
+  const reportStatus = plagCheck === 'not_found' ? 'not_found' : plagCheck?.status; // 'pending' | 'completed' | 'failed' | 'not_found'
+  const band = reportStatus === 'completed' ? bandFor(plagCheck.similarity_score, thresholds) : null;
   const tone = band ? SIMILARITY_TONE[band] : null;
 
   return (
@@ -291,12 +344,12 @@ export default function SimilarityReport({ role = 'editor' }) {
 
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">{isAdmin ? 'Oversight' : 'Editorial'} · {manuscript.id}</span>
+          <span className="eyebrow">{isAdmin ? 'Oversight' : 'Editorial'} · #{manuscript.id}</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>
             Similarity for <em className="serif-italic">{manuscript.title}</em>.
           </h1>
           <p className="page-subtitle">
-            {manuscript.category} · Submitted {manuscript.submitted}
+            {manuscript.category} · Submitted {formatCheckedAt(manuscript.submitted_at)}
           </p>
         </div>
         <div className="row">
@@ -316,7 +369,7 @@ export default function SimilarityReport({ role = 'editor' }) {
         </div>
       )}
 
-      {!report && (
+      {reportStatus === 'not_found' && (
         <div className="card fade-up delay-1">
           <div className="sim-empty">
             No originality check has been run for this manuscript yet.
@@ -325,15 +378,15 @@ export default function SimilarityReport({ role = 'editor' }) {
         </div>
       )}
 
-      {report?.status === 'failed' && (
+      {reportStatus === 'failed' && (
         <div className="card fade-up delay-1">
           <div className="card-header">
             <div>
               <div className="card-title" style={{ color: 'var(--red-800)' }}>Check failed</div>
-              <div className="card-meta">Attempted {formatCheckedAt(report.checked_at)}</div>
+              {plagCheck.checked_at && <div className="card-meta">Attempted {formatCheckedAt(plagCheck.checked_at)}</div>}
             </div>
           </div>
-          <p style={{ fontSize: 13.5, color: 'var(--ink-800)', lineHeight: 1.6 }}>{report.error}</p>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-800)', lineHeight: 1.6 }}>{plagCheck.error_message}</p>
           {!isAdmin && (
             <div style={{ marginTop: 16 }}>
               <button className="btn btn-primary btn-sm">Retry check</button>
@@ -342,33 +395,33 @@ export default function SimilarityReport({ role = 'editor' }) {
         </div>
       )}
 
-      {(report?.status === 'queued' || report?.status === 'running') && (
+      {reportStatus === 'pending' && (
         <div className="card fade-up delay-1">
           <div className="sim-empty">
-            The originality check is {report.status === 'queued' ? 'queued' : 'running'}. This usually takes under a minute.
+            The originality check is running. This usually takes under a minute, longer on large PDFs.
           </div>
         </div>
       )}
 
-      {report?.status === 'done' && (
+      {reportStatus === 'completed' && noplagReport && (
         <>
           <div className="card fade-up delay-1">
             <div className="sim-hero">
               <div className="sim-dial" style={{ background: tone.bg, color: tone.fg }}>
-                <span className="sim-dial-pct">{report.overall_similarity_pct}%</span>
+                <span className="sim-dial-pct">{plagCheck.similarity_score}%</span>
                 <span className="sim-dial-label">{BAND_LABELS[band]}</span>
               </div>
               <div className="sim-hero-body">
-                <h3>Overall similarity across {report.sources.length} source{report.sources.length === 1 ? '' : 's'}</h3>
+                <h3>Overall similarity across {(noplagReport.sources || []).length} source{(noplagReport.sources || []).length === 1 ? '' : 's'}</h3>
                 <p>{BAND_HINTS[band]}</p>
                 <div className="sim-facts">
                   <div>
                     <div className="sim-fact-label">Checked</div>
-                    <div className="sim-fact-value">{formatCheckedAt(report.checked_at)}</div>
+                    <div className="sim-fact-value">{formatCheckedAt(plagCheck.checked_at)}</div>
                   </div>
                   <div>
-                    <div className="sim-fact-label">Engine</div>
-                    <div className="sim-fact-value">{report.engine_version}</div>
+                    <div className="sim-fact-label">Coverage</div>
+                    <div className="sim-fact-value">{noplagReport.coverage === 'partial' ? 'Partial scan' : 'Full scan'}</div>
                   </div>
                   <div>
                     <div className="sim-fact-label">Flag threshold</div>
@@ -390,7 +443,12 @@ export default function SimilarityReport({ role = 'editor' }) {
               reject it — both leave the paper in the pipeline. Neither touches the
               score, which is a fact about the text that an editor's disagreement
               does not change. */}
-          <ScreeningActions manuscriptId={manuscript.id} band={band} isAdmin={isAdmin} />
+          <ScreeningActions
+            manuscriptId={manuscript.id}
+            band={band}
+            isAdmin={isAdmin}
+            initialRecord={screeningRecord}
+          />
 
           <div className="card fade-up delay-2">
             <div className="card-header">
@@ -443,11 +501,11 @@ export default function SimilarityReport({ role = 'editor' }) {
                 <div className="card-meta">Highest overlap first. Expand a source to compare the passages.</div>
               </div>
             </div>
-            {report.sources.length === 0 && (
-              <div className="sim-empty">No sources matched above the current exclusion settings.</div>
+            {(noplagReport.sources || []).length === 0 && (
+              <div className="sim-empty">No sources matched.</div>
             )}
-            {report.sources.map((s, i) => (
-              <SourceCard key={s.id} source={s} rank={i + 1} />
+            {(noplagReport.sources || []).map((s, i) => (
+              <SourceCard key={s.source_document_id} source={s} rank={i + 1} queryText={noplagReport.query_text} />
             ))}
           </div>
         </>

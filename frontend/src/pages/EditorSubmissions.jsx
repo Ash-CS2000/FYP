@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { bandFor, BAND_LABELS, SIMILARITY_TONE } from '../data/similarity.js';
-import { thresholdsFrom, loadLocalSettings } from '../data/editorScreeningMock.js';
+import { thresholdsFrom, loadLocalSettings } from '../data/screeningSettings.js';
 import { DECISION_LABELS, DECISION_TONE } from '../data/editorial.js';
 import { MANUSCRIPT_STATUSES, STATUS_LABELS, statusPillClass } from '../data/manuscriptStatus.js';
 import { listAllManuscripts } from '../api/manuscripts.js';

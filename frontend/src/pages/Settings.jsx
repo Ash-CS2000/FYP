@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import { getScreeningSettings, patchScreeningSettings } from '../api/similarity.js';
-import { loadLocalSettings, saveLocalSettings } from '../data/editorScreeningMock.js';
+import { loadLocalSettings, saveLocalSettings } from '../data/screeningSettings.js';
 import { deleteAccount, clearSession } from '../api/auth';
 
 // Screening thresholds are platform policy, so only an admin sets them — see the
