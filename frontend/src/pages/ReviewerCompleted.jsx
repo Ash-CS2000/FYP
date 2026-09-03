@@ -1,39 +1,76 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-
-const COMPLETED = [
-  { id: 1, title: 'A Survey of Natural Language Processing in 2025', date: '3 days ago', recommendation: 'Accept', cls: 'pill-approved' },
-  { id: 2, title: 'Quantum Computing in Cryptography', date: '1 week ago', recommendation: 'Major Revision', cls: 'pill-revision' },
-  { id: 3, title: 'Microservices Architecture Patterns', date: '2 weeks ago', recommendation: 'Accept w/ Minor', cls: 'pill-approved' },
-  { id: 4, title: 'Edge Computing Latency Analysis', date: '3 weeks ago', recommendation: 'Reject', cls: 'pill-rejected' },
-  { id: 5, title: 'Smart Agriculture IoT Networks', date: '1 month ago', recommendation: 'Accept', cls: 'pill-approved' },
-  { id: 6, title: '5G Security Threat Modeling', date: '6 weeks ago', recommendation: 'Minor Revision', cls: 'pill-review' },
-];
+import { formatDate } from '../data/invitations.js';
+import { RECOMMENDATION_LABELS, RECOMMENDATION_TONE } from '../data/reviews.js';
+import { listAssignments } from '../api/invitations.js';
 
 export default function ReviewerCompleted() {
+  const [completed, setCompleted] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    listAssignments()
+      .then((rows) => {
+        if (cancelled) return;
+        setCompleted(rows.filter(a => a.status === 'submitted'));
+      })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load your reviews.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <AppShell role="reviewer" searchPlaceholder="Search completed reviews...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Reviewer Workspace</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Completed <em className="serif-italic">Reviews</em>.</h1>
-          <p className="page-subtitle">Your contribution to the journal — {COMPLETED.length} reviews shown.</p>
+          <p className="page-subtitle">
+            {loading ? 'Loading…' : `Your contribution to the journal — ${completed.length} review${completed.length === 1 ? '' : 's'} shown.`}
+          </p>
         </div>
       </div>
 
       <div className="card fade-up delay-1">
-        <table className="data-table">
-          <thead><tr><th>Paper</th><th>Submitted</th><th>Recommendation</th><th></th></tr></thead>
-          <tbody>
-            {COMPLETED.map(r => (
-              <tr key={r.id}>
-                <td><div className="table-title">{r.title}</div></td>
-                <td><span className="muted">{r.date}</span></td>
-                <td><span className={`pill ${r.cls}`}>{r.recommendation}</span></td>
-                <td><a href="#" style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>View →</a></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {loading && <div className="card-meta" style={{ padding: 20 }}>Loading…</div>}
+        {!loading && loadError && (
+          <div className="card-meta" style={{ padding: 20, color: 'var(--red-800)' }}>{loadError}</div>
+        )}
+        {!loading && !loadError && completed.length === 0 && (
+          <div className="card-meta" style={{ padding: 20 }}>Nothing submitted yet.</div>
+        )}
+        {!loading && !loadError && completed.length > 0 && (
+          <table className="data-table">
+            <thead><tr><th>Paper</th><th>Submitted</th><th>Recommendation</th><th></th></tr></thead>
+            <tbody>
+              {completed.map(a => {
+                const rec = a.review?.recommendation;
+                const tone = RECOMMENDATION_TONE[rec];
+                return (
+                  <tr key={a.id}>
+                    <td><div className="table-title">{a.title}</div></td>
+                    <td><span className="muted">{formatDate(a.due_at)}</span></td>
+                    <td>
+                      {rec && tone ? (
+                        <span className="pill" style={{ background: tone.bg, color: tone.fg }}>
+                          {RECOMMENDATION_LABELS[rec]}
+                        </span>
+                      ) : <span className="muted">—</span>}
+                    </td>
+                    <td>
+                      <Link to={`/reviewer/review/${a.manuscript_id}`} style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>
+                        View →
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </AppShell>
   );

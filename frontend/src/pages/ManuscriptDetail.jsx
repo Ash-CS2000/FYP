@@ -14,11 +14,11 @@ import AppShell from '../components/AppShell.jsx';
 import { getStoredUser } from '../utils/user.js';
 import { getManuscript } from '../api/manuscripts.js';
 import {
-  reviewsFor,
   compositeScore,
   RECOMMENDATION_LABELS,
   RECOMMENDATION_TONE,
 } from '../data/reviews.js';
+import { getReviews } from '../api/reviews.js';
 import { useEffect, useState } from 'react';
 import { getPlagiarismStatus } from '../api/similarity.js';
 import {
@@ -36,6 +36,7 @@ import { TERMINAL_STATUSES } from '../data/manuscriptStatus.js';
 import ReviewerPanel from '../components/ReviewerPanel.jsx';
 import DecisionHistory from '../components/DecisionHistory.jsx';
 import { listManuscriptAssignments } from '../api/invitations.js';
+import { formatDate } from '../data/invitations.js';
 
 // The editor's own name goes on the letter, so the author sees who decided.
 function editorName() {
@@ -330,7 +331,7 @@ export default function ManuscriptDetail({ role = 'editor' }) {
     return () => { cancelled = true; };
   }, [id]);
 
-  const reviews = reviewsFor(id);
+  const [reviews, setReviews] = useState([]);
   const submitted = reviews.filter(r => r.status === 'submitted');
   const [decision, setDecision] = useState(null);
   const [assignmentCount, setAssignmentCount] = useState(0);
@@ -344,6 +345,15 @@ export default function ManuscriptDetail({ role = 'editor' }) {
     listManuscriptAssignments(manuscript.id)
       .then(rows => { if (!cancelled) setAssignmentCount(rows.length); })
       .catch(() => { /* left at 0 — worst case the gate is briefly too permissive */ });
+    return () => { cancelled = true; };
+  }, [manuscript?.id]);
+
+  useEffect(() => {
+    if (!manuscript) return;
+    let cancelled = false;
+    getReviews(manuscript.id)
+      .then(rows => { if (!cancelled) setReviews(rows); })
+      .catch(() => { /* left empty — the summary below just reads as "no reviews yet" */ });
     return () => { cancelled = true; };
   }, [manuscript?.id]);
 
@@ -424,7 +434,7 @@ export default function ManuscriptDetail({ role = 'editor' }) {
             <em className="serif-italic">{manuscript.title}</em>.
           </h1>
           <p className="page-subtitle">
-            {manuscript.category} · Submitted {manuscript.submitted}
+            {manuscript.category} · Submitted {formatDate(manuscript.submitted_at)}
           </p>
         </div>
         <Link to={`${basePath}/submissions`} className="btn btn-ghost btn-sm">Back to submissions</Link>
@@ -456,7 +466,7 @@ export default function ManuscriptDetail({ role = 'editor' }) {
               </div>
               <div>
                 <div className="md-meta-label">Submitted</div>
-                <div className="md-meta-value">{manuscript.submitted}</div>
+                <div className="md-meta-value">{formatDate(manuscript.submitted_at)}</div>
               </div>
               <div>
                 <div className="md-meta-label">Similarity</div>

@@ -10,6 +10,7 @@ class Notification(models.Model):
         REVIEW_INVITE = 'review_invite', 'Review Invitation'
         REVIEW_RESPONSE = 'review_response', 'Review Response'
         REVIEW_EXTENSION = 'review_extension', 'Review Extension'
+        REVIEW_SUBMITTED = 'review_submitted', 'Review Submitted'
         ROLE = 'role', 'Role change'
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')

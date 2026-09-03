@@ -15,13 +15,18 @@ from django.utils import timezone
 
 from apps.notifications.models import Notification
 from apps.reviews.matching import compute_conflict, rank_candidates
-from apps.reviews.models import ReviewAssignment
+from apps.reviews.models import Review, ReviewAssignment
 from apps.reviews.notifications import (
     REVIEW_INVITE_BODY, REVIEW_INVITE_TITLE, REVIEW_REMINDER_BODY, REVIEW_REMINDER_TITLE,
     REVIEW_EXTENSION_GRANTED_BODY, REVIEW_EXTENSION_GRANTED_TITLE, REVIEW_EXTENSION_REFUSED_BODY,
-    REVIEW_EXTENSION_REFUSED_TITLE,
+    REVIEW_EXTENSION_REFUSED_TITLE, REVIEW_SUBMITTED_BODY, REVIEW_SUBMITTED_TITLE,
 )
-from apps.reviews.serializers import InviteReviewersSerializer, ManuscriptAssignmentSerializer
+from apps.reviews.serializers import (
+    AuthorReviewSerializer, InviteReviewersSerializer, ManuscriptAssignmentSerializer,
+    ManuscriptForReviewerSerializer, ManuscriptReviewSerializer, ReviewCreateSerializer,
+    reviewer_labels_for,
+)
+from apps.users.permissions import is_reviewer
 
 from .models import Decision, Manuscript, PlagiarismCheck, ScreeningAction
 from .notifications import (
@@ -144,13 +149,20 @@ class ManuscriptDecisionView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # TODO(reviews-app): the frontend spec also calls for a 422 when
-        # desk-rejecting a manuscript that already has reviews, but apps.reviews
-        # has no model yet — nothing to check against server-side until it does.
-
         serializer = DecisionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+
+        # Matches the frontend's own definition of "has reviews" (DecisionPanel's
+        # hasReviewers: counts invitations, not submitted reviews — the moment
+        # anyone has been asked, "rejected without troubling a reviewer" is no
+        # longer true). The UI already hides desk-reject once an invitation
+        # exists; this makes the server agree instead of silently allowing it.
+        if data['type'] == Decision.Type.DESK_REJECT and manuscript.review_assignments.exists():
+            return Response(
+                {'detail': 'This manuscript already has reviewers involved and cannot be desk rejected.'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
 
         with transaction.atomic():
             decision = Decision.objects.create(manuscript=manuscript, decided_by=request.user, **data)
@@ -502,3 +514,114 @@ class ManuscriptAssignmentExtensionDecideView(APIView):
             )
 
         return Response(ManuscriptAssignmentSerializer(assignment).data)
+
+
+class ManuscriptReviewListCreateView(APIView):
+    """
+    GET  /api/manuscripts/<int:pk>/reviews/ → one row per ReviewAssignment
+    with status accepted/submitted, review content null until submitted.
+    Editor/admin only.
+    POST /api/manuscripts/<int:pk>/reviews/ → the calling reviewer submits
+    their review. Only for their own accepted assignment on this manuscript.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        if not is_editor_or_admin(request.user):
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        rows = (
+            manuscript.review_assignments
+            .filter(status__in=[ReviewAssignment.Status.ACCEPTED, ReviewAssignment.Status.SUBMITTED])
+            .select_related('review')
+        )
+        labels = reviewer_labels_for(manuscript)
+        return Response(ManuscriptReviewSerializer(rows, many=True, context={'labels': labels}).data)
+
+    def post(self, request, pk):
+        if not is_reviewer(request.user):
+            return Response({'detail': 'You do not have permission to submit a review.'}, status=status.HTTP_403_FORBIDDEN)
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+
+        assignment = ReviewAssignment.objects.filter(manuscript=manuscript, reviewer=request.user).first()
+        if assignment is None:
+            return Response(
+                {'detail': 'You do not have an assignment on this manuscript.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if getattr(assignment, 'review', None) is not None:
+            return Response({'detail': 'You have already submitted this review.'}, status=status.HTTP_409_CONFLICT)
+        if assignment.status != ReviewAssignment.Status.ACCEPTED:
+            return Response(
+                {'detail': 'You do not have an accepted assignment on this manuscript.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = ReviewCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        with transaction.atomic():
+            review = Review.objects.create(assignment=assignment, **data)
+            assignment.status = ReviewAssignment.Status.SUBMITTED
+            assignment.save(update_fields=['status'])
+            if assignment.invited_by_id:
+                Notification.objects.create(
+                    recipient_id=assignment.invited_by_id,
+                    category=Notification.Category.REVIEW_SUBMITTED,
+                    title=REVIEW_SUBMITTED_TITLE,
+                    body=REVIEW_SUBMITTED_BODY.format(
+                        reviewer=request.user.get_full_name() or request.user.email,
+                        title=manuscript.title,
+                    ),
+                    manuscript=manuscript,
+                )
+
+        labels = reviewer_labels_for(manuscript)
+        return Response(
+            ManuscriptReviewSerializer(assignment, context={'labels': labels}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ManuscriptAuthorReviewsView(APIView):
+    """
+    GET /api/manuscripts/<int:pk>/reviews/author/ → the reviews an author is
+    permitted to read on their own manuscript. 404 until a decision exists —
+    reviews are released to the author only once one does, never before.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        if manuscript.owner_id != request.user.id:
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        if not manuscript.decisions.exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        reviews = Review.objects.filter(
+            assignment__manuscript=manuscript, assignment__status=ReviewAssignment.Status.SUBMITTED,
+        ).select_related('assignment')
+        labels = reviewer_labels_for(manuscript)
+        return Response(AuthorReviewSerializer(reviews, many=True, context={'labels': labels}).data)
+
+
+class ManuscriptReviewerViewView(APIView):
+    """
+    GET /api/manuscripts/<int:pk>/reviewer-view/ → the manuscript content a
+    reviewer is permitted to read: title/abstract/category/file, nothing
+    that identifies the author. Accepted or already-submitted only (a
+    reviewer who has submitted may still want to reference the manuscript —
+    matches AssignmentGate.jsx, which only ever blocked 'invited'/'declined').
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        has_access = ReviewAssignment.objects.filter(
+            manuscript=manuscript, reviewer=request.user,
+            status__in=[ReviewAssignment.Status.ACCEPTED, ReviewAssignment.Status.SUBMITTED],
+        ).exists()
+        if not has_access:
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        return Response(ManuscriptForReviewerSerializer(manuscript).data)

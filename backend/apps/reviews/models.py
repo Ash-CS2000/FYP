@@ -57,3 +57,32 @@ class ReviewAssignment(models.Model):
 
     def __str__(self):
         return f'ReviewAssignment(manuscript={self.manuscript_id}, reviewer={self.reviewer_id}, status={self.status})'
+
+
+class Review(models.Model):
+    """
+    The content of a submitted review. One-to-one with the ReviewAssignment it
+    belongs to — a reviewer submits once per assignment, no resubmission.
+    'Reviewer 1'/'Reviewer 2' labels are computed at serialization time from a
+    stable ordering of the manuscript's review_assignments, never stored here.
+    """
+    class Recommendation(models.TextChoices):
+        ACCEPT = 'accept', 'Accept'
+        MINOR = 'minor', 'Minor Revision'
+        MAJOR = 'major', 'Major Revision'
+        REJECT = 'reject', 'Reject'
+
+    assignment = models.OneToOneField(ReviewAssignment, on_delete=models.CASCADE, related_name='review')
+    originality = models.PositiveSmallIntegerField()
+    technical = models.PositiveSmallIntegerField()
+    clarity = models.PositiveSmallIntegerField()
+    relevance = models.PositiveSmallIntegerField()
+    recommendation = models.CharField(max_length=20, choices=Recommendation.choices)
+    summary = models.TextField()
+    strengths = models.TextField()
+    weaknesses = models.TextField()
+    confidential_to_editor = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Review(assignment={self.assignment_id}, recommendation={self.recommendation})'

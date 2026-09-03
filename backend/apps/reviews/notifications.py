@@ -27,3 +27,6 @@ REVIEW_EXTENSION_GRANTED_BODY = 'Your extension request on "{title}" was granted
 
 REVIEW_EXTENSION_REFUSED_TITLE = 'Your extension was refused'
 REVIEW_EXTENSION_REFUSED_BODY = 'Your extension request on "{title}" was refused. The original deadline stands.'
+
+REVIEW_SUBMITTED_TITLE = 'A review has been submitted'
+REVIEW_SUBMITTED_BODY = '{reviewer} submitted their review of "{title}".'

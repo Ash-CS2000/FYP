@@ -2,9 +2,10 @@ from django.urls import path
 
 from .views import (
     ManuscriptAssignmentExtensionDecideView, ManuscriptAssignmentListCreateView, ManuscriptAssignmentRemindView,
-    ManuscriptDecisionHistoryView, ManuscriptDecisionView, ManuscriptDetailView, ManuscriptEditorListView,
-    ManuscriptListView, ManuscriptRevisionView, ManuscriptReviewerCandidatesView, ManuscriptScreeningView,
-    ManuscriptUploadView, PlagiarismCheckStatusView,
+    ManuscriptAuthorReviewsView, ManuscriptDecisionHistoryView, ManuscriptDecisionView, ManuscriptDetailView,
+    ManuscriptEditorListView, ManuscriptListView, ManuscriptRevisionView, ManuscriptReviewerCandidatesView,
+    ManuscriptReviewerViewView, ManuscriptReviewListCreateView, ManuscriptScreeningView, ManuscriptUploadView,
+    PlagiarismCheckStatusView,
 )
 
 urlpatterns = [
@@ -21,4 +22,7 @@ urlpatterns = [
     path('<int:pk>/assignments/', ManuscriptAssignmentListCreateView.as_view(), name='manuscript-assignment-list-create'),
     path('<int:pk>/assignments/<int:assignment_id>/remind/', ManuscriptAssignmentRemindView.as_view(), name='manuscript-assignment-remind'),
     path('<int:pk>/assignments/<int:assignment_id>/extension/', ManuscriptAssignmentExtensionDecideView.as_view(), name='manuscript-assignment-extension-decide'),
+    path('<int:pk>/reviews/', ManuscriptReviewListCreateView.as_view(), name='manuscript-review-list-create'),
+    path('<int:pk>/reviews/author/', ManuscriptAuthorReviewsView.as_view(), name='manuscript-author-reviews'),
+    path('<int:pk>/reviewer-view/', ManuscriptReviewerViewView.as_view(), name='manuscript-reviewer-view'),
 ]

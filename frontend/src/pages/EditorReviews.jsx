@@ -3,16 +3,18 @@
 // is what the editor needs in order to decide. This is the ONLY screen that
 // renders confidential_to_editor — see data/reviews.js for the contract.
 
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import {
-  MANUSCRIPTS,
-  reviewsFor,
   compositeScore,
   RATING_CRITERIA,
   RECOMMENDATION_LABELS,
   RECOMMENDATION_TONE,
 } from '../data/reviews.js';
+import { formatDate } from '../data/invitations.js';
+import { getManuscript } from '../api/manuscripts.js';
+import { getReviews } from '../api/reviews.js';
 
 function StatusPill({ review }) {
   if (review.status === 'submitted') return <span className="pill pill-approved">Submitted</span>;
@@ -23,19 +25,42 @@ function StatusPill({ review }) {
 
 export default function EditorReviews({ role = 'editor' }) {
   const { id } = useParams();
-  const manuscript = MANUSCRIPTS[id];
-  const reviews = reviewsFor(id);
-  const submitted = reviews.filter(r => r.status === 'submitted');
   const isAdmin = role === 'admin';
   const backTo = isAdmin ? '/admin/submissions' : '/editor/submissions';
 
-  if (!manuscript) {
+  const [manuscript, setManuscript] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
+    Promise.all([getManuscript(id), getReviews(id)])
+      .then(([m, r]) => { if (!cancelled) { setManuscript(m); setReviews(r); } })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load reviews.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [id]);
+
+  const submitted = reviews.filter(r => r.status === 'submitted');
+
+  if (loading) {
+    return (
+      <AppShell role={role} searchPlaceholder="Search submissions...">
+        <div className="card fade-up"><div style={{ padding: 24 }}>Loading…</div></div>
+      </AppShell>
+    );
+  }
+
+  if (loadError || !manuscript) {
     return (
       <AppShell role={role} searchPlaceholder="Search submissions...">
         <div className="page-header fade-up">
           <div>
             <span className="eyebrow">Editorial</span>
-            <h1 className="page-title" style={{ marginTop: 8 }}>Manuscript not found.</h1>
+            <h1 className="page-title" style={{ marginTop: 8 }}>{loadError || 'Manuscript not found.'}</h1>
             <p className="page-subtitle">No manuscript matches that reference.</p>
           </div>
           <Link to={backTo} className="btn btn-ghost btn-sm">Back to submissions</Link>
@@ -68,12 +93,12 @@ export default function EditorReviews({ role = 'editor' }) {
 
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">{isAdmin ? 'Oversight' : 'Editorial'} · {manuscript.id}</span>
+          <span className="eyebrow">{isAdmin ? 'Oversight' : 'Editorial'} · #{manuscript.id}</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>
             Reviews for <em className="serif-italic">{manuscript.title}</em>.
           </h1>
           <p className="page-subtitle">
-            {submitted.length} of {reviews.length} reviews submitted · {manuscript.category} · Submitted {manuscript.submitted}
+            {submitted.length} of {reviews.length} reviews submitted · {manuscript.category} · Submitted {formatDate(manuscript.submitted_at)}
           </p>
         </div>
         <Link to={backTo} className="btn btn-ghost btn-sm">Back to submissions</Link>
