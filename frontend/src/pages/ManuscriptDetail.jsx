@@ -31,7 +31,7 @@ import {
   issueFor,
   saveIssueAssignment,
 } from '../data/editorial.js';
-import { getDecision, postDecision } from '../api/editorial.js';
+import { getDecision, postDecision, publishManuscript } from '../api/editorial.js';
 import { TERMINAL_STATUSES } from '../data/manuscriptStatus.js';
 import ReviewerPanel from '../components/ReviewerPanel.jsx';
 import DecisionHistory from '../components/DecisionHistory.jsx';
@@ -89,16 +89,38 @@ function SimilarityLine({ manuscriptId, basePath }) {
 // Scheduling an accepted paper into an issue. Deliberately gated on an 'accept'
 // decision existing: putting a manuscript in an issue before it is accepted is
 // how a journal ends up announcing something it has to pull.
-function IssueCard({ manuscriptId, decision, isAdmin }) {
+// Where acceptance turns into publication. Accepting is the judgement about the
+// science; publishing is the separate act of releasing the paper to the public
+// library at /author/discover and /search, and only an editor may do it.
+//
+// Gated on manuscript.status, NOT on the fetched decision: the decision endpoint
+// 404s for anything accepted before it existed (that 404 is swallowed as normal
+// below), which would leave the card invisible on exactly the older manuscripts
+// most likely to be ready for publication.
+function PublicationCard({ manuscript, isAdmin, onPublished }) {
+  const manuscriptId = manuscript.id;
   const [assigned, setAssigned] = useState(() => issueFor(manuscriptId));
   const [picking, setPicking] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState('');
 
-  if (decision?.type !== 'accept') return null;
+  const isPublished = manuscript.status === 'published';
+  if (!['accepted', 'published'].includes(manuscript.status)) return null;
 
   const choose = (issueId) => {
     saveIssueAssignment(manuscriptId, issueId);
     setAssigned(ISSUES.find(i => i.id === issueId) || null);
     setPicking(false);
+  };
+
+  const publish = () => {
+    setPublishing(true);
+    setError('');
+    publishManuscript(manuscriptId)
+      .then(() => { setConfirming(false); onPublished(); })
+      .catch(err => setError(err.message || 'Could not publish this manuscript.'))
+      .finally(() => setPublishing(false));
   };
 
   return (
@@ -107,17 +129,45 @@ function IssueCard({ manuscriptId, decision, isAdmin }) {
         <div>
           <div className="card-title">Publication</div>
           <div className="card-meta">
-            {assigned
-              ? `Scheduled for ${assigned.label}, publishing ${assigned.publish_on}.`
-              : 'Accepted but not yet scheduled into an issue.'}
+            {isPublished
+              ? `Published ${manuscript.published_at ? new Date(manuscript.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''} — now discoverable to readers.`
+              : assigned
+                ? `Scheduled for ${assigned.label}, publishing ${assigned.publish_on}.`
+                : 'Accepted but not yet published.'}
           </div>
         </div>
-        {!isAdmin && !picking && (
+        {!isAdmin && !picking && !isPublished && (
           <button className="btn btn-ghost btn-sm" onClick={() => setPicking(true)}>
             {assigned ? 'Change issue' : 'Assign to issue'}
           </button>
         )}
       </div>
+
+      {!isAdmin && !isPublished && (
+        <>
+          {error && <div className="field-hint" style={{ color: 'var(--red-800)' }}>{error}</div>}
+          {!confirming ? (
+            <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={() => setConfirming(true)}>
+              Publish manuscript →
+            </button>
+          ) : (
+            <div className="md-confirm" style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 12 }}>
+                Publish this manuscript? It becomes publicly visible in the research
+                library, and cannot be unpublished from here.
+              </div>
+              <div className="row">
+                <button className="btn btn-primary btn-sm" onClick={publish} disabled={publishing}>
+                  {publishing ? 'Publishing…' : 'Confirm'}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setConfirming(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {picking && (
         <>
@@ -350,6 +400,12 @@ export default function ManuscriptDetail({ role = 'editor' }) {
     getManuscript(id).then(m => setManuscript(m)).catch(() => {});
   };
 
+  // Same reasoning as handleDecided — refetch rather than flipping status
+  // locally, so published_at comes from the server that stamped it.
+  const handlePublished = () => {
+    getManuscript(id).then(m => setManuscript(m)).catch(() => {});
+  };
+
   if (loadError) {
     return (
       <AppShell role={role} searchPlaceholder="Search submissions...">
@@ -504,7 +560,7 @@ export default function ManuscriptDetail({ role = 'editor' }) {
         </div>
 
         <div className="gap-grid">
-          <IssueCard manuscriptId={manuscript.id} decision={decision} isAdmin={isAdmin} />
+          <PublicationCard manuscript={manuscript} isAdmin={isAdmin} onPublished={handlePublished} />
 
           {!isAdmin && !TERMINAL_STATUSES.includes(manuscript.status) && manuscript.status !== 'revisions_requested' && (
             <DecisionPanel

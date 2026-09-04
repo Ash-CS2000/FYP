@@ -8,6 +8,24 @@ from .models import UserProfile, UserRole
 User = get_user_model()
 
 
+# Keys accepted inside UserProfile.preferences. Mirrored in
+# frontend/src/api/account.js (PREFERENCE_KEYS). Whitelisted rather than open so
+# the JSON column stays a settings store and not a dumping ground for whatever a
+# client decides to send.
+PREFERENCE_KEYS = {
+    # General
+    'language', 'timezone', 'date_format', 'theme',
+    # Notifications
+    'notify_email_digest', 'notify_in_app', 'notify_weekly_summary',
+    'notify_reviewer_reminders',
+    # Privacy
+    'privacy_visibility', 'privacy_signed_reviews',
+    # Reviewing — no columns of their own; the editor's assignment panel reads
+    # these when it is built.
+    'availability', 'unavailable_until', 'max_concurrent', 'credentials',
+}
+
+
 class UserSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     role = serializers.CharField(source='profile.role', read_only=True)
@@ -15,6 +33,27 @@ class UserSerializer(serializers.ModelSerializer):
     institution = serializers.CharField(
         source='profile.institution', required=False, allow_blank=True
     )
+
+    # Self-editable profile fields. `name`/`email` deliberately are not: they are
+    # the name of record on submissions, decision letters and certificates.
+    # display_name is the nickname the UI renders in their place.
+    display_name = serializers.CharField(
+        source='profile.display_name', required=False, allow_blank=True, max_length=50
+    )
+    bio = serializers.CharField(
+        source='profile.bio', required=False, allow_blank=True
+    )
+    website = serializers.URLField(
+        source='profile.website', required=False, allow_blank=True
+    )
+    research_areas = serializers.CharField(
+        source='profile.research_areas', required=False, allow_blank=True
+    )
+    preferences = serializers.JSONField(source='profile.preferences', required=False)
+
+    # Presence only — the image itself is served by GET /api/users/<pk>/avatar/,
+    # which re-signs a URL on each request (presigned links expire in an hour).
+    avatar_key = serializers.CharField(source='profile.avatar_key', read_only=True)
 
     roles = serializers.SerializerMethodField()
     reviewer_status = serializers.SerializerMethodField()
@@ -27,16 +66,41 @@ class UserSerializer(serializers.ModelSerializer):
             'name',
             'first_name',
             'last_name',
+            'display_name',
             'role',
             'status',
             'institution',
+            'bio',
+            'website',
+            'research_areas',
+            'preferences',
+            'avatar_key',
             'roles',
             'reviewer_status',
         )
-        read_only_fields = ('id', 'email', 'role', 'status', 'roles', 'reviewer_status')
+        # The name of record — first_name, last_name and the `name` computed
+        # from them — is not self-editable, because it is printed on
+        # submissions, decision letters and certificates; letting someone change
+        # it here would silently rewrite what is already on the published
+        # record. display_name is the editable one. Correcting a legal name goes
+        # through an editor, who has the admin endpoints for it.
+        read_only_fields = (
+            'id', 'email', 'first_name', 'last_name',
+            'role', 'status', 'roles', 'reviewer_status', 'avatar_key',
+        )
 
     def get_name(self, obj):
         return obj.get_full_name() or obj.email
+
+    def validate_preferences(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Preferences must be an object.')
+        unknown = sorted(set(value) - PREFERENCE_KEYS)
+        if unknown:
+            raise serializers.ValidationError(
+                f'Unknown preference key(s): {", ".join(unknown)}.'
+            )
+        return value
 
     def get_roles(self, obj):
         return list(obj.roles.filter(status=UserRole.Status.ACTIVE).values_list('role', flat=True))
@@ -50,6 +114,14 @@ class UserSerializer(serializers.ModelSerializer):
         instance = super().update(instance, validated_data)
         if profile_data:
             profile, _ = UserProfile.objects.get_or_create(user=instance)
+            # Preferences are one column holding many independent settings, so a
+            # PATCH carrying only the changed keys must merge rather than
+            # replace — otherwise saving a timezone would wipe every notification
+            # choice, and two tabs saving different sections would clobber each
+            # other.
+            prefs = profile_data.pop('preferences', None)
+            if prefs is not None:
+                profile.preferences = {**(profile.preferences or {}), **prefs}
             for field, value in profile_data.items():
                 setattr(profile, field, value)
             profile.save()
@@ -62,6 +134,7 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
     reviewer_status = serializers.SerializerMethodField()
     institution = serializers.CharField(source='profile.institution', default='', read_only=True)
+    avatar_key = serializers.CharField(source='profile.avatar_key', default='', read_only=True)
     status = serializers.SerializerMethodField()
     joined = serializers.DateTimeField(source='date_joined', read_only=True)
 
@@ -69,7 +142,7 @@ class AdminUserListSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'name', 'email', 'roles', 'reviewer_status',
-            'institution', 'status', 'is_active', 'joined',
+            'institution', 'avatar_key', 'status', 'is_active', 'joined',
         )
 
     def get_name(self, obj):
@@ -254,3 +327,38 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['roles'] = active_roles
         token['reviewer_status'] = reviewer_role.status if reviewer_role else ''
         return token
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """Change your own password, proving you know the current one.
+
+    Requiring the current password is what stops a borrowed unlocked laptop (or
+    a stolen access token) from being turned into permanent account takeover.
+    """
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8, max_length=128)
+
+    def validate_current_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError('That is not your current password.')
+        return value
+
+    def validate_new_password(self, value):
+        # Django's configured validators (length, common-password list, numeric,
+        # similarity to the user's own attributes). Passing the user is what
+        # enables the similarity check.
+        validate_password(value, self.context['request'].user)
+        return value
+
+    def validate(self, attrs):
+        if attrs['current_password'] == attrs['new_password']:
+            raise serializers.ValidationError(
+                {'new_password': 'The new password must be different from the current one.'}
+            )
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.context['request'].user
+        user.set_password(self.validated_data['new_password'])
+        user.save(update_fields=['password'])
+        return user

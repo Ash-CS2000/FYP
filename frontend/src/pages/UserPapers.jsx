@@ -1,171 +1,295 @@
-import { useMemo, useState } from 'react';
-import AppShell from '../components/AppShell.jsx';
-import { TOPICS, TOPIC_AREAS } from '../data/papers.js';
+// src/pages/UserPapers.jsx
+// Discover Topics (/author/discover) — research from across the literature,
+// sourced from OpenAlex.
+//
+// This page used to show our own published corpus. It no longer does, and that
+// is the point. Two published papers cannot tell an author what their field is
+// talking about, and mixing our reviewed work with fetched preprints in one list
+// would blur the only thing a peer-review system has to be unambiguous about.
+// Our library keeps its homes on /search and the landing page; this page is
+// entirely external, and says so.
+//
+// Three states, driven by the URL (?field=&topic=) so Back moves between them
+// and any view can be linked:
+//
+//   1. the 26 fields as a grid   — the landing state
+//   2. topics within one field   — most-cited first, with activity counts
+//   3. works under one topic     — each linking out to its DOI
+//
+// Search is submit-driven and server-side. The old page held the whole library
+// in memory and filtered as you typed, which data/topics.js justifies because
+// the corpus is small — an assumption that does not survive ~250 million works.
 
-function StarRating({ rating }) {
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import AppShell from '../components/AppShell.jsx';
+import WorkCard from '../components/WorkCard.jsx';
+import { listFields, listFieldTopics, listTopicWorks, searchWorks } from '../api/openalex.js';
+
+const compact = (n) => {
+  if (!n) return '0';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+  return String(n);
+};
+
+/**
+ * Load-once-per-key async data with loading and error state.
+ *
+ * Every view on this page has the same shape — fetch on key change, ignore a
+ * response that arrives after the key moved on — so it is written once here
+ * rather than three times as near-identical useEffects.
+ */
+function useRemote(fetcher, key, enabled = true) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(enabled);
+  const [error, setError] = useState('');
+
+  const run = useCallback(() => {
+    if (!enabled) { setData(null); setLoading(false); return undefined; }
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    fetcher()
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch((e) => { if (!cancelled) setError(e?.message || 'Something went wrong.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // fetcher is recreated every render by design; key is what actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, enabled]);
+
+  useEffect(run, [run]);
+  return { data, loading, error, retry: run };
+}
+
+function Loading({ label }) {
+  return <div className="dv-state">{label}</div>;
+}
+
+function Failed({ message, onRetry }) {
   return (
-    <span style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }} aria-label={`${rating} out of 5 stars`}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <svg
-          key={n}
-          width="13"
-          height="13"
-          viewBox="0 0 20 20"
-          style={{ color: n <= rating ? '#f59e0b' : 'var(--ink-200)', fill: 'currentColor' }}
-          aria-hidden="true"
-        >
-          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-        </svg>
-      ))}
-    </span>
+    <div className="dv-state">
+      <div className="alert alert-error" style={{ justifyContent: 'center' }}>{message}</div>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={onRetry}>Try again</button>
+    </div>
   );
 }
 
 export default function UserPapers() {
-  const [query, setQuery] = useState('');
-  const [area, setArea] = useState('All');
+  const [params, setParams] = useSearchParams();
+  const fieldId = params.get('field') || '';
+  const topicId = params.get('topic') || '';
+  const activeQuery = params.get('q') || '';
 
-  const filteredTopics = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return TOPICS.filter((t) => {
-      const matchesArea = area === 'All' || t.area === area;
-      const searchable = [t.topic, t.summary, t.area, t.institution, ...t.keywords]
-        .join(' ')
-        .toLowerCase();
-      return matchesArea && (!term || searchable.includes(term));
-    });
-  }, [query, area]);
+  const [queryInput, setQueryInput] = useState(activeQuery);
+  const [sort, setSort] = useState('cited');
+
+  // Keep the box in step when the URL changes underneath us — a Back press, or
+  // clearing a search by navigating.
+  useEffect(() => { setQueryInput(activeQuery); }, [activeQuery]);
+
+  const searching = Boolean(activeQuery);
+
+  const fields = useRemote(listFields, 'fields');
+  const topics = useRemote(
+    () => listFieldTopics(fieldId),
+    `topics:${fieldId}`,
+    Boolean(fieldId) && !searching,
+  );
+  const works = useRemote(
+    () => listTopicWorks(topicId, { sort }),
+    `works:${topicId}:${sort}`,
+    Boolean(topicId) && !searching,
+  );
+  const results = useRemote(
+    () => searchWorks({ q: activeQuery, field: fieldId, sort }),
+    `search:${activeQuery}:${fieldId}:${sort}`,
+    searching,
+  );
+
+  const field = (fields.data || []).find(f => f.id === fieldId);
+  const topic = (topics.data || []).find(t => t.id === topicId);
+
+  const go = (next) => setParams(
+    Object.fromEntries(Object.entries(next).filter(([, v]) => v)),
+    { replace: false },
+  );
+
+  const submitSearch = (e) => {
+    e.preventDefault();
+    const q = queryInput.trim();
+    // Keep the field as a filter when searching from inside one; drop the topic,
+    // which no longer describes what is on screen.
+    go(q ? { q, field: fieldId } : { field: fieldId });
+  };
 
   return (
-    <AppShell role="author" searchPlaceholder="Search research topics...">
+    <AppShell role="author" searchPlaceholder="Search settings...">
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">Research Discovery</span>
-          <h1 className="page-title" style={{ marginTop: 8 }}>Explore research topics.</h1>
-          <p className="page-subtitle">Browse summaries of peer-reviewed research to inspire your own original work.</p>
+          <span className="eyebrow">Research</span>
+          <h1 className="page-title" style={{ marginTop: 8 }}>
+            Discover <em className="serif-italic">topics</em>.
+          </h1>
+          <p className="page-subtitle">
+            Published research from across the literature, via OpenAlex — to read around
+            your subject and find an angle for your own paper. These papers are{' '}
+            <strong>not</strong> peer-reviewed by PaperBridge.
+          </p>
         </div>
       </div>
 
-      <div className="card fade-up delay-1" style={{ marginBottom: 22 }}>
-        <div className="field-grid">
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label className="field-label">Search topics</label>
-            <input
-              className="field-input"
-              type="search"
-              placeholder="Search by topic, keyword, or institution..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label className="field-label">Research Area</label>
-            <select className="field-select" value={area} onChange={(e) => setArea(e.target.value)}>
-              {TOPIC_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
-          </div>
-        </div>
-      </div>
+      {/* Breadcrumb doubles as the way back up. Rendered only once you are
+          somewhere, so the landing state stays uncluttered. */}
+      {(fieldId || searching) && (
+        <nav className="dv-crumbs fade-up" aria-label="Breadcrumb">
+          <button type="button" className="dv-crumb" onClick={() => go({})}>All fields</button>
+          {field && (
+            <>
+              <span className="dv-crumb-sep">/</span>
+              <button
+                type="button"
+                className="dv-crumb"
+                onClick={() => go({ field: fieldId })}
+                disabled={!topicId && !searching}
+              >
+                {field.name}
+              </button>
+            </>
+          )}
+          {topic && !searching && (
+            <>
+              <span className="dv-crumb-sep">/</span>
+              <span className="dv-crumb dv-crumb-here">{topic.name}</span>
+            </>
+          )}
+          {searching && (
+            <>
+              <span className="dv-crumb-sep">/</span>
+              <span className="dv-crumb dv-crumb-here">“{activeQuery}”</span>
+            </>
+          )}
+        </nav>
+      )}
 
-      <div className="portal-toolbar">
-        <div>
-          <div className="card-title">
-            {filteredTopics.length} research {filteredTopics.length === 1 ? 'topic' : 'topics'} found
-          </div>
-          <div className="card-meta">Summaries only — full documents are not available for download.</div>
-        </div>
-      </div>
+      <form className="dv-search fade-up" onSubmit={submitSearch}>
+        <input
+          className="field-input"
+          value={queryInput}
+          onChange={e => setQueryInput(e.target.value)}
+          placeholder={field ? `Search within ${field.name}…` : 'Search the literature…'}
+          aria-label="Search published research"
+        />
+        <button type="submit" className="btn btn-primary btn-sm" disabled={queryInput.trim().length < 2}>
+          Search
+        </button>
+        {searching && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => go({ field: fieldId })}>
+            Clear
+          </button>
+        )}
+        {(searching || topicId) && (
+          <select className="field-select dv-sort" value={sort} onChange={e => setSort(e.target.value)}>
+            <option value="cited">Most cited</option>
+            <option value="recent">Most recent</option>
+          </select>
+        )}
+      </form>
 
-      <div className="topic-feed fade-up delay-2">
-        <style>{`
-          .topic-feed {
-            border: 1px solid var(--ink-200);
-            border-radius: var(--r-lg);
-            overflow: hidden;
-            background: var(--white);
-          }
-          .topic-entry {
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--ink-100);
-            transition: background 0.12s;
-          }
-          .topic-entry:last-child { border-bottom: none; }
-          .topic-entry:hover { background: var(--ink-50); }
-          .topic-entry-title {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--navy-800, #1e3a5f);
-            margin-bottom: 6px;
-            line-height: 1.35;
-          }
-          .topic-entry-summary {
-            font-size: 13.5px;
-            color: var(--ink-700);
-            line-height: 1.65;
-            margin-bottom: 10px;
-          }
-          .topic-entry-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-bottom: 12px;
-          }
-          .topic-tag {
-            background: var(--ink-100);
-            color: var(--ink-600);
-            font-size: 11.5px;
-            padding: 3px 8px;
-            border-radius: var(--r-pill);
-          }
-          .topic-entry-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 8px;
-          }
-          .topic-attribution {
-            font-size: 12.5px;
-            color: var(--ink-500);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-          }
-          .topic-attribution-sep { color: var(--ink-300); }
-          .topic-empty {
-            padding: 56px 24px;
-            text-align: center;
-            color: var(--ink-500);
-            font-size: 14px;
-          }
-        `}</style>
+      <div className="fade-up delay-1">
+        {/* ── Search results ─────────────────────────────────────────────── */}
+        {searching && (
+          results.loading ? <Loading label="Searching the literature…" />
+          : results.error ? <Failed message={results.error} onRetry={results.retry} />
+          : (results.data || []).length === 0
+            ? <div className="dv-state">No papers matched “{activeQuery}”.</div>
+            : (
+              <>
+                <div className="dv-count">
+                  {results.data.length} result{results.data.length === 1 ? '' : 's'}
+                  {field && <> in {field.name}</>}
+                </div>
+                <div className="dv-list">
+                  {results.data.map(w => <WorkCard key={w.id} work={w} />)}
+                </div>
+              </>
+            )
+        )}
 
-        {filteredTopics.length === 0 ? (
-          <div className="topic-empty">No topics match your search. Try different keywords or clear the area filter.</div>
-        ) : (
-          filteredTopics.map((t) => (
-            <article className="topic-entry" key={t.id}>
-              <div className="topic-entry-title">{t.topic}</div>
-              <p className="topic-entry-summary">{t.summary}</p>
-              <div className="topic-entry-tags">
-                {t.keywords.map((kw) => (
-                  <span key={kw} className="topic-tag">{kw}</span>
+        {/* ── Works under a topic ────────────────────────────────────────── */}
+        {!searching && topicId && (
+          works.loading ? <Loading label="Loading papers…" />
+          : works.error ? <Failed message={works.error} onRetry={works.retry} />
+          : (
+            <>
+              {topic?.description && <p className="dv-topic-desc">{topic.description}</p>}
+              <div className="dv-list">
+                {(works.data || []).map(w => <WorkCard key={w.id} work={w} />)}
+              </div>
+            </>
+          )
+        )}
+
+        {/* ── Topics in a field ──────────────────────────────────────────── */}
+        {!searching && fieldId && !topicId && (
+          topics.loading ? <Loading label="Loading topics…" />
+          : topics.error ? <Failed message={topics.error} onRetry={topics.retry} />
+          : (
+            <>
+              <div className="dv-count">
+                Active research topics in {field?.name || 'this field'}, most cited first.
+              </div>
+              <div className="dv-topics">
+                {(topics.data || []).map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="dv-topic"
+                    onClick={() => go({ field: fieldId, topic: t.id })}
+                  >
+                    <span className="dv-topic-name">{t.name}</span>
+                    {t.subfield && <span className="dv-topic-sub">{t.subfield}</span>}
+                    <span className="dv-topic-counts">
+                      {compact(t.works_count)} papers
+                      <span className="wk-sep">·</span>
+                      {compact(t.cited_by_count)} citations
+                    </span>
+                  </button>
                 ))}
               </div>
-              <div className="topic-entry-footer">
-                <span className="topic-attribution">
-                  <span>{t.institution}</span>
-                  <span className="topic-attribution-sep">·</span>
-                  <span>{t.level} level</span>
-                  <span className="topic-attribution-sep">·</span>
-                  <span>{t.year}</span>
-                </span>
-                <StarRating rating={t.rating} />
-              </div>
-            </article>
-          ))
+            </>
+          )
+        )}
+
+        {/* ── The 26 fields ──────────────────────────────────────────────── */}
+        {!searching && !fieldId && (
+          fields.loading ? <Loading label="Loading research fields…" />
+          : fields.error ? <Failed message={fields.error} onRetry={fields.retry} />
+          : (
+            <div className="dv-fields">
+              {(fields.data || []).map(f => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className="dv-field"
+                  onClick={() => go({ field: f.id })}
+                >
+                  <span className="dv-field-domain">{f.domain}</span>
+                  <span className="dv-field-name">{f.name}</span>
+                  <span className="dv-field-count">{compact(f.works_count)} papers</span>
+                </button>
+              ))}
+            </div>
+          )
         )}
       </div>
+
+      <p className="dv-credit">
+        Metadata from <a href="https://openalex.org" target="_blank" rel="noopener noreferrer">OpenAlex</a>,
+        an open catalogue of scholarly work. Summaries only — follow a paper’s DOI to read it at
+        the publisher.
+      </p>
     </AppShell>
   );
 }

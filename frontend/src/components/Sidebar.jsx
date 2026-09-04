@@ -4,7 +4,8 @@ import { getMergedSidebar } from '../data/sidebarConfig.jsx';
 import { clearDemoSession, getDemoSession } from '../data/demoAccounts.js';
 import { clearSession } from '../api/auth';
 import { workspaceEntry, ROLE_LABELS, setActiveRole } from '../auth/roles';
-import { getStoredUser, getInitials } from '../utils/user.js';
+import Avatar from './Avatar.jsx';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 
 // Remember the sidebar's scroll position across route changes. Each page mounts
 // a fresh AppShell → Sidebar, which would otherwise snap scroll back to the top.
@@ -21,22 +22,23 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificati
     if (el) el.scrollTop = savedSidebarScroll;
   }, []);
 
-  const storedUser = getStoredUser();
+  const { user: storedUser } = useCurrentUser();
   // Show ONLY the workspace we're currently in (the route's role), not a merge
   // of every role. The full role list is used for the switcher options below.
   const cfg = getMergedSidebar([role]);
   if (!cfg) return null;
 
   const session = getDemoSession();
-  const user = session
-    ? session
-    : storedUser
-      ? {
-          name: storedUser.name,
-          initials: getInitials(storedUser),
-          role: storedUser.institution || cfg.role,
-        }
-      : cfg.user;
+  // The nickname is what this is for — it is the name someone chose to be known
+  // by. Falls back to the name of record, then the email, never to a fictional
+  // person.
+  const displayUser = session || storedUser;
+  const displayName = session
+    ? session.name
+    : storedUser?.display_name || storedUser?.name || storedUser?.email || '';
+  const subtitle = session
+    ? session.role
+    : storedUser?.institution || cfg.role;
   const availableRoles = storedUser?.roles?.length ? storedUser.roles : [role];
   const canSwitchRole = availableRoles.length > 1;
 
@@ -127,10 +129,16 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificati
           </div>
         )}
         <div className="sidebar-user">
-          <div className="sidebar-avatar">{user.initials}</div>
+          <Avatar
+            user={displayUser}
+            size="lg"
+            tone="amber"
+            label={displayName}
+            className="sidebar-avatar"
+          />
           <div className="sidebar-user-info">
-            <div className="sidebar-user-name">{user.name}</div>
-            <div className="sidebar-user-role">{user.role}</div>
+            <div className="sidebar-user-name">{displayName}</div>
+            <div className="sidebar-user-role">{subtitle}</div>
           </div>
         </div>
         <button type="button" className="sidebar-signout" title="Sign out" onClick={handleSignOut}>

@@ -38,11 +38,13 @@ import ManuscriptDetail from './pages/ManuscriptDetail.jsx';
 import AuthorPaper from './pages/AuthorPaper.jsx';
 import ReviewerAssignments from './pages/ReviewerAssignments.jsx';
 import AssignmentGate from './auth/AssignmentGate.jsx';
+import { CurrentUserProvider } from './auth/CurrentUserContext.jsx';
 import AdminAudit from './pages/AdminAudit.jsx';
 import EditorInvite from './pages/EditorInvite.jsx';
 
 export default function App() {
   return (
+    <CurrentUserProvider>
     <Routes>
       {/* Public */}
       <Route path="/" element={<HomePage />} />
@@ -122,6 +124,7 @@ export default function App() {
           <Route path="/reviewer/completed" element={<ReviewerCompleted />} />
           <Route path="/reviewer/notifications" element={<Notifications role="reviewer" />} />
           <Route path="/reviewer/profile" element={<Profile role="reviewer" />} />
+          <Route path="/reviewer/settings" element={<Settings role="reviewer" />} />
         </Route>
       </Route>
 
@@ -137,6 +140,7 @@ export default function App() {
         <Route path="/editor/submissions/:id/reviews" element={<EditorReviews />} />
         <Route path="/editor/submissions/:id/similarity" element={<SimilarityReport />} />
         <Route path="/editor/notifications" element={<Notifications role="editor" />} />
+        <Route path="/editor/profile" element={<Profile role="editor" />} />
         <Route path="/editor/settings" element={<Settings role="editor" />} />
       </Route>
 
@@ -151,6 +155,7 @@ export default function App() {
         <Route path="/admin/submissions/:id" element={<ManuscriptDetail role="admin" />} />
         <Route path="/admin/submissions/:id/reviews" element={<EditorReviews role="admin" />} />
         <Route path="/admin/submissions/:id/similarity" element={<SimilarityReport role="admin" />} />
+        <Route path="/admin/profile" element={<Profile role="admin" />} />
         <Route path="/admin/settings" element={<Settings role="admin" />} />
       </Route>
 
@@ -159,5 +164,6 @@ export default function App() {
       {/* Fallback */}
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </CurrentUserProvider>
   );
 }

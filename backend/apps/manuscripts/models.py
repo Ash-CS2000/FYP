@@ -48,6 +48,11 @@ class Manuscript(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Set when an editor publishes the manuscript. Separate from submitted_at
+    # because a discovery card shows the publication year, not the year the
+    # author happened to submit — those can be different years entirely.
+    published_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
         return f'{self.title} ({self.owner.email})'
 

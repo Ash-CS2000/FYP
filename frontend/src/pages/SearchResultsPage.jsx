@@ -1,136 +1,68 @@
-import { useMemo, useState } from 'react';
+// src/pages/SearchResultsPage.jsx
+// The public research library at /search — reachable logged out, so everything
+// here goes through api/discovery.js (plain fetch, no bearer token) rather than
+// authFetch, which would bounce an anonymous or stale-session visitor to /login.
+//
+// Search is submit-driven and lives in the URL, so a result page is shareable.
+// Sorting is deliberately NOT in the URL and never refetches: filtering narrows
+// what we fetch, sorting reorders what we already hold.
+
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import PublicNav from '../components/PublicNav.jsx';
-
-const TOPICS = [
-  {
-    id: 'topic-001',
-    topic: 'Deep Learning Applications in Medical Imaging',
-    summary: 'Investigates how convolutional and transformer-based neural networks are used for diagnostic classification in radiology and pathology.',
-    institution: 'University of Malaya',
-    level: "Master's",
-    year: 2024,
-    rating: 5,
-    area: 'Computer Science',
-    keywords: ['deep learning', 'medical imaging', 'CNN', 'computer vision'],
-  },
-  {
-    id: 'topic-002',
-    topic: 'Large Language Models and NLP Benchmarks',
-    summary: 'Reviews the landscape of large language model evaluation methodologies, benchmark design, and limitations in open-domain tasks.',
-    institution: 'Universiti Teknologi Malaysia',
-    level: "Master's",
-    year: 2025,
-    rating: 4,
-    area: 'Computer Science',
-    keywords: ['NLP', 'language model', 'benchmarks', 'evaluation'],
-  },
-  {
-    id: 'topic-003',
-    topic: 'Quantum Computing in Combinatorial Optimization',
-    summary: 'Examines the practical viability of quantum annealing and variational algorithms for solving NP-hard logistics and scheduling problems.',
-    institution: 'Universiti Sains Malaysia',
-    level: 'Doctoral',
-    year: 2024,
-    rating: 4,
-    area: 'Physics',
-    keywords: ['quantum computing', 'optimization', 'QAOA', 'simulation'],
-  },
-  {
-    id: 'topic-004',
-    topic: 'Smart Grid Load Balancing with Renewable Sources',
-    summary: 'Analyzes demand-response strategies and optimization frameworks for integrating solar and wind energy into distributed grid systems.',
-    institution: 'Universiti Putra Malaysia',
-    level: "Bachelor's",
-    year: 2024,
-    rating: 3,
-    area: 'Engineering',
-    keywords: ['renewable energy', 'smart grid', 'optimization', 'load balancing'],
-  },
-  {
-    id: 'topic-005',
-    topic: 'IoT Security Architectures for Smart City Infrastructure',
-    summary: 'Develops threat classification models and mitigation frameworks for IoT device vulnerabilities in urban sensor networks.',
-    institution: 'University of Malaya',
-    level: "Master's",
-    year: 2025,
-    rating: 4,
-    area: 'Engineering',
-    keywords: ['IoT', 'smart city', 'cybersecurity', 'threat modelling'],
-  },
-  {
-    id: 'topic-006',
-    topic: 'Blockchain Transparency in ASEAN Supply Chains',
-    summary: 'Surveys adoption patterns and governance challenges of blockchain-based traceability in manufacturing and procurement across Southeast Asia.',
-    institution: 'Universiti Malaya',
-    level: "Bachelor's",
-    year: 2024,
-    rating: 3,
-    area: 'Business',
-    keywords: ['blockchain', 'supply chain', 'ASEAN', 'traceability'],
-  },
-  {
-    id: 'topic-007',
-    topic: 'Federated Learning for Privacy-Preserving Health Analytics',
-    summary: 'Explores decentralized model training approaches that enable cross-hospital collaboration without sharing raw patient data.',
-    institution: 'Universiti Kebangsaan Malaysia',
-    level: 'Doctoral',
-    year: 2025,
-    rating: 5,
-    area: 'Computer Science',
-    keywords: ['federated learning', 'privacy', 'healthcare', 'machine learning'],
-  },
-  {
-    id: 'topic-008',
-    topic: 'Carbon Capture Material Design Using Computational Chemistry',
-    summary: 'Investigates metal-organic frameworks and porous materials simulated at atomic scale for selective CO2 adsorption and sequestration.',
-    institution: 'Universiti Sains Malaysia',
-    level: "Master's",
-    year: 2023,
-    rating: 4,
-    area: 'Chemistry',
-    keywords: ['carbon capture', 'MOF', 'computational chemistry', 'climate'],
-  },
-];
-
-const AREAS = ['All', 'Computer Science', 'Engineering', 'Physics', 'Business', 'Chemistry'];
-
-function StarRating({ rating }) {
-  return (
-    <span className="star-rating" aria-label={`${rating} out of 5 stars`}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <svg
-          key={n}
-          className={`star-icon${n <= rating ? ' star-filled' : ' star-empty'}`}
-          viewBox="0 0 20 20"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-hidden="true"
-        >
-          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-        </svg>
-      ))}
-    </span>
-  );
-}
+import TopicCard from '../components/TopicCard.jsx';
+import { listPublishedCategories, listPublishedTopics } from '../api/discovery.js';
+import { AREA_ALL, areaOptions } from '../data/topics.js';
 
 export default function SearchResultsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // The param is `category`, matching the backend and the landing page's footer
+  // links. It used to be read as `area` while HomePage linked to `?category=`,
+  // which quietly made all four of those links do nothing.
   const [query, setQuery] = useState(searchParams.get('q') || '');
-  const [area, setArea] = useState(searchParams.get('area') || 'All');
-  const [sort, setSort] = useState('relevant');
+  const [area, setArea] = useState(searchParams.get('category') || AREA_ALL);
+  const [sort, setSort] = useState('newest');
+
+  const [topics, setTopics] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  const activeQuery = searchParams.get('q') || '';
+  const activeArea = searchParams.get('category') || AREA_ALL;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
+    listPublishedTopics({ q: activeQuery, category: activeArea === AREA_ALL ? '' : activeArea })
+      .then((data) => { if (!cancelled) setTopics(data); })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load the research library.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeQuery, activeArea]);
+
+  // Non-fatal: without it the dropdown is just 'All'.
+  useEffect(() => {
+    let cancelled = false;
+    listPublishedCategories()
+      .then((data) => { if (!cancelled) setCategories(data); })
+      .catch(() => { /* dropdown degrades to 'All' */ });
+    return () => { cancelled = true; };
+  }, []);
 
   function handleSearch(e) {
     e.preventDefault();
     const params = new URLSearchParams();
     if (query.trim()) params.set('q', query.trim());
-    if (area !== 'All') params.set('area', area);
+    if (area !== AREA_ALL) params.set('category', area);
     setSearchParams(params);
   }
 
   function handleKeywordClick(keyword) {
     setQuery(keyword);
-    setArea('All');
+    setArea(AREA_ALL);
     const params = new URLSearchParams();
     params.set('q', keyword);
     setSearchParams(params);
@@ -138,33 +70,22 @@ export default function SearchResultsPage() {
 
   function clearFilters() {
     setQuery('');
-    setArea('All');
-    setSort('relevant');
+    setArea(AREA_ALL);
+    setSort('newest');
     setSearchParams({});
   }
 
-  const activeQuery = searchParams.get('q') || '';
-  const activeArea = searchParams.get('area') || 'All';
-
+  // Sort only — the server already filtered. No network call on a chip click.
   const filteredTopics = useMemo(() => {
-    const term = activeQuery.trim().toLowerCase();
-
-    let result = TOPICS.filter((t) => {
-      const matchesArea = activeArea === 'All' || t.area === activeArea;
-      const searchable = [t.topic, t.summary, t.area, t.institution, ...t.keywords]
-        .join(' ')
-        .toLowerCase();
-      return matchesArea && (!term || searchable.includes(term));
-    });
-
-    if (sort === 'top-rated') {
-      result = [...result].sort((a, b) => b.rating - a.rating);
-    } else if (sort === 'newest') {
-      result = [...result].sort((a, b) => b.year - a.year);
+    const result = [...topics];
+    if (sort === 'title') {
+      result.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sort === 'oldest') {
+      result.sort((a, b) => new Date(a.published_at) - new Date(b.published_at));
     }
-
+    // 'newest' is the order the server already returned.
     return result;
-  }, [activeQuery, activeArea, sort]);
+  }, [topics, sort]);
 
   return (
     <div className="search-portal">
@@ -255,76 +176,11 @@ export default function SearchResultsPage() {
           overflow: hidden;
           background: var(--white);
         }
-        .topic-row {
-          padding: 20px 24px;
-          border-bottom: 1px solid var(--ink-100);
-          transition: background 0.12s;
-        }
-        .topic-row:last-child { border-bottom: none; }
-        .topic-row:hover { background: var(--ink-50); }
-
-        .topic-name {
-          font-size: 16px;
-          font-weight: 600;
-          color: var(--navy-800, #1e3a5f);
-          margin-bottom: 6px;
-          line-height: 1.3;
-        }
-        .topic-summary {
-          font-size: 14px;
-          color: var(--ink-700);
-          line-height: 1.6;
-          margin-bottom: 10px;
-        }
-        .topic-keywords {
-          display: flex;
-          gap: 5px;
-          flex-wrap: wrap;
-          margin-bottom: 12px;
-        }
-        .topic-keyword-tag {
-          background: var(--ink-100);
-          color: var(--ink-600);
-          font-size: 11.5px;
-          padding: 3px 8px;
-          border-radius: var(--r-pill);
-          border: none;
-          cursor: pointer;
-          font-family: inherit;
-          transition: background 0.12s, color 0.12s;
-        }
-        .topic-keyword-tag:hover {
-          background: var(--navy-100, #dbeafe);
-          color: var(--navy-700, #1d4ed8);
-        }
-        .topic-footer {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          flex-wrap: wrap;
-          gap: 10px;
-        }
-        .topic-attribution {
-          font-size: 12.5px;
-          color: var(--ink-500);
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .topic-attribution-sep { color: var(--ink-300); }
-
-        .star-rating {
-          display: inline-flex;
-          gap: 2px;
-          align-items: center;
-        }
-        .star-icon {
-          width: 14px;
-          height: 14px;
-          fill: currentColor;
-        }
-        .star-filled { color: #f59e0b; }
-        .star-empty  { color: var(--ink-200); }
+        /* The row itself is styled by components/TopicCard.jsx, which both this
+           page and Discover share. These rules used to be duplicated here under
+           different names, and .topic-attribution / .topic-attribution-sep were
+           declared in both files with different values — whichever page mounted
+           last won. */
 
         .empty-state {
           text-align: center;
@@ -353,7 +209,6 @@ export default function SearchResultsPage() {
         @media (max-width: 680px) {
           .search-bar-row { grid-template-columns: 1fr; }
           .search-hero, .search-main { padding: 20px 16px; }
-          .topic-footer { flex-direction: column; align-items: flex-start; }
         }
       `}</style>
 
@@ -380,7 +235,7 @@ export default function SearchResultsPage() {
               onChange={(e) => setQuery(e.target.value)}
             />
             <select value={area} onChange={(e) => setArea(e.target.value)}>
-              {AREAS.map((a) => (
+              {areaOptions(categories).map((a) => (
                 <option key={a} value={a}>{a}</option>
               ))}
             </select>
@@ -393,72 +248,81 @@ export default function SearchResultsPage() {
         <div className="search-inner">
           <div className="search-toolbar">
             <p className="result-count">
-              <strong>{filteredTopics.length}</strong> research {filteredTopics.length === 1 ? 'topic' : 'topics'} found
-              {activeQuery && <> for <em>"{activeQuery}"</em></>}
+              {loading
+                ? 'Searching…'
+                : <>
+                    <strong>{filteredTopics.length}</strong> published {filteredTopics.length === 1 ? 'paper' : 'papers'} found
+                    {activeQuery && <> for <em>"{activeQuery}"</em></>}
+                  </>}
             </p>
+            {/* No "Top Rated" — there is no rating in the system — and no
+                "Relevant", because the server has no relevance score and a chip
+                that claims one would be a lie. */}
             <div className="sort-chips">
-              <button
-                className={`filter-chip${sort === 'relevant' ? ' active' : ''}`}
-                onClick={() => setSort('relevant')}
-              >
-                Relevant
-              </button>
-              <button
-                className={`filter-chip${sort === 'top-rated' ? ' active' : ''}`}
-                onClick={() => setSort('top-rated')}
-              >
-                Top Rated
-              </button>
               <button
                 className={`filter-chip${sort === 'newest' ? ' active' : ''}`}
                 onClick={() => setSort('newest')}
               >
                 Newest
               </button>
+              <button
+                className={`filter-chip${sort === 'oldest' ? ' active' : ''}`}
+                onClick={() => setSort('oldest')}
+              >
+                Oldest
+              </button>
+              <button
+                className={`filter-chip${sort === 'title' ? ' active' : ''}`}
+                onClick={() => setSort('title')}
+              >
+                A–Z
+              </button>
             </div>
           </div>
 
-          {filteredTopics.length === 0 ? (
+          {loading && <div className="empty-state"><p>Loading published research…</p></div>}
+
+          {!loading && loadError && (
+            <div className="empty-state">
+              <div className="empty-state-icon">&#x26A0;&#xFE0F;</div>
+              <h3>Could not load the research library</h3>
+              <p>{loadError}</p>
+            </div>
+          )}
+
+          {/* "Nothing published yet" and "nothing matched" are different
+              situations. Telling a visitor to change their keywords when the
+              library is simply empty sends them chasing a result that cannot
+              exist. */}
+          {!loading && !loadError && filteredTopics.length === 0 && (
             <div className="empty-state">
               <div className="empty-state-icon">&#x1F50D;</div>
-              <h3>No topics match your search</h3>
-              <p>
-                {activeQuery && `No results for "${activeQuery}"`}
-                {activeQuery && activeArea !== 'All' && ` in area "${activeArea}"`}
-                {!activeQuery && activeArea !== 'All' && `No topics in area "${activeArea}"`}
-              </p>
-              <button className="btn btn-primary" onClick={clearFilters}>
-                Clear Filters
-              </button>
+              {activeQuery || activeArea !== AREA_ALL ? (
+                <>
+                  <h3>No papers match your search</h3>
+                  <p>
+                    {activeQuery && `No results for "${activeQuery}"`}
+                    {activeQuery && activeArea !== AREA_ALL && ` in "${activeArea}"`}
+                    {!activeQuery && activeArea !== AREA_ALL && `No published papers in "${activeArea}"`}
+                  </p>
+                  <button className="btn btn-primary" onClick={clearFilters}>
+                    Clear Filters
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h3>Nothing published yet</h3>
+                  <p>Published research will appear here as papers complete peer review.</p>
+                </>
+              )}
             </div>
-          ) : (
+          )}
+
+          {!loading && !loadError && filteredTopics.length > 0 && (
             <ul className="topic-list" role="list">
               {filteredTopics.map((t) => (
-                <li className="topic-row" key={t.id}>
-                  <div className="topic-name">{t.topic}</div>
-                  <p className="topic-summary">{t.summary}</p>
-                  <div className="topic-keywords">
-                    {t.keywords.map((kw) => (
-                      <button
-                        key={kw}
-                        className="topic-keyword-tag"
-                        onClick={() => handleKeywordClick(kw)}
-                        title={`Search "${kw}"`}
-                      >
-                        {kw}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="topic-footer">
-                    <span className="topic-attribution">
-                      <span>{t.institution}</span>
-                      <span className="topic-attribution-sep">·</span>
-                      <span>{t.level} level</span>
-                      <span className="topic-attribution-sep">·</span>
-                      <span>{t.year}</span>
-                    </span>
-                    <StarRating rating={t.rating} />
-                  </div>
+                <li key={t.id}>
+                  <TopicCard topic={t} onKeywordClick={handleKeywordClick} />
                 </li>
               ))}
             </ul>

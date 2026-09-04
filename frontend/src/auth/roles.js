@@ -2,6 +2,8 @@
 // Single source of truth for role identity and post-auth routing.
 // Keep every "where does this role go?" decision here — do not re-declare
 // route maps in pages/components.
+import { getStoredUser } from '../utils/user.js';
+
 
 import { isTrained } from '../data/trainingProgress.js';
 
@@ -29,15 +31,10 @@ export const ROLE_DESCRIPTIONS = {
 const ACTIVE_ROLE_KEY = 'paperbridge-active-role';
 
 // Read the logged-in user (works for both demo and real backend sessions,
-// since both persist a `user` object in localStorage).
-export function getStoredUser() {
-  try {
-    const raw = localStorage.getItem('user');
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
+// since both persist a `user` object in localStorage). Re-exported from
+// utils/user.js rather than reimplemented — this file used to carry a second
+// copy, and two implementations of "who is signed in" is one too many.
+export { getStoredUser } from '../utils/user.js';
 
 // A session exists if we have a stored user. Demo accounts have no JWT, so we
 // deliberately do NOT gate on the access token here.

@@ -985,18 +985,32 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .activity-text strong { color: var(--navy-900); font-weight: 600; }
 .activity-time { font-size: 12px; color: var(--ink-500); margin-top: 2px; }
 
-/* Avatar */
+/* Avatar
+   One component renders all of these (components/Avatar.jsx). Size comes from
+   the `size` prop as an inline width/height, so these rules carry only shape and
+   colour; the tones are the treatments that already existed in the app. */
 .avatar {
   width: 32px; height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--navy-700), var(--navy-900));
-  color: var(--white);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
   font-size: 12px;
   flex-shrink: 0;
+  overflow: hidden;
+  user-select: none;
+}
+/* When it is a photo rather than initials. */
+img.avatar { object-fit: cover; display: block; background: var(--ink-100); }
+
+.avatar-navy  { background: linear-gradient(135deg, var(--navy-700), var(--navy-900)); color: var(--white); }
+.avatar-amber { background: linear-gradient(135deg, var(--amber-500), var(--amber-700)); color: var(--navy-900); }
+.avatar-flat  { background: var(--navy-900); color: var(--white); font-weight: 700; }
+/* Bare .avatar keeps its old navy look for the call sites that pass no tone. */
+.avatar:not([class*="avatar-navy"]):not([class*="avatar-amber"]):not([class*="avatar-flat"]) {
+  background: linear-gradient(135deg, var(--navy-700), var(--navy-900));
+  color: var(--white);
 }
 .avatar-sm { width: 24px; height: 24px; font-size: 10px; }
 
@@ -2724,3 +2738,276 @@ button:disabled {
   content: '✓';
   color: var(--teal-700);
 }
+
+/* ================================================
+   Account: editable cards, switches, alerts
+   Used by Profile and Settings via components/EditableCard.jsx.
+================================================ */
+
+/* Cards open read-only and are put into edit mode deliberately, so the header
+   carries the Edit button and the saved-confirmation pill. */
+.ec-head-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.ec-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ink-100);
+}
+.ec-footer-note { font-size: 12.5px; color: var(--ink-500); margin-right: auto; }
+/* No note: push the buttons to the right anyway. */
+.ec-footer > .btn:first-child { margin-left: auto; }
+.ec-footer-note ~ .btn:first-of-type { margin-left: 0; }
+
+/* Read-only rows in view mode. */
+.ec-row { padding: 11px 0; border-bottom: 1px solid var(--ink-100); }
+.ec-row:last-child { border-bottom: none; }
+.ec-row-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-600);
+  margin-bottom: 3px;
+}
+.ec-row-value { font-size: 14px; color: var(--navy-900); line-height: 1.55; word-break: break-word; }
+.ec-row-value.ec-row-empty { color: var(--ink-400); font-style: italic; }
+.ec-row-hint { margin-top: 4px; }
+.ec-lock { color: var(--ink-400); flex-shrink: 0; }
+
+/* A field that is never editable — the name of record, your email. Styled as an
+   input so the form reads as one thing, but visibly inert. */
+.field-locked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r-md);
+  background: var(--ink-50);
+  font-size: 14px;
+  color: var(--ink-700);
+  cursor: not-allowed;
+}
+.field-locked .ec-lock { color: var(--ink-500); }
+
+/* Two-column field grid collapses on narrow screens — the account forms are the
+   densest in the app and were overflowing on phones. */
+@media (max-width: 720px) {
+  .field-grid { grid-template-columns: 1fr; }
+}
+
+/* Inline banners. These shapes were being re-declared inline at every call
+   site; same look, one definition. */
+.alert {
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.alert-error   { background: var(--red-50);  border: 1px solid #f5c6c6; color: var(--red-700); }
+.alert-success { background: var(--teal-50); border: 1px solid #a8dcc8; color: var(--teal-800); }
+.alert-warning { background: #fffbeb;        border: 1px solid #f0d58c; color: #92600a; }
+.alert-info    { background: var(--navy-100); border: 1px solid var(--ink-200); color: var(--navy-800); }
+
+/* Toggle rows. Replaces ~40 lines of duplicated inline switch styling that had
+   been pasted into Settings twice. */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--ink-100);
+}
+.toggle-row:last-of-type { border-bottom: none; }
+.toggle-row-text { flex: 1; min-width: 0; }
+.toggle-row-label { font-size: 14px; font-weight: 600; color: var(--navy-900); }
+.toggle-row-desc { font-size: 12.5px; color: var(--ink-600); margin-top: 2px; line-height: 1.5; }
+.toggle-row-error { font-size: 12.5px; color: var(--red-700); margin-top: 4px; }
+
+.switch { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch-track {
+  position: absolute;
+  inset: 0;
+  background: var(--ink-300);
+  border-radius: var(--r-pill);
+  transition: background var(--t-fast);
+  pointer-events: none;
+}
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: var(--white);
+  border-radius: 50%;
+  transition: transform var(--t-fast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.switch input:checked ~ .switch-track { background: var(--navy-900); }
+.switch input:checked ~ .switch-track .switch-thumb { transform: translateX(18px); }
+.switch input:focus-visible ~ .switch-track { box-shadow: 0 0 0 3px rgba(24, 95, 165, 0.25); }
+.switch input:disabled ~ .switch-track { opacity: 0.55; }
+.switch input:disabled { cursor: not-allowed; }
+
+/* Profile identity card */
+.pf-identity { text-align: center; }
+.pf-identity .avatar { margin: 12px auto 16px; }
+.pf-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--navy-900);
+  line-height: 1.3;
+}
+.pf-sub { font-size: 13px; color: var(--ink-600); margin-top: 4px; }
+.pf-roles { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 12px; }
+.pf-photo-actions { display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+
+/* Settings section nav — reuses .tabs, adds wrapping for the narrow case. */
+.settings-tabs { flex-wrap: wrap; }
+.settings-tabs .tab { background: none; border-top: none; border-left: none; border-right: none; }
+
+/* Password rules checklist — stated before you submit, not discovered by
+   failing. The similarity rule in particular is invisible until it fires. */
+.pw-rules {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.pw-rules li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--ink-500);
+  line-height: 1.5;
+  transition: color var(--t-fast);
+}
+.pw-rule-mark { width: 11px; flex-shrink: 0; text-align: center; font-size: 11px; }
+.pw-rules li.met { color: var(--teal-800); }
+.pw-rules li.unmet { color: var(--ink-600); }
+
+/* ================================================
+   Discover Topics — external research (OpenAlex)
+   Field grid → topic list → works. See pages/UserPapers.jsx.
+================================================ */
+
+.dv-crumbs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.dv-crumb {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: 13px; font-weight: 500; color: var(--navy-700); font-family: inherit;
+}
+.dv-crumb:hover:not(:disabled) { text-decoration: underline; }
+.dv-crumb:disabled { cursor: default; color: var(--ink-600); }
+.dv-crumb-here { color: var(--navy-900); font-weight: 600; cursor: default; }
+.dv-crumb-sep { color: var(--ink-400); font-size: 13px; }
+
+.dv-search { display: flex; gap: 10px; align-items: center; margin-bottom: 22px; flex-wrap: wrap; }
+.dv-search .field-input { flex: 1; min-width: 220px; }
+.dv-sort { max-width: 160px; }
+
+.dv-count { font-size: 13px; color: var(--ink-600); margin-bottom: 14px; }
+
+.dv-state {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 56px 24px; color: var(--ink-500); font-size: 14px; text-align: center;
+}
+
+/* ── The 26 fields ──────────────────────────────────────────────────────── */
+.dv-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+.dv-field {
+  display: flex; flex-direction: column; gap: 4px;
+  text-align: left; cursor: pointer; font-family: inherit;
+  background: var(--white); border: 1px solid var(--ink-200);
+  border-radius: var(--r-lg); padding: 18px;
+  transition: all var(--t-fast);
+}
+.dv-field:hover {
+  border-color: var(--navy-700);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.dv-field-domain {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--amber-700);
+}
+.dv-field-name {
+  font-family: var(--font-display); font-size: 16.5px; font-weight: 500;
+  color: var(--navy-900); line-height: 1.3;
+}
+.dv-field-count { font-size: 12px; color: var(--ink-500); margin-top: 2px; }
+
+/* ── Topics within a field ──────────────────────────────────────────────── */
+.dv-topics { display: grid; gap: 10px; }
+.dv-topic {
+  display: flex; flex-direction: column; gap: 3px;
+  text-align: left; cursor: pointer; width: 100%; font-family: inherit;
+  background: var(--white); border: 1px solid var(--ink-200);
+  border-radius: var(--r-md); padding: 14px 16px;
+  transition: all var(--t-fast);
+}
+.dv-topic:hover { border-color: var(--navy-700); background: var(--ink-50); }
+.dv-topic-name { font-size: 14.5px; font-weight: 600; color: var(--navy-900); line-height: 1.4; }
+.dv-topic-sub { font-size: 12px; color: var(--amber-800); }
+.dv-topic-counts { font-size: 12px; color: var(--ink-500); margin-top: 3px; }
+.dv-topic-desc {
+  font-size: 13.5px; color: var(--ink-700); line-height: 1.6;
+  margin-bottom: 18px; max-width: 70ch;
+}
+
+/* ── An external work ───────────────────────────────────────────────────── */
+.dv-list { display: grid; gap: 10px; }
+
+.wk { background: var(--white); border: 1px solid var(--ink-200); border-radius: var(--r-md); overflow: hidden; }
+.wk-open { border-color: var(--navy-700); }
+.wk-head {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%;
+  text-align: left; cursor: pointer; font-family: inherit;
+  background: none; border: none; padding: 16px 18px;
+}
+.wk-head:hover { background: var(--ink-50); }
+.wk-head-text { flex: 1; min-width: 0; }
+.wk-title { font-size: 14.5px; font-weight: 600; color: var(--navy-900); line-height: 1.45; margin: 0; }
+.wk-authors { font-size: 12.5px; color: var(--ink-700); margin-top: 5px; }
+/* Three-line preview. The full abstract is already in memory; this only clamps
+   it, so expanding costs no request. */
+.wk-snippet {
+  font-size: 13px; color: var(--ink-600); line-height: 1.55; margin: 8px 0 0;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.wk-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 12px; color: var(--ink-500); margin-top: 9px;
+}
+.wk-sep { color: var(--ink-300); margin: 0 4px; }
+.wk-oa { margin-left: 4px; }
+.wk-chev { color: var(--ink-500); flex-shrink: 0; margin-top: 3px; transition: transform var(--t-fast); }
+.wk-open .wk-chev { transform: rotate(180deg); }
+.wk-body { padding: 0 18px 18px; border-top: 1px solid var(--ink-100); }
+.wk-abstract { font-size: 13.5px; color: var(--ink-800); line-height: 1.65; margin: 14px 0 0; max-width: 78ch; }
+.wk-insts { font-size: 12.5px; color: var(--ink-600); margin-top: 12px; }
+.wk-doi { margin-top: 14px; }
+
+.dv-credit {
+  font-size: 12px; color: var(--ink-500); line-height: 1.6;
+  margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--ink-100);
+}
+.dv-credit a { color: var(--navy-700); font-weight: 500; }

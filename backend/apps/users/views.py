@@ -3,6 +3,7 @@ import secrets
 from datetime import timedelta
 
 from rest_framework import generics, permissions, status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
@@ -14,8 +15,11 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.http import Http404
+from django.shortcuts import redirect
 from django.utils import timezone
 
+from apps.manuscripts import storage
 from apps.notifications.models import Notification
 
 from . import orcid_service
@@ -23,11 +27,12 @@ from .emails import send_editor_invite_email, send_editor_role_added_email
 from .permissions import IsAdmin, is_admin
 from .serializers import (
     AdminUserListSerializer,
+    ChangePasswordSerializer,
     EmailTokenObtainPairSerializer,
     RegisterSerializer,
     UserSerializer,
 )
-from .throttles import AuthRateThrottle
+from .throttles import AuthRateThrottle, PasswordChangeThrottle
 from .models import EditorInvite, UserProfile, UserRole
 
 User = get_user_model()
@@ -685,3 +690,162 @@ class EditorInviteView(APIView):
             invite.save(update_fields=['accepted_at'])
 
         return Response(_tokens_for(user), status=status.HTTP_201_CREATED)
+
+# ── Password ─────────────────────────────────────────────────────────────────
+
+class ChangePasswordView(APIView):
+    """
+    POST /api/users/me/password/  → change your own password
+
+    Returns a fresh token pair. Changing a password revokes the caller's refresh
+    token, so without new credentials the user would be signed out at their next
+    silent refresh — which reads as the app breaking, not as security.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [PasswordChangeThrottle]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(
+            data=request.data, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        # Revoke the refresh token the client is holding. SIMPLE_JWT sets
+        # ROTATE_REFRESH_TOKENS but not BLACKLIST_AFTER_ROTATION, so an old
+        # refresh token otherwise stays usable for its full 7 days — meaning a
+        # password change would not actually lock anyone out.
+        supplied_refresh = request.data.get('refresh')
+        if supplied_refresh:
+            try:
+                RefreshToken(supplied_refresh).blacklist()
+            except TokenError:
+                pass  # already expired or blacklisted — nothing to revoke
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {'access': str(refresh.access_token), 'refresh': str(refresh)},
+            status=status.HTTP_200_OK,
+        )
+
+
+# ── Avatar ───────────────────────────────────────────────────────────────────
+
+AVATAR_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
+AVATAR_CONTENT_TYPES = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+}
+
+
+class AvatarView(APIView):
+    """
+    PUT    /api/users/me/avatar/  → set your profile photo (multipart, field `avatar`)
+    DELETE /api/users/me/avatar/  → remove it and fall back to initials
+
+    Stored in Supabase Storage under `avatars/<user id>/`, same pattern as
+    manuscript files — the project has no MEDIA_ROOT and Render's disk is
+    ephemeral, so a local ImageField would lose every photo on redeploy.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    throttle_classes = [UserRateThrottle]
+
+    def put(self, request):
+        upload = request.FILES.get('avatar')
+        if not upload:
+            return Response(
+                {'avatar': 'No file was uploaded.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        content_type = (upload.content_type or '').lower()
+        if content_type not in AVATAR_CONTENT_TYPES:
+            return Response(
+                {'avatar': 'Use a JPEG, PNG or WebP image.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if upload.size > AVATAR_MAX_BYTES:
+            return Response(
+                {'avatar': 'That image is larger than 2 MB. Please choose a smaller one.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        previous_key = profile.avatar_key
+
+        key = storage.build_avatar_key(request.user.id, upload.name)
+        try:
+            storage.upload_file(upload, key, content_type=content_type)
+        except Exception:
+            logger.exception('Avatar upload failed for user %s', request.user.id)
+            return Response(
+                {'detail': 'Could not store the image. Please try again.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        profile.avatar_key = key
+        profile.save(update_fields=['avatar_key'])
+        # request.user may already hold a cached `profile` from before the
+        # update, and the serializer reads through it. Without this the response
+        # carries the OLD avatar_key, so the client stores a user with no photo
+        # and the new one does not appear until a reload.
+        request.user.profile = profile
+
+        # Only after the new key is committed — a failed cleanup must not cost
+        # the user the photo they just uploaded.
+        _discard_avatar(previous_key)
+
+        return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        previous_key = profile.avatar_key
+        if previous_key:
+            profile.avatar_key = ''
+            profile.save(update_fields=['avatar_key'])
+            _discard_avatar(previous_key)
+        request.user.profile = profile  # see the note in put()
+        return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
+
+
+def _discard_avatar(key):
+    """Best-effort delete of a superseded avatar. An orphaned object costs a few
+    kilobytes; a raised exception here would fail a request that already
+    succeeded."""
+    if not key:
+        return
+    try:
+        storage.delete_files([key])
+    except Exception:
+        logger.warning('Could not delete superseded avatar %s', key, exc_info=True)
+
+
+class AvatarRedirectView(APIView):
+    """
+    GET /api/users/<pk>/avatar/  → 302 to a freshly presigned image URL
+
+    Unauthenticated by design. The bucket is private and its presigned URLs
+    expire in an hour while an access token lasts eight, and an <img> tag cannot
+    carry an Authorization header at all — so the tag points here and the
+    signature is regenerated per request. Avatars are shown to other users
+    throughout the app, so the image itself is not a secret; the only thing this
+    exposes is whether a given user id has a photo.
+    """
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_classes = [AnonRateThrottle]
+
+    def get(self, request, pk):
+        profile = UserProfile.objects.filter(user_id=pk).only('avatar_key').first()
+        if not profile or not profile.avatar_key:
+            raise Http404('No avatar set.')
+        url = storage.get_file_url(profile.avatar_key)
+        if not url:
+            raise Http404('No avatar set.')
+        # Not cached: the target is a signed URL that goes stale in an hour, and
+        # a cached redirect would outlive it and start 403-ing.
+        response = redirect(url)
+        response['Cache-Control'] = 'no-store'
+        return response

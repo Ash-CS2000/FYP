@@ -32,6 +32,17 @@ def build_key(owner_id, category, filename):
     return f'manuscripts/{owner_id}/{category}/{uuid.uuid4().hex}-{safe_name}'
 
 
+def build_avatar_key(user_id, filename):
+    """Key for a profile photo.
+
+    Deliberately outside the `manuscripts/` prefix: seed_demo_data's reset wipes
+    every key under that prefix, and re-seeding demo manuscripts should not strip
+    people's avatars.
+    """
+    safe_name = filename.replace('/', '_')
+    return f'avatars/{user_id}/{uuid.uuid4().hex}-{safe_name}'
+
+
 def upload_file(file_obj, key, content_type=None):
     extra_args = {'ContentType': content_type} if content_type else {}
     _client().upload_fileobj(file_obj, settings.SUPABASE_S3_BUCKET, key, ExtraArgs=extra_args)

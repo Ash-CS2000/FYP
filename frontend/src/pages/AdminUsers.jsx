@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import { patchReviewerStatus, patchUserRole, patchUserStatus, onboardEditor, listEditorInvites, cancelEditorInvite, listUsers, listAuditLog } from '../api/admin.js';
 import { getStoredUser } from '../auth/roles';
+import Avatar from '../components/Avatar.jsx';
 
 const DEMO_USERS = [
   { id: 1, initials: 'AR', name: 'Ahmad Razif', email: 'ahmad@utm.edu.my', roles: ['author'], institution: 'UTM', date: '12 Jan 2026', status: 'active', reviewer_status: '' },
@@ -26,10 +27,6 @@ function getPrimaryRole(u) {
   return u.role || '—';
 }
 
-function getInitials(name = '') {
-  return name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
-}
-
 // Map a server user row (see listUsers in api/admin.js) to the shape this
 // table renders.
 function toRow(u) {
@@ -40,11 +37,11 @@ function toRow(u) {
     roles: u.roles || [],
     reviewer_status: u.reviewer_status || '',
     institution: u.institution || '—',
+    avatar_key: u.avatar_key || '',
     status: u.status || (u.is_active === false ? 'deactivated' : 'active'),
     date: u.joined
       ? new Date(u.joined).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
       : '—',
-    initials: getInitials(u.name || u.email),
   };
 }
 
@@ -270,7 +267,7 @@ export default function AdminUsers() {
                 <tr key={u.id} style={{ background: '#fffbeb' }}>
                   <td>
                     <div className="row">
-                      <div className="avatar">{u.initials || getInitials(u.name)}</div>
+                      <Avatar user={u} size="md" />
                       <div style={{ marginLeft: 4 }}>
                         <div className="table-title">{u.name}</div>
                         <div className="table-meta">{u.email}</div>
@@ -359,7 +356,7 @@ export default function AdminUsers() {
               <tr key={u.id}>
                 <td>
                   <div className="row">
-                    <div className="avatar">{u.initials || getInitials(u.name)}</div>
+                    <Avatar user={u} size="md" />
                     <div style={{ marginLeft: 4 }}>
                       <div className="table-title">{u.name}</div>
                       <div className="table-meta">{u.email}</div>

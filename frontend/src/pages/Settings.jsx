@@ -1,8 +1,412 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import EditableCard, { ReadRow, InstantToggle } from '../components/EditableCard.jsx';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 import { getScreeningSettings, patchScreeningSettings } from '../api/similarity.js';
 import { loadLocalSettings, saveLocalSettings } from '../data/screeningSettings.js';
 import { deleteAccount, clearSession } from '../api/auth';
+import { updatePreferences, changePassword, DEFAULT_PREFERENCES } from '../api/account';
+
+// ── General ──────────────────────────────────────────────────────────────────
+
+const LANGUAGES = [
+  ['en', 'English'],
+  ['ms', 'Bahasa Malaysia'],
+  ['zh', '中文 (简体)'],
+];
+const TIMEZONES = [
+  ['Asia/Kuala_Lumpur', '(GMT+8) Kuala Lumpur'],
+  ['Asia/Singapore', '(GMT+8) Singapore'],
+  ['Asia/Tokyo', '(GMT+9) Tokyo'],
+  ['Europe/London', '(GMT+0) London'],
+];
+const DATE_FORMATS = [
+  ['dmy', 'DD MMM YYYY (12 Jan 2026)'],
+  ['mdy', 'MMM DD, YYYY (Jan 12, 2026)'],
+  ['iso', 'YYYY-MM-DD (2026-01-12)'],
+];
+const THEMES = [
+  ['light', 'Light'],
+  ['system', 'Match system'],
+];
+
+const labelOf = (pairs, id) => pairs.find(([v]) => v === id)?.[1] || id;
+
+function PreferencesCard({ prefs, save }) {
+  const values = {
+    language: prefs.language,
+    timezone: prefs.timezone,
+    date_format: prefs.date_format,
+    theme: prefs.theme,
+  };
+
+  return (
+    <EditableCard
+      title="Preferences"
+      meta="Language, timezone and display options. These follow your account, not this browser."
+      values={values}
+      onSave={save}
+    >
+      {({ draft, set, editing }) => (editing ? (
+        <div className="field-grid">
+          <div className="field">
+            <label className="field-label" htmlFor="st-lang">Language</label>
+            <select id="st-lang" className="field-select" value={draft.language}
+                    onChange={e => set({ language: e.target.value })}>
+              {LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="st-tz">Timezone</label>
+            <select id="st-tz" className="field-select" value={draft.timezone}
+                    onChange={e => set({ timezone: e.target.value })}>
+              {TIMEZONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+            <div className="field-hint">Deadlines and timestamps are shown in this zone.</div>
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="st-df">Date format</label>
+            <select id="st-df" className="field-select" value={draft.date_format}
+                    onChange={e => set({ date_format: e.target.value })}>
+              {DATE_FORMATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="st-theme">Theme</label>
+            <select id="st-theme" className="field-select" value={draft.theme}
+                    onChange={e => set({ theme: e.target.value })}>
+              {THEMES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+      ) : (
+        <>
+          <ReadRow label="Language" value={labelOf(LANGUAGES, values.language)} />
+          <ReadRow label="Timezone" value={labelOf(TIMEZONES, values.timezone)} />
+          <ReadRow label="Date format" value={labelOf(DATE_FORMATS, values.date_format)} />
+          <ReadRow label="Theme" value={labelOf(THEMES, values.theme)} />
+        </>
+      ))}
+    </EditableCard>
+  );
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+const NOTIFICATION_ROWS = [
+  ['notify_email_digest', 'Email digest', 'A daily summary delivered to your inbox.'],
+  ['notify_in_app', 'In-app notifications', 'Real-time alerts in the PaperBridge notification bell.'],
+  ['notify_weekly_summary', 'Weekly summary', 'A roll-up of all activity every Monday morning.'],
+  ['notify_reviewer_reminders', 'Reviewer reminders', 'Gentle nudges as deadlines approach.'],
+];
+
+function NotificationsCard({ prefs, save }) {
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title">Notifications</div>
+          <div className="card-meta">
+            Choose how you want to be alerted. Changes save as you make them.
+          </div>
+        </div>
+      </div>
+      {NOTIFICATION_ROWS.map(([key, label, desc]) => (
+        <InstantToggle
+          key={key}
+          label={label}
+          desc={desc}
+          checked={prefs[key]}
+          onChange={next => save({ [key]: next })}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Privacy ──────────────────────────────────────────────────────────────────
+
+const VISIBILITY = [
+  ['public', 'Public — anyone can see my profile'],
+  ['community', 'Community — only PaperBridge users'],
+  ['private', 'Private — only editors and admins'],
+];
+
+function PrivacyCard({ prefs, save }) {
+  const values = {
+    privacy_visibility: prefs.privacy_visibility,
+    privacy_signed_reviews: prefs.privacy_signed_reviews,
+  };
+
+  return (
+    <EditableCard
+      title="Privacy"
+      meta="Control what others can see."
+      values={values}
+      onSave={save}
+    >
+      {({ draft, set, editing }) => (editing ? (
+        <>
+          <div className="field">
+            <label className="field-label" htmlFor="st-vis">Profile visibility</label>
+            <select id="st-vis" className="field-select" value={draft.privacy_visibility}
+                    onChange={e => set({ privacy_visibility: e.target.value })}>
+              {VISIBILITY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label className="field-label" htmlFor="st-signed">Review signing</label>
+            <select id="st-signed" className="field-select" value={draft.privacy_signed_reviews ? 'signed' : 'anon'}
+                    onChange={e => set({ privacy_signed_reviews: e.target.value === 'signed' })}>
+              <option value="anon">Keep my reviews anonymous (recommended)</option>
+              <option value="signed">Sign my reviews with my name</option>
+            </select>
+            <div className="field-hint">
+              PaperBridge uses double-blind review by default. Authors will not see your
+              name regardless of this setting.
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <ReadRow label="Profile visibility" value={labelOf(VISIBILITY, values.privacy_visibility)} />
+          <ReadRow
+            label="Review signing"
+            value={values.privacy_signed_reviews ? 'Signed with my name' : 'Anonymous'}
+          />
+        </>
+      ))}
+    </EditableCard>
+  );
+}
+
+// ── Security ─────────────────────────────────────────────────────────────────
+
+// The password rules, shown before you submit rather than discovered by failing.
+//
+// The similarity rule is the one worth stating out loud: it is invisible until it
+// fires, and Django reports it against whichever attribute matched — your email,
+// first name or last name — so a user who has never seen these rules just sees an
+// unexplained rejection. These checks mirror the server's; the server remains the
+// one that decides.
+const PW_MIN = 8;
+
+function similarTo(password, user) {
+  const pw = (password || '').toLowerCase();
+  if (pw.length < 4) return false;
+  const parts = [
+    user?.first_name, user?.last_name,
+    // The local part is what people actually reuse, so check it as well as the
+    // whole address.
+    (user?.email || '').split('@')[0], user?.email,
+  ];
+  return parts.some((raw) => {
+    const v = (raw || '').toLowerCase().trim();
+    if (v.length < 4) return false;
+    return pw.includes(v) || v.includes(pw);
+  });
+}
+
+function PasswordRules({ value, user }) {
+  const v = value || '';
+  const rules = [
+    [v.length >= PW_MIN, `At least ${PW_MIN} characters`],
+    [!/^\d+$/.test(v), 'Not all numbers'],
+    [!similarTo(v, user), 'Not similar to your name or email'],
+  ];
+  // Nothing typed yet: state the rules plainly, without marking them failed.
+  const untouched = v.length === 0;
+
+  return (
+    <ul className="pw-rules">
+      {rules.map(([met, label]) => (
+        <li key={label} className={untouched ? '' : met ? 'met' : 'unmet'}>
+          <span className="pw-rule-mark" aria-hidden="true">{untouched ? '•' : met ? '✓' : '○'}</span>
+          {label}
+        </li>
+      ))}
+      <li className={untouched ? '' : 'met'}>
+        <span className="pw-rule-mark" aria-hidden="true">{untouched ? '•' : '✓'}</span>
+        Not a commonly used password <span className="muted">(checked when you save)</span>
+      </li>
+    </ul>
+  );
+}
+
+function ChangePasswordCard({ user }) {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [done, setDone] = useState(false);
+
+  const reset = () => {
+    setCurrent(''); setNext(''); setConfirm('');
+    setError(''); setFieldErrors({});
+  };
+
+  const mismatch = confirm.length > 0 && next !== confirm;
+  const canSubmit = current && next.length >= 8 && next === confirm && !busy;
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    setFieldErrors({});
+    try {
+      // Returns a fresh token pair and stores it — the old refresh token is
+      // revoked server-side, so without this the session would die at the next
+      // silent refresh.
+      await changePassword(current, next);
+      reset();
+      setOpen(false);
+      setDone(true);
+    } catch (err) {
+      setError(err?.message || 'Could not change your password. Please try again.');
+      setFieldErrors(err?.fields || {});
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title">Password</div>
+          <div className="card-meta">Keep your account safe.</div>
+        </div>
+        {!open && (
+          <button type="button" className="btn btn-ghost btn-sm"
+                  onClick={() => { setDone(false); setOpen(true); }}>
+            Change password
+          </button>
+        )}
+      </div>
+
+      {done && !open && (
+        <div className="alert alert-success">
+          Your password has been changed. You are still signed in on this device;
+          other devices will need the new password.
+        </div>
+      )}
+
+      {!open ? (
+        <ReadRow label="Password" value="••••••••••" hint="Last changed is not recorded." />
+      ) : (
+        <form onSubmit={submit}>
+          {error && <div className="alert alert-error">{error}</div>}
+
+          <div className="field">
+            <label className="field-label" htmlFor="st-cur">Current password</label>
+            <input id="st-cur" className="field-input" type="password" autoComplete="current-password"
+                   value={current} onChange={e => setCurrent(e.target.value)} />
+            {fieldErrors.current_password && (
+              <div className="field-hint" style={{ color: 'var(--red-700)' }}>{fieldErrors.current_password}</div>
+            )}
+          </div>
+
+          <div className="field-grid">
+            <div className="field">
+              <label className="field-label" htmlFor="st-new">New password</label>
+              <input id="st-new" className="field-input" type="password" autoComplete="new-password"
+                     value={next} onChange={e => setNext(e.target.value)} />
+              <PasswordRules value={next} user={user} />
+              {fieldErrors.new_password && (
+                <div className="field-hint" style={{ color: 'var(--red-700)' }}>{fieldErrors.new_password}</div>
+              )}
+            </div>
+            <div className="field">
+              <label className="field-label" htmlFor="st-confirm">Confirm new password</label>
+              <input id="st-confirm" className="field-input" type="password" autoComplete="new-password"
+                     value={confirm} onChange={e => setConfirm(e.target.value)} />
+              {mismatch && (
+                <div className="field-hint" style={{ color: 'var(--red-700)' }}>
+                  These two do not match.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="ec-footer">
+            <button type="submit" className="btn btn-primary btn-sm" disabled={!canSubmit}>
+              {busy ? 'Changing…' : 'Change password'}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={busy}
+                    onClick={() => { reset(); setOpen(false); }}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+// Self-service account deletion. Soft delete on the server — the account is
+// deactivated (no login) but its record stays. See DELETE /api/users/me/.
+function DangerZoneCard() {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function remove() {
+    setBusy(true);
+    setError('');
+    try {
+      await deleteAccount();
+      clearSession();
+      window.location.href = '/login';
+    } catch (err) {
+      setError(err?.message || 'Could not delete your account. Please try again.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ borderColor: '#f0c9c9' }}>
+      <div className="card-header">
+        <div>
+          <div className="card-title" style={{ color: 'var(--red-700)' }}>Delete account</div>
+          <div className="card-meta">
+            Removes your access to PaperBridge. Your submitted work stays on the record.
+          </div>
+        </div>
+      </div>
+
+      {error && <div className="alert alert-error">{error}</div>}
+
+      {!confirming ? (
+        <button className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--red-700)', borderColor: '#f0c9c9' }}
+                onClick={() => setConfirming(true)}>
+          Delete my account
+        </button>
+      ) : (
+        <div>
+          <p style={{ fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 10 }}>
+            This deactivates your account — you will be signed out and can no longer log in.
+            An administrator can restore it later. Continue?
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-danger btn-sm" disabled={busy} onClick={remove}>
+              {busy ? 'Deleting…' : 'Yes, delete my account'}
+            </button>
+            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Platform (admin) ─────────────────────────────────────────────────────────
 
 // Screening thresholds are platform policy, so only an admin sets them — see the
 // role model: editors act on the bands, admins define them. Every other screen
@@ -53,26 +457,16 @@ function ScreeningSettingsCard() {
       <div className="field-grid">
         <div className="field">
           <label className="field-label">Review threshold (%)</label>
-          <input
-            className="field-input"
-            type="number"
-            min="0"
-            max="100"
-            value={settings.review_threshold}
-            onChange={(e) => update({ review_threshold: Number(e.target.value) })}
-          />
+          <input className="field-input" type="number" min="0" max="100"
+                 value={settings.review_threshold}
+                 onChange={(e) => update({ review_threshold: Number(e.target.value) })} />
           <div className="field-hint">At or above this, the score is shown in amber for the editor’s attention.</div>
         </div>
         <div className="field">
           <label className="field-label">Flag threshold (%)</label>
-          <input
-            className="field-input"
-            type="number"
-            min="0"
-            max="100"
-            value={settings.high_threshold}
-            onChange={(e) => update({ high_threshold: Number(e.target.value) })}
-          />
+          <input className="field-input" type="number" min="0" max="100"
+                 value={settings.high_threshold}
+                 onChange={(e) => update({ high_threshold: Number(e.target.value) })} />
           <div className="field-hint">At or above this, the manuscript is flagged for screening before review.</div>
         </div>
       </div>
@@ -85,47 +479,20 @@ function ScreeningSettingsCard() {
 
       <div className="field">
         <label className="field-label">Ignore matches shorter than</label>
-        <input
-          className="field-input"
-          type="number"
-          min="1"
-          max="60"
-          style={{ maxWidth: 140 }}
-          value={settings.min_words}
-          onChange={(e) => update({ min_words: Number(e.target.value) })}
-        />
+        <input className="field-input" type="number" min="1" max="60" style={{ maxWidth: 140 }}
+               value={settings.min_words}
+               onChange={(e) => update({ min_words: Number(e.target.value) })} />
         <div className="field-hint">Words. Short common phrases match everywhere and are rarely meaningful.</div>
       </div>
 
       {toggles.map(([key, label, desc]) => (
-        <div key={key} style={{
-          display: 'flex', alignItems: 'center', gap: 16,
-          padding: '14px 0', borderBottom: '1px solid var(--ink-100)'
-        }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--navy-900)' }}>{label}</div>
-            <div style={{ fontSize: 12.5, color: 'var(--ink-600)', marginTop: 2 }}>{desc}</div>
-          </div>
-          <label style={{ position: 'relative', display: 'inline-block', width: 42, height: 24 }}>
-            <input
-              type="checkbox"
-              checked={Boolean(settings[key])}
-              onChange={(e) => update({ [key]: e.target.checked })}
-              style={{ opacity: 0, width: 0, height: 0 }}
-            />
-            <span style={{
-              position: 'absolute', cursor: 'pointer', inset: 0,
-              background: settings[key] ? 'var(--navy-900)' : 'var(--ink-300)',
-              borderRadius: 999, transition: 'all .2s',
-            }}>
-              <span style={{
-                position: 'absolute', top: 3, left: settings[key] ? 21 : 3,
-                width: 18, height: 18, background: 'var(--white)', borderRadius: '50%',
-                transition: 'all .2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-              }}></span>
-            </span>
-          </label>
-        </div>
+        <InstantToggle
+          key={key}
+          label={label}
+          desc={desc}
+          checked={settings[key]}
+          onChange={(nextValue) => { update({ [key]: nextValue }); }}
+        />
       ))}
 
       <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--ink-600)', lineHeight: 1.55 }}>
@@ -246,12 +613,9 @@ function CategoriesCard() {
 
           {editing === cat.id ? (
             <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
-              <input
-                className="field-input"
-                value={draftSubs}
-                onChange={e => setDraftSubs(e.target.value)}
-                placeholder="Comma-separated subcategories"
-              />
+              <input className="field-input" value={draftSubs}
+                     onChange={e => setDraftSubs(e.target.value)}
+                     placeholder="Comma-separated subcategories" />
             </div>
           ) : cat.subcategories.length > 0 && (
             <div className="cat-subs">
@@ -262,14 +626,10 @@ function CategoriesCard() {
       ))}
 
       <div className="row" style={{ marginTop: 16, gap: 10 }}>
-        <input
-          className="field-input"
-          style={{ maxWidth: 280 }}
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') add(); }}
-          placeholder="New category name"
-        />
+        <input className="field-input" style={{ maxWidth: 280 }} value={newName}
+               onChange={e => setNewName(e.target.value)}
+               onKeyDown={e => { if (e.key === 'Enter') add(); }}
+               placeholder="New category name" />
         <button className="btn btn-ghost btn-sm" onClick={add} disabled={!newName.trim()}>
           Add category
         </button>
@@ -283,229 +643,84 @@ function CategoriesCard() {
   );
 }
 
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+const SECTIONS = [
+  { id: 'general',       label: 'General' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'privacy',       label: 'Privacy' },
+  { id: 'security',      label: 'Security' },
+  { id: 'platform',      label: 'Platform', adminOnly: true },
+];
+
 export default function Settings({ role = 'author' }) {
-  const isAdmin = role === 'admin';
+  const { user, setUser } = useCurrentUser();
+  const [params, setParams] = useSearchParams();
+
+  const isAdmin = (user?.roles || [role]).includes('admin');
+  const sections = SECTIONS.filter(s => !s.adminOnly || isAdmin);
+
+  // The section lives in the URL so it can be linked to and so Back moves
+  // between sections rather than leaving the page.
+  const requested = params.get('section');
+  const active = sections.some(s => s.id === requested) ? requested : sections[0].id;
+
+  const prefs = { ...DEFAULT_PREFERENCES, ...(user?.preferences || {}) };
+
+  // Every preference card saves the same way: send only what changed, let the
+  // server merge it into the stored blob, and put the returned user back into
+  // context so the rest of the app sees it immediately.
+  const savePrefs = async (patch) => setUser(await updatePreferences(patch));
+
   return (
     <AppShell role={role} searchPlaceholder="Search settings...">
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">Account</span>
-          <h1 className="page-title" style={{ marginTop: 8 }}><em className="serif-italic">Settings</em>.</h1>
+          <h1 className="page-title" style={{ marginTop: 8 }}>
+            <em className="serif-italic">Settings</em>.
+          </h1>
+          {/* No page-level Save: each card saves its own section, so a single
+              global button could only ever be ambiguous about what it saved. */}
           <p className="page-subtitle">Manage how PaperBridge works for you.</p>
         </div>
-        <button className="btn btn-primary btn-sm">Save Changes</button>
+      </div>
+
+      <div className="tabs settings-tabs fade-up">
+        {sections.map(s => (
+          <button
+            key={s.id}
+            type="button"
+            className={`tab${active === s.id ? ' active' : ''}`}
+            aria-current={active === s.id ? 'page' : undefined}
+            onClick={() => setParams({ section: s.id })}
+          >
+            {s.label}
+          </button>
+        ))}
       </div>
 
       <div className="gap-grid fade-up delay-1">
-        {isAdmin && <ScreeningSettingsCard />}
-        {isAdmin && <CategoriesCard />}
+        {active === 'general' && <PreferencesCard prefs={prefs} save={savePrefs} />}
 
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Account preferences</div>
-              <div className="card-meta">Language, timezone and display options.</div>
-            </div>
-          </div>
-          <div className="field-grid">
-            <div className="field">
-              <label className="field-label">Language</label>
-              <select className="field-select" defaultValue="en">
-                <option value="en">English</option>
-                <option value="ms">Bahasa Malaysia</option>
-                <option value="zh">中文 (简体)</option>
-              </select>
-            </div>
-            <div className="field">
-              <label className="field-label">Timezone</label>
-              <select className="field-select" defaultValue="kl">
-                <option value="kl">(GMT+8) Kuala Lumpur</option>
-                <option value="sg">(GMT+8) Singapore</option>
-                <option value="ja">(GMT+9) Tokyo</option>
-                <option value="lo">(GMT+0) London</option>
-              </select>
-            </div>
-            <div className="field">
-              <label className="field-label">Date format</label>
-              <select className="field-select" defaultValue="dmy">
-                <option value="dmy">DD MMM YYYY (12 Jan 2026)</option>
-                <option value="mdy">MMM DD, YYYY (Jan 12, 2026)</option>
-                <option value="iso">YYYY-MM-DD (2026-01-12)</option>
-              </select>
-            </div>
-            <div className="field">
-              <label className="field-label">Theme</label>
-              <select className="field-select" defaultValue="light">
-                <option value="light">Light</option>
-                <option value="dark">Dark (coming soon)</option>
-                <option value="system">Match system</option>
-              </select>
-            </div>
-          </div>
-        </div>
+        {active === 'notifications' && <NotificationsCard prefs={prefs} save={savePrefs} />}
 
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Notifications</div>
-              <div className="card-meta">Choose how you want to be alerted.</div>
-            </div>
-          </div>
-          {[
-            { label: 'Email digest', desc: 'A daily summary delivered to your inbox.', checked: true },
-            { label: 'In-app notifications', desc: 'Real-time alerts in the PaperBridge notification bell.', checked: true },
-            { label: 'Weekly summary', desc: 'A roll-up of all activity every Monday morning.', checked: false },
-            { label: 'Reviewer reminders', desc: 'Gentle nudges as deadlines approach.', checked: true },
-          ].map((row) => (
-            <div key={row.label} style={{
-              display: 'flex', alignItems: 'center', gap: 16,
-              padding: '14px 0', borderBottom: '1px solid var(--ink-100)'
-            }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--navy-900)' }}>{row.label}</div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink-600)', marginTop: 2 }}>{row.desc}</div>
-              </div>
-              <label style={{ position: 'relative', display: 'inline-block', width: 42, height: 24 }}>
-                <input type="checkbox" defaultChecked={row.checked} style={{ opacity: 0, width: 0, height: 0 }} />
-                <span style={{
-                  position: 'absolute', cursor: 'pointer', inset: 0,
-                  background: row.checked ? 'var(--navy-900)' : 'var(--ink-300)',
-                  borderRadius: 999, transition: 'all .2s',
-                }}>
-                  <span style={{
-                    position: 'absolute', top: 3, left: row.checked ? 21 : 3,
-                    width: 18, height: 18, background: 'var(--white)', borderRadius: '50%',
-                    transition: 'all .2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-                  }}></span>
-                </span>
-              </label>
-            </div>
-          ))}
-        </div>
+        {active === 'privacy' && <PrivacyCard prefs={prefs} save={savePrefs} />}
 
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Privacy</div>
-              <div className="card-meta">Control what others can see.</div>
-            </div>
-          </div>
-          <div className="field">
-            <label className="field-label">Profile visibility</label>
-            <select className="field-select" defaultValue="community">
-              <option value="public">Public — anyone can see my profile</option>
-              <option value="community">Community — only PaperBridge users</option>
-              <option value="private">Private — only editors and admins</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="field-label">Anonymous review participation</label>
-            <select className="field-select" defaultValue="anon">
-              <option value="anon">Yes — keep my reviews anonymous (recommended)</option>
-              <option value="signed">No — sign my reviews with my name</option>
-            </select>
-            <div className="field-hint">PaperBridge uses double-blind review by default. Authors will not see your name regardless of this setting.</div>
-          </div>
-        </div>
+        {active === 'security' && (
+          <>
+            <ChangePasswordCard user={user} />
+            <DangerZoneCard />
+          </>
+        )}
 
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Security</div>
-              <div className="card-meta">Keep your account safe.</div>
-            </div>
-          </div>
-          <div className="field-grid">
-            <div className="field">
-              <label className="field-label">Current password</label>
-              <input className="field-input" type="password" placeholder="••••••••" />
-            </div>
-            <div className="field">
-              <label className="field-label">New password</label>
-              <input className="field-input" type="password" placeholder="At least 8 characters" />
-            </div>
-          </div>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 16,
-            padding: '14px 0', borderTop: '1px solid var(--ink-100)', marginTop: 8
-          }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--navy-900)' }}>Two-factor authentication</div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-600)', marginTop: 2 }}>Add an extra layer of security with an authenticator app.</div>
-            </div>
-            <button className="btn btn-ghost btn-sm">Enable 2FA</button>
-          </div>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 16,
-            padding: '14px 0', borderTop: '1px solid var(--ink-100)'
-          }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--navy-900)' }}>Active sessions</div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-600)', marginTop: 2 }}>You're signed in on 2 devices.</div>
-            </div>
-            <button className="btn btn-ghost btn-sm">View sessions</button>
-          </div>
-        </div>
-
-        <DangerZoneCard />
+        {active === 'platform' && isAdmin && (
+          <>
+            <ScreeningSettingsCard />
+            <CategoriesCard />
+          </>
+        )}
       </div>
     </AppShell>
-  );
-}
-
-// Self-service account deletion. Soft delete on the server — the account is
-// deactivated (no login) but its record stays. See DELETE /api/users/me/.
-function DangerZoneCard() {
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  async function remove() {
-    setBusy(true);
-    setError('');
-    try {
-      await deleteAccount();
-      clearSession();
-      window.location.href = '/login';
-    } catch (err) {
-      setError(err?.message || 'Could not delete your account. Please try again.');
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="card" style={{ borderColor: '#f0c9c9' }}>
-      <div className="card-header">
-        <div>
-          <div className="card-title" style={{ color: 'var(--red-700)' }}>Delete account</div>
-          <div className="card-meta">Removes your access to PaperBridge. Your submitted work stays on the record.</div>
-        </div>
-      </div>
-
-      {error && (
-        <div style={{ background: 'var(--red-50)', border: '1px solid #f0c9c9', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: 'var(--red-700)', marginBottom: 12 }}>
-          {error}
-        </div>
-      )}
-
-      {!confirming ? (
-        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red-700)', borderColor: '#f0c9c9' }} onClick={() => setConfirming(true)}>
-          Delete my account
-        </button>
-      ) : (
-        <div>
-          <p style={{ fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 10 }}>
-            This deactivates your account — you will be signed out and can no longer log in.
-            An administrator can restore it later. Continue?
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-sm" style={{ background: 'var(--red-700)', color: '#fff', border: 'none' }} disabled={busy} onClick={remove}>
-              {busy ? 'Deleting…' : 'Yes, delete my account'}
-            </button>
-            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
-    </div>
   );
 }

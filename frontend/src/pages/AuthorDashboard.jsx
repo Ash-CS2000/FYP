@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-import { getStoredUser, getFirstName } from '../utils/user.js';
+import { getFirstName } from '../utils/user.js';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 import { isTrained } from '../data/trainingProgress.js';
 import { listManuscripts } from '../api/manuscripts.js';
 import { statusLabel, statusPillClass } from '../data/manuscriptStatus.js';
@@ -31,7 +32,7 @@ function mostRecentlyUpdated(papers) {
 }
 
 export default function AuthorDashboard() {
-  const firstName = getFirstName(getStoredUser()) || 'Author';
+  const firstName = getFirstName(useCurrentUser().user) || 'Author';
   const trained = isTrained();
 
   const [manuscripts, setManuscripts] = useState([]);

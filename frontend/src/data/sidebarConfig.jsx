@@ -55,10 +55,13 @@ export function getMergedSidebar(roles = []) {
   return { ...base, sections: mergedSections };
 }
 
+// Nav structure per role. Deliberately no `user` here any more: the sidebar
+// renders whoever is signed in, via CurrentUserContext. The demo identities
+// that used to live on each role were shown to real users whenever the stored
+// user was missing a field, which is worse than showing an email.
 export const SIDEBAR_CONFIG = {
   author: {
     role: 'Author',
-    user: { name: 'Ahmad Razif', initials: 'AR', role: 'Computer Science · UTM' },
     sections: [
       {
         title: 'Training',
@@ -92,7 +95,6 @@ export const SIDEBAR_CONFIG = {
   },
   reviewer: {
     role: 'Reviewer',
-    user: { name: 'Dr. Lim Wei Ping', initials: 'LW', role: 'Senior Reviewer · UM' },
     sections: [
       {
         title: 'Reviews',
@@ -108,13 +110,13 @@ export const SIDEBAR_CONFIG = {
         items: [
           { id: 'notifications', label: 'Notifications', to: '/reviewer/notifications', icon: ICONS.bell },
           { id: 'profile', label: 'Profile', to: '/reviewer/profile', icon: ICONS.user },
+          { id: 'settings', label: 'Settings', to: '/reviewer/settings', icon: ICONS.settings },
         ],
       },
     ],
   },
   editor: {
     role: 'Chief Editor',
-    user: { name: 'Prof. Hassan Ibrahim', initials: 'HI', role: 'Editor-in-Chief' },
     sections: [
       {
         title: 'Editorial',
@@ -129,6 +131,7 @@ export const SIDEBAR_CONFIG = {
         title: 'Account',
         items: [
           { id: 'notifications', label: 'Notifications', to: '/editor/notifications', icon: ICONS.bell },
+          { id: 'profile', label: 'Profile', to: '/editor/profile', icon: ICONS.user },
           { id: 'settings', label: 'Settings', to: '/editor/settings', icon: ICONS.settings },
         ],
       },
@@ -136,7 +139,6 @@ export const SIDEBAR_CONFIG = {
   },
   admin: {
     role: 'Administrator',
-    user: { name: 'System Admin', initials: 'SA', role: 'Platform Administrator' },
     sections: [
       {
         title: 'System',
@@ -149,6 +151,7 @@ export const SIDEBAR_CONFIG = {
       {
         title: 'Configuration',
         items: [
+          { id: 'profile', label: 'Profile', to: '/admin/profile', icon: ICONS.user },
           { id: 'settings', label: 'System Settings', to: '/admin/settings', icon: ICONS.settings },
           { id: 'audit', label: 'Audit Log', to: '/admin/audit', icon: ICONS.log },
         ],

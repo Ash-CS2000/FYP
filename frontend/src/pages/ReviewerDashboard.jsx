@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-import { getStoredUser, getFirstName } from '../utils/user.js';
+import { getFirstName } from '../utils/user.js';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 import {
   myAssignments,
   ASSIGNMENT_STATUS_LABELS,
@@ -23,7 +24,7 @@ function AnonymousAuthor() {
 }
 
 export default function ReviewerDashboard() {
-  const firstName = getFirstName(getStoredUser()) || 'Reviewer';
+  const firstName = getFirstName(useCurrentUser().user) || 'Reviewer';
 
   // Live counts off the same store the assignments page writes to, so accepting
   // or declining is reflected here rather than drifting from hardcoded numbers.

@@ -152,6 +152,37 @@ export function postScreeningAction(manuscriptId, { action, note }) {
 }
 
 /**
+ * Publish an accepted manuscript into the public research library.
+ *
+ *   POST /api/manuscripts/:id/publish/
+ *   body    none
+ *   200     { id, status: 'published', published_at }
+ *   403     caller is not an editor — admins included, per the header note
+ *   404     no such manuscript
+ *   409     not in 'accepted': already published, still under review, rejected,
+ *           or awaiting a revision
+ *
+ * The last step of the editorial pipeline, and the only thing that puts a paper
+ * into the library at GET /api/manuscripts/published/. Deliberately separate
+ * from postDecision(): accepting is a judgement about the science, publishing is
+ * the production act of releasing it, and the two routinely happen days apart.
+ * Before this endpoint existed 'published' was a status the system could name
+ * and never reach.
+ *
+ * published_at is stamped server-side — the frontend must not send a date.
+ * Notifies the author.
+ */
+export function publishManuscript(manuscriptId) {
+  return request(`/api/manuscripts/${encodeURIComponent(manuscriptId)}/publish/`, {
+    method: 'POST',
+    // authFetch sets Content-Type: application/json for any non-FormData body,
+    // so send a parseable one. The view never reads request.data today, but a
+    // declared-JSON POST with an empty stream is one refactor away from a 400.
+    body: '{}',
+  });
+}
+
+/**
  * The reviews an author is permitted to read on their own manuscript.
  *
  *   GET /api/manuscripts/:id/reviews/author/

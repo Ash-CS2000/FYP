@@ -1,6 +1,9 @@
 from django.urls import path
 
 from .views import (
+    AvatarRedirectView,
+    AvatarView,
+    ChangePasswordView,
     MeView,
     RegisterView,
     LogoutView,
@@ -19,6 +22,12 @@ urlpatterns = [
     path('', AdminUserListView.as_view(), name='user-list'),
     path('register/', RegisterView.as_view(), name='register'),
     path('me/', MeView.as_view(), name='me'),
+    path('me/password/', ChangePasswordView.as_view(), name='change-password'),
+    path('me/avatar/', AvatarView.as_view(), name='my-avatar'),
+
+    # Public: an <img> tag cannot send an Authorization header, so the photo
+    # is served by redirect to a freshly presigned URL. See AvatarRedirectView.
+    path('<int:pk>/avatar/', AvatarRedirectView.as_view(), name='user-avatar'),
     path('logout/', LogoutView.as_view(), name='logout'),
 
     # Reviewer application

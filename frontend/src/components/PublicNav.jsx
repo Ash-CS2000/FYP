@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { getStoredUser, getInitials } from '../utils/user.js';
+import Avatar from './Avatar.jsx';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 
 const WORKSPACE = {
   student:  { label: 'Training',       route: '/student/training' },
@@ -14,7 +15,7 @@ export default function PublicNav() {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const user = getStoredUser();
+  const { user } = useCurrentUser();
   const workspace = user ? WORKSPACE[user.role] : null;
 
   function handleSearch(e) {
@@ -69,13 +70,7 @@ export default function PublicNav() {
               <button className="btn btn-ghost btn-sm" onClick={handleSignOut}>
                 Sign Out
               </button>
-              <span
-                className="nav-avatar"
-                title={user.name || user.email}
-                aria-label={user.name || user.email}
-              >
-                {getInitials(user)}
-              </span>
+              <Avatar user={user} size="md" tone="flat" className="nav-avatar" />
             </>
           ) : (
             <Link to="/login" className="btn btn-ghost btn-sm">Sign In</Link>

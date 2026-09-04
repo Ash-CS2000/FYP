@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
-import { TOPICS } from '../data/papers.js';
+import { useEffect, useState } from 'react';
+import { listPublishedTopics } from '../api/discovery.js';
+import { topicMeta } from '../data/topics.js';
 import PublicNav from '../components/PublicNav.jsx';
-
-const TRENDING = [...TOPICS].sort((a, b) => b.rating - a.rating).slice(0, 3);
 
 function getUser() {
   try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
@@ -17,7 +17,7 @@ const HOW_IT_WORKS = [
   {
     step: '02',
     title: 'Explore Topics',
-    desc: 'Read summaries of peer-reviewed research — institution, level, year, and rating — without access to full documents, to encourage original thinking.',
+    desc: 'Read summaries of published research — institution, research area, and year — without access to full documents, to encourage original thinking.',
   },
   {
     step: '03',
@@ -28,6 +28,19 @@ const HOW_IT_WORKS = [
 
 export default function HomePage() {
   const user = getUser();
+  const [latest, setLatest] = useState([]);
+
+  // Deliberately no loading or error state, unlike every other page in the app:
+  // this is a public landing page, and a marketing section must not announce
+  // that the API is down. It either has papers to show or it isn't rendered.
+  useEffect(() => {
+    let cancelled = false;
+    listPublishedTopics({ limit: 3 })
+      .then((data) => { if (!cancelled) setLatest(data); })
+      .catch(() => { /* section stays hidden */ });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className="paper-portal">
       <style>{`
@@ -188,14 +201,6 @@ export default function HomePage() {
           gap: 8px;
           flex-wrap: wrap;
           margin-bottom: 8px;
-        }
-        .trending-downloads {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 12px;
-          font-weight: 600;
-          color: var(--amber-700);
         }
 
         /* How It Works */
@@ -450,30 +455,26 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Trending This Week */}
+      {/* Latest Research. Not "trending": there is no view count, download
+          count, citation count or rating anywhere in the system, so any claim
+          about popularity would be invented. Newest-published is a fact we
+          actually hold. Hidden entirely when the library is empty or the fetch
+          failed — a public landing page should not show an error strip. */}
+      {latest.length > 0 && (
       <section className="trending-section">
         <div className="portal-inner">
           <div className="trending-header">
-            <h2>Trending Research Topics</h2>
-            <span className="trending-badge">Top Rated</span>
+            <h2>Latest Research</h2>
+            <span className="trending-badge">Newest</span>
           </div>
           <div className="trending-grid">
-            {TRENDING.map((t, i) => (
+            {latest.map((t, i) => (
               <div className="trending-card" key={t.id}>
                 <span className={`trending-rank rank-${i + 1}`}>{String(i + 1).padStart(2, '0')}</span>
                 <div className="trending-info">
-                  <h3>{t.topic}</h3>
+                  <h3>{t.title}</h3>
                   <div className="trending-meta">
-                    <span>{t.institution}</span>
-                    <span>{t.area}</span>
-                    <span>{t.level} · {t.year}</span>
-                  </div>
-                  <div className="trending-downloads" style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }}>
-                    {[1,2,3,4,5].map(n => (
-                      <svg key={n} width="13" height="13" viewBox="0 0 20 20" style={{ color: n <= t.rating ? '#f59e0b' : 'var(--ink-200)', fill: 'currentColor' }} aria-hidden="true">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                    ))}
+                    {topicMeta(t).map((part) => <span key={part}>{part}</span>)}
                   </div>
                 </div>
               </div>
@@ -481,6 +482,7 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* How It Works */}
       <section className="how-it-works">

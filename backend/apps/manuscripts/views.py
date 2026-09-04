@@ -2,11 +2,13 @@ import logging
 
 from botocore.exceptions import BotoCoreError, ClientError
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
@@ -14,14 +16,16 @@ from apps.notifications.models import Notification
 
 from .models import Decision, Manuscript, PlagiarismCheck, ScreeningAction
 from .notifications import (
-    DECISION_NOTIFICATION_BODIES, DECISION_NOTIFICATION_TITLES, REVISION_SUBMITTED_NOTIFICATION_BODY,
+    DECISION_NOTIFICATION_BODIES, DECISION_NOTIFICATION_TITLES, PUBLICATION_NOTIFICATION_BODY,
+    PUBLICATION_NOTIFICATION_TITLE, REVISION_SUBMITTED_NOTIFICATION_BODY,
     REVISION_SUBMITTED_NOTIFICATION_TITLE, SCREENING_NOTIFICATION_BODIES, SCREENING_NOTIFICATION_TITLES,
 )
 from .permissions import IsEditorOrAdmin, is_editor, is_editor_or_admin
 from .serializers import (
     DecisionCreateSerializer, DecisionSerializer, ManuscriptEditorSerializer,
     ManuscriptRevisionCreateSerializer, ManuscriptRevisionSerializer, ManuscriptSerializer,
-    ManuscriptSubmitSerializer, ScreeningActionCreateSerializer, ScreeningActionSerializer,
+    ManuscriptSubmitSerializer, PublishedManuscriptSerializer, ScreeningActionCreateSerializer,
+    ScreeningActionSerializer,
 )
 from .services.noplag_client import get_check_status, get_check_report, NoPlagClientError
 from .services.plagiarism import sync_accepted_manuscript_to_corpus
@@ -63,6 +67,107 @@ class ManuscriptListView(generics.ListAPIView):
 
     def get_queryset(self):
         return Manuscript.objects.filter(owner=self.request.user).order_by('-submitted_at')
+
+
+class PublishedManuscriptListView(generics.ListAPIView):
+    """
+    GET /api/manuscripts/published/ → the published corpus, newest first.
+
+    The only unauthenticated endpoint in this app. It backs the author's
+    Discover page, the public /search results and the landing page, all three of
+    which are reachable logged out — hence AllowAny, which has to be stated
+    because DEFAULT_PERMISSION_CLASSES is IsAuthenticated.
+
+    'published' only. An accepted manuscript has cleared review but has not been
+    released, and a discovery surface that shows it leaks the paper early.
+
+    Query params, all optional:
+      q         substring over title / abstract / keywords / author institution
+      category  exact match on Manuscript.category
+      limit     1..100, applied after filtering
+    """
+    serializer_class = PublishedManuscriptSerializer
+    permission_classes = [permissions.AllowAny]
+    # No authentication at all, not merely optional. A token buys nothing here,
+    # and DRF authenticates before it checks permissions — so with JWT auth left
+    # on, a visitor carrying an expired token would get a 401 from a page that
+    # is supposed to be public. Empty list, no such failure mode.
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'discovery'
+
+    # Nothing paginates in this project and adding a global page size would
+    # reshape every existing list response, so the ceiling is a hard slice.
+    # Revisit when the corpus outgrows it.
+    MAX_RESULTS = 200
+
+    def get_queryset(self):
+        # prefetch is load-bearing, not an optimisation: the serializer walks
+        # authors → affiliations on every row, so without it this is an N+1 on
+        # the one endpoint anonymous traffic can reach.
+        queryset = (
+            Manuscript.objects
+            .filter(status=Manuscript.Status.PUBLISHED)
+            .prefetch_related('authors__affiliations')
+            .order_by('-published_at', '-id')  # -id keeps the ordering total
+        )
+
+        params = self.request.query_params
+
+        term = params.get('q', '').strip()
+        if term:
+            queryset = queryset.filter(
+                Q(title__icontains=term)
+                | Q(abstract__icontains=term)
+                | Q(keywords__icontains=term)
+                | Q(authors__affiliations__institution__icontains=term)
+            ).distinct()  # the affiliation join fans a manuscript out per match
+
+        category = params.get('category', '').strip()
+        if category:
+            queryset = queryset.filter(category=category)
+
+        return queryset[:self._limit(params.get('limit'))]
+
+    def _limit(self, raw):
+        if raw is None:
+            return self.MAX_RESULTS
+        try:
+            return max(1, min(int(raw), self.MAX_RESULTS))
+        except (TypeError, ValueError):
+            return self.MAX_RESULTS
+
+
+class PublishedCategoryListView(APIView):
+    """
+    GET /api/manuscripts/published/categories/ → every research category that
+    has at least one published paper, A-Z. A bare string[].
+
+    Its own endpoint rather than something the client derives from a filtered
+    list: once the caller filters by category the response contains only that
+    category, so a dropdown built from the rows would collapse to the single
+    option the user just picked.
+
+    Derived from the data, never hardcoded — the seeded corpus and the
+    submission form's category <select> do not agree, so any vocabulary written
+    down in the frontend would be wrong on day one. 'All' is not in here; that
+    is a UI sentinel, not a category.
+    """
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'discovery'
+
+    def get(self, request):
+        categories = (
+            Manuscript.objects
+            .filter(status=Manuscript.Status.PUBLISHED)
+            .exclude(category='')
+            .order_by('category')
+            .values_list('category', flat=True)
+            .distinct()
+        )
+        return Response(list(categories))
 
 
 class ManuscriptDetailView(generics.RetrieveAPIView):
@@ -339,3 +444,53 @@ class ManuscriptScreeningView(APIView):
             )
 
         return Response(ScreeningActionSerializer(screening).data, status=status.HTTP_201_CREATED)
+
+
+class ManuscriptPublishView(APIView):
+    """
+    POST /api/manuscripts/<int:pk>/publish/ → release an accepted manuscript to
+    the public discovery surface. accepted → published.
+
+    Until this existed, 'published' was a status the system could describe and
+    never reach: Decision.STATUS_MAP tops out at 'accepted', and nothing else
+    wrote the value. Acceptance is the editorial verdict; publication is the
+    separate act of releasing it, and only this endpoint performs it.
+
+    Editor only — an admin must be refused, same boundary ManuscriptScreeningView
+    draws. Publication is editorial judgement, not platform administration.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        if not is_editor(request.user):
+            return Response(
+                {'detail': 'You do not have permission to publish a manuscript.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+
+        # Covers both directions of wrong state: not yet accepted, and already
+        # published. Matches how ManuscriptDecisionView refuses a transition.
+        if manuscript.status != Manuscript.Status.ACCEPTED:
+            return Response(
+                {'detail': f'Only an accepted manuscript can be published — this one is {manuscript.status}.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        with transaction.atomic():
+            manuscript.status = Manuscript.Status.PUBLISHED
+            manuscript.published_at = timezone.now()
+            manuscript.save(update_fields=['status', 'published_at', 'updated_at'])
+            Notification.objects.create(
+                recipient=manuscript.owner,
+                category=Notification.Category.PUBLICATION,
+                title=PUBLICATION_NOTIFICATION_TITLE,
+                body=PUBLICATION_NOTIFICATION_BODY.format(title=manuscript.title),
+                manuscript=manuscript,
+            )
+
+        return Response({
+            'id': manuscript.id,
+            'status': manuscript.status,
+            'published_at': manuscript.published_at,
+        })

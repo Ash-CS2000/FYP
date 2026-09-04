@@ -61,7 +61,7 @@ class ManuscriptSerializer(serializers.ModelSerializer):
             'keywords', 'file_name', 'file_size', 'file_url', 'cover_letter',
             'no_funding', 'funder', 'grant_no', 'no_competing', 'competing',
             'ethics_na', 'ethics', 'data_statement', 'status', 'submitted_at', 'updated_at',
-            'authors', 'supplementary_files',
+            'published_at', 'authors', 'supplementary_files',
         )
 
     def get_file_url(self, obj):
@@ -99,6 +99,58 @@ class ManuscriptEditorSerializer(serializers.ModelSerializer):
         if decision is None:
             return None
         return {'type': decision.type, 'decided_at': decision.decided_at}
+
+
+class PublishedManuscriptSerializer(serializers.ModelSerializer):
+    """
+    The public discovery card for a published manuscript. Deliberately narrow.
+
+    This is the ONLY serializer that reaches anonymous callers, so it is written
+    as an allow-list and must stay one. ManuscriptSerializer must never be
+    substituted here: it carries file_url (a signed URL to the full PDF) plus
+    cover_letter, competing, ethics, data_statement, funder and the agreed_*
+    audit booleans — none of which belong to a reader browsing summaries. Two
+    serializers cannot leak into each other; one serializer with a conditional
+    field list is one forgotten branch away from publishing the whole corpus.
+    """
+    keywords = serializers.SerializerMethodField()
+    institutions = serializers.SerializerMethodField()
+    authors = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Manuscript
+        fields = (
+            'id', 'title', 'abstract', 'article_type', 'category', 'sub_category',
+            'keywords', 'institutions', 'authors', 'published_at',
+        )
+
+    def get_keywords(self, obj):
+        # Free-text CharField, comma-separated by convention only — nothing
+        # enforces it, and the field is blank on every seeded row, so [] is the
+        # normal case rather than the exception.
+        return [kw.strip() for kw in obj.keywords.split(',') if kw.strip()]
+
+    def get_institutions(self, obj):
+        # The only institution data in the system hangs two joins off the
+        # manuscript. Order-preserving dedupe: the byline order is meaningful,
+        # and the first entry is what the card shows.
+        seen = []
+        for author in obj.authors.all():
+            for affiliation in author.affiliations.all():
+                name = affiliation.institution.strip()
+                if name and name not in seen:
+                    seen.append(name)
+        return seen
+
+    def get_authors(self, obj):
+        # Display names only. Byline authors of a published paper are public;
+        # their emails and ORCIDs are not.
+        names = []
+        for author in obj.authors.all():
+            name = f'{author.given_name} {author.family_name}'.strip()
+            if name:
+                names.append(name)
+        return names
 
 
 class DecisionSerializer(serializers.ModelSerializer):

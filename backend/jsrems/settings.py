@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'apps.notifications',
     'apps.analysis',
     'apps.publications',
+    'apps.discovery',
 ]
 
 MIDDLEWARE = [
@@ -84,7 +85,18 @@ DATABASES = {
 }
 
 AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        # `username` is dropped deliberately, and this costs nothing: accounts are
+        # created with username set equal to email, so the email entry below
+        # rejects exactly the same passwords. What it buys is a message people can
+        # act on. The validator names whichever attribute it checked first, so
+        # with `username` in the list every failure read "too similar to the
+        # username" — a field nobody in this app has ever seen, since you register
+        # and sign in with an email. It said that even when the real overlap was
+        # with your surname.
+        'OPTIONS': {'user_attributes': ('first_name', 'last_name', 'email')},
+    },
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
@@ -113,6 +125,16 @@ REST_FRAMEWORK = {
         'user': '100/minute',       # logged in users
         'orcid': '10/minute',       # orcid login
         'password_reset': '3/hour', # password reset
+        'password_change': '10/hour',  # changing your own password. Looser than
+                                    # password_reset: the caller is already
+                                    # authenticated, and a legitimate user who
+                                    # mistypes their current password twice must
+                                    # not be locked out for an hour. Still
+                                    # capped, because the endpoint takes the
+                                    # current password and so can be guessed at.
+        'discovery': '120/minute',  # public research library — browsing is cheap
+                                    # and read-only, and the anon 30/min ceiling
+                                    # is easy to hit just paging around /search
     },
 }
 
@@ -174,6 +196,11 @@ ORCID_CLIENT_ID = os.getenv('ORCID_CLIENT_ID', '')
 ORCID_CLIENT_SECRET = os.getenv('ORCID_CLIENT_SECRET', '')
 ORCID_REDIRECT_URI = os.getenv('ORCID_REDIRECT_URI', '')
 ORCID_BASE_URL = os.getenv('ORCID_BASE_URL', 'https://orcid.org')
+
+# Contact address sent to OpenAlex on every Discover request. Identifying the
+# caller puts us in their faster "polite pool"; it is not authentication and
+# there is no key to keep secret. A deployment address, not a personal one.
+OPENALEX_MAILTO = os.getenv('OPENALEX_MAILTO', '')
 
 # Supabase Storage (S3-compatible) — used for manuscript file uploads
 SUPABASE_S3_ENDPOINT_URL = os.getenv('SUPABASE_S3_ENDPOINT_URL', '')

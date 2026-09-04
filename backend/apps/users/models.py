@@ -34,6 +34,29 @@ class UserProfile(models.Model):
     student_level = models.CharField(max_length=50, blank=True)
     degree = models.CharField(max_length=100, blank=True)
 
+    # ── Account section ──────────────────────────────────────────────────────
+    # The name of record lives on auth_user (first_name/last_name) and appears on
+    # submissions, decision letters and certificates, so it is not self-editable.
+    # This is the display name the UI renders instead — a nickname, changeable at
+    # will, with no bearing on the published record.
+    display_name = models.CharField(max_length=50, blank=True)
+    bio = models.TextField(blank=True)
+
+    # A Supabase Storage key, not an ImageField — the project has no MEDIA_ROOT
+    # and Render's filesystem is ephemeral. Same convention as
+    # ManuscriptSupplementaryFile.file_key. Read through GET /api/users/<pk>/avatar/.
+    avatar_key = models.CharField(max_length=255, blank=True)
+
+    # Language, timezone, notification and privacy choices — one blob rather than
+    # a column per toggle, because they are read and written together and none of
+    # them is ever queried across users. UserSerializer.validate_preferences
+    # whitelists the keys so this cannot decay into a dumping ground.
+    preferences = models.JSONField(default=dict, blank=True)
+
+    def display_label(self):
+        """What the UI shows: the nickname if set, else the name of record."""
+        return self.display_name or self.user.get_full_name() or self.user.email
+
     def __str__(self):
         return f'{self.user.get_full_name() or self.user.email} ({self.role})'
 

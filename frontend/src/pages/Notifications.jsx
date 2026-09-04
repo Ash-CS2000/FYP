@@ -4,6 +4,7 @@ import { useNotifications } from '../hooks/useNotifications.js';
 const CATEGORY_ICONS = {
   decision: '⚖️',
   revision_submitted: '📝',
+  publication: '📄',
 };
 
 function formatDateTime(iso) {

@@ -33,3 +33,6 @@ SCREENING_NOTIFICATION_BODIES = {
     ScreeningAction.Action.ALLOW: '"{title}" cleared the similarity screen and will continue to review.',
     ScreeningAction.Action.RETURN: '"{title}" was returned by the editor before review. See their note for details.',
 }
+
+PUBLICATION_NOTIFICATION_TITLE = 'Your manuscript has been published'
+PUBLICATION_NOTIFICATION_BODY = '"{title}" is now published and discoverable to readers.'
