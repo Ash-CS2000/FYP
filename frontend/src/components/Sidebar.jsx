@@ -22,7 +22,7 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificati
     if (el) el.scrollTop = savedSidebarScroll;
   }, []);
 
-  const { user: storedUser } = useCurrentUser();
+  const { user: storedUser, setUser } = useCurrentUser();
   // Show ONLY the workspace we're currently in (the route's role), not a merge
   // of every role. The full role list is used for the switcher options below.
   const cfg = getMergedSidebar([role]);
@@ -51,6 +51,7 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificati
   function handleSignOut() {
     clearDemoSession();      // demo-account + active-role keys
     clearSession();          // user + access + refresh tokens
+    setUser(null);           // clear the in-memory context immediately
     navigate('/login');
   }
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { API_URL } from '../config';
 import { saveTokens } from '../api/auth';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 
 // Editor activation page. Opened from the invite link an admin sends
 // (POST /api/users/editors/). The invitee sets a password; on success we get
@@ -10,6 +11,7 @@ import { saveTokens } from '../api/auth';
 export default function EditorInvite() {
   const { token } = useParams();
   const navigate = useNavigate();
+  const { setUser } = useCurrentUser();
 
   const [state, setState] = useState('loading'); // loading | ready | invalid
   const [invite, setInvite] = useState(null);
@@ -66,7 +68,7 @@ export default function EditorInvite() {
         return;
       }
       saveTokens(data.access, data.refresh);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      setUser(data.user);
       navigate('/editor/dashboard');
     } catch {
       setError('Could not reach the server. Please try again.');

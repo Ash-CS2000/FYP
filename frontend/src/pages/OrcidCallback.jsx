@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { landingRoute } from '../auth/roles';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 import { API_URL } from '../config';
 
 export default function OrcidCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { setUser } = useCurrentUser();
   const [status, setStatus] = useState('loading'); // 'loading' | 'error'
   const [error, setError] = useState('');
 
@@ -57,7 +59,7 @@ export default function OrcidCallback() {
 
         // Logged-in user linking/adding a role via ORCID (no new tokens issued)
         if (data.detail && data.user && !data.access) {
-          localStorage.setItem('user', JSON.stringify(data.user));
+          setUser(data.user);
           navigate(landingRoute(data.user), {
             state: data.already_registered
               ? { message: 'This ORCID iD is already registered for this role.' }
@@ -69,7 +71,7 @@ export default function OrcidCallback() {
         // Fresh login/registration via ORCID (new tokens issued)
         localStorage.setItem('access', data.access);
         localStorage.setItem('refresh', data.refresh);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        setUser(data.user);
         navigate(landingRoute(data.user));
 
       } catch (err) {
@@ -79,7 +81,7 @@ export default function OrcidCallback() {
     }
 
     handleCallback();
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, setUser]);
 
   return (
     <div className="orcid-callback-page">

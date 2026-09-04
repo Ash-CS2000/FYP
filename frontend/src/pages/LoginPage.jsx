@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { saveTokens } from '../api/auth';
 import { findDemoAccount, saveDemoSession } from '../data/demoAccounts.js';
 import { landingRoute } from '../auth/roles';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 import { API_URL } from '../config';
 
 const EyeOpen = () => (
@@ -25,6 +26,7 @@ export default function LoginPage() {
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const navigate  = useNavigate();
+  const { setUser } = useCurrentUser();
 
   async function handleOrcidClick() {
     setError('');
@@ -56,7 +58,7 @@ export default function LoginPage() {
         roles: demo.roles,
         reviewer_status: demo.reviewer_status || '',
       };
-      localStorage.setItem('user', JSON.stringify(demoUser));
+      setUser(demoUser); // writes localStorage and the in-memory context together
       setLoading(false);
       navigate(location.state?.from?.pathname || landingRoute(demoUser));
       return;
@@ -73,7 +75,7 @@ export default function LoginPage() {
         data?.detail || data?.email?.[0] || data?.non_field_errors?.[0] || 'Invalid email or password.'
       );
       saveTokens(data.access, data.refresh);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      setUser(data.user); // writes localStorage and the in-memory context together
       navigate(location.state?.from?.pathname || landingRoute(data.user));
     } catch (err) {
       setError(err.message);

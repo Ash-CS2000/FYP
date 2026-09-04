@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { saveTokens } from '../api/auth';
 import { landingRoute } from '../auth/roles';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 import { API_URL } from '../config';
 import TagPicker from '../components/TagPicker.jsx';
 
@@ -190,6 +191,7 @@ export default function RegisterPage() {
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { setUser } = useCurrentUser();
 
   function selectView(v) {
     // 'roles' is the picker itself; anything else must be publicly registrable.
@@ -278,7 +280,7 @@ export default function RegisterPage() {
       if (loginRes.ok) {
         const loginData = await loginRes.json();
         saveTokens(loginData.access, loginData.refresh);
-        localStorage.setItem('user', JSON.stringify(loginData.user));
+        setUser(loginData.user);
         // A reviewer registration is an application, not an activation — hold
         // them on the pending screen regardless of what the backend echoes
         // back. Everyone else routes on the same user object we persisted, so

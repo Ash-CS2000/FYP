@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getMe } from '../api/account';
 import { getStoredUser } from '../utils/user.js';
 import { getAccessToken } from '../api/auth';
@@ -20,6 +21,7 @@ export function CurrentUserProvider({ children }) {
   // Seeded synchronously so there is no signed-out flash on first paint: the
   // stored user is already correct, it may just be slightly stale.
   const [user, setUser] = useState(getStoredUser);
+  const location = useLocation();
 
   const persist = useCallback((next) => {
     setUser(next);
@@ -31,6 +33,21 @@ export function CurrentUserProvider({ children }) {
     }
     return next;
   }, []);
+
+  // Re-sync from localStorage on every navigation. The auth entry points
+  // (LoginPage, RegisterPage, OrcidCallback, EditorInvite) and the sign-out
+  // buttons write localStorage directly and then navigate; without this the
+  // in-memory copy here would stay on the *previous* user for the rest of the
+  // SPA session, so signing out of one account and into another would leave
+  // every consumer — the sidebar, and the route guard — seeing the old person.
+  useEffect(() => {
+    const stored = getStoredUser();
+    setUser((prev) => {
+      const a = prev ? JSON.stringify(prev) : '';
+      const b = stored ? JSON.stringify(stored) : '';
+      return a === b ? prev : stored;
+    });
+  }, [location.key]);
 
   // Revalidate against the server once on mount. The stored copy can be days
   // old — roles granted, a reviewer application approved, a photo added from

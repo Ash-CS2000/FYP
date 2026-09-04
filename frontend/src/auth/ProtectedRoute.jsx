@@ -4,11 +4,17 @@
 // Omit `allow` to require only that the user is authenticated (any role).
 
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { getStoredUser, getRoles, landingRoute } from './roles';
+import { getRoles, landingRoute } from './roles';
+import { useCurrentUser } from './CurrentUserContext.jsx';
 
 export default function ProtectedRoute({ allow }) {
   const location = useLocation();
-  const user = getStoredUser();
+  // Read from the context, not getStoredUser(), so the check re-runs when the
+  // user is revalidated. CurrentUserProvider calls getMe() on mount; a stale
+  // localStorage copy can list a role the account no longer has, which would
+  // otherwise let someone linger on a workspace they've lost access to until a
+  // full reload.
+  const { user } = useCurrentUser();
 
   // Not signed in → send to login, remember where we were headed.
   if (!user) {

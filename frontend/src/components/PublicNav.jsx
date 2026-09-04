@@ -15,7 +15,7 @@ export default function PublicNav() {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { user } = useCurrentUser();
+  const { user, setUser } = useCurrentUser();
   const workspace = user ? WORKSPACE[user.role] : null;
 
   function handleSearch(e) {
@@ -29,7 +29,7 @@ export default function PublicNav() {
   function handleSignOut() {
     localStorage.removeItem('access');
     localStorage.removeItem('refresh');
-    localStorage.removeItem('user');
+    setUser(null); // clears localStorage 'user' and the in-memory context
     navigate('/');
   }
 
