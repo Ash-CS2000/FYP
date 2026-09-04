@@ -13,17 +13,18 @@
 // heuristic to start with — nothing here changes. What the editor actually reads
 // is `match_reasons`: a bare 94% is not something anyone can sanity-check.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  REVIEWER_POOL,
-  assignmentsFor,
   saveAssignments,
   AVAILABILITY_LABELS,
   AVAILABILITY_TONE,
   deadlineState,
   formatDate,
 } from '../data/invitations.js';
-import { inviteReviewers, remindReviewer, decideExtension } from '../api/invitations.js';
+import { SPECIALTY_TAG_LABELS } from '../data/specialtyTags.js';
+import {
+  decideExtension, inviteReviewers, listCandidates, listManuscriptAssignments, remindReviewer,
+} from '../api/invitations.js';
 
 const STATUS_LABELS = {
   invited:   'Invited',
@@ -56,6 +57,7 @@ function DeadlineText({ iso }) {
 function CandidateRow({ candidate, checked, onToggle, alreadyOn }) {
   const tone = AVAILABILITY_TONE[candidate.availability];
   const blocked = alreadyOn || candidate.availability === 'unavailable';
+  const expertiseLabels = (candidate.specialty_tags || []).map(s => SPECIALTY_TAG_LABELS[s] || s);
 
   return (
     <label className={`rp-cand ${checked ? 'selected' : ''} ${blocked ? 'blocked' : ''}`}>
@@ -71,7 +73,7 @@ function CandidateRow({ candidate, checked, onToggle, alreadyOn }) {
           <span className="rp-cand-score">{candidate.match_score}</span>
         </span>
         <span className="rp-cand-meta">
-          {candidate.institution} · {candidate.expertise.join(', ')}
+          {candidate.institution}{expertiseLabels.length > 0 && ` · ${expertiseLabels.join(', ')}`}
         </span>
         <span className="rp-cand-reasons">
           {candidate.match_reasons.join(' · ')}
@@ -81,7 +83,9 @@ function CandidateRow({ candidate, checked, onToggle, alreadyOn }) {
             {AVAILABILITY_LABELS[candidate.availability]}
           </span>
           <span className="muted">{candidate.active_reviews} active</span>
-          <span className="muted">~{candidate.avg_turnaround_days}d turnaround</span>
+          <span className="muted">
+            {candidate.avg_turnaround_days == null ? 'no history yet' : `~${candidate.avg_turnaround_days}d turnaround`}
+          </span>
         </span>
         {candidate.conflict && (
           <span className="rp-conflict">Conflict: {candidate.conflict}</span>
@@ -93,11 +97,34 @@ function CandidateRow({ candidate, checked, onToggle, alreadyOn }) {
 }
 
 export default function ReviewerPanel({ manuscriptId, reviews, isAdmin }) {
-  const [rows, setRows] = useState(() => assignmentsFor(manuscriptId));
+  const [rows, setRows] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [candidatesLoaded, setCandidatesLoaded] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [picked, setPicked] = useState([]);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState('');
+
+  // Who's already on this manuscript, real — survives a reload and reflects
+  // what any editor invited, not just optimistic local state from this tab.
+  useEffect(() => {
+    let cancelled = false;
+    listManuscriptAssignments(manuscriptId)
+      .then((data) => { if (!cancelled) setRows(data); })
+      .catch(() => { /* left empty — the panel still renders, just starts from zero */ });
+    return () => { cancelled = true; };
+  }, [manuscriptId]);
+
+  // Candidates are ranked server-side and only needed once the editor opens
+  // the invite picker — no point computing them on every manuscript page.
+  useEffect(() => {
+    if (!inviting || candidatesLoaded) return;
+    let cancelled = false;
+    listCandidates(manuscriptId)
+      .then((data) => { if (!cancelled) { setCandidates(data); setCandidatesLoaded(true); } })
+      .catch(() => { if (!cancelled) setFlash('Could not load candidates — the matching service is unavailable.'); });
+    return () => { cancelled = true; };
+  }, [inviting, candidatesLoaded, manuscriptId]);
 
   // Two sources, deliberately: `reviews` is the seeded editorial view from
   // data/reviews.js, `rows` is what this editor has invited since. They are
@@ -112,15 +139,16 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin }) {
   const all = [...seeded, ...rows];
 
   const namesOn = new Set(all.map(a => a.name));
-  const candidates = [...REVIEWER_POOL].sort((a, b) => b.match_score - a.match_score);
+  const rankedCandidates = [...candidates].sort((a, b) => b.match_score - a.match_score);
 
   const toggle = (id) =>
     setPicked(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
 
   const invite = async () => {
     setBusy(true);
-    const chosen = REVIEWER_POOL.filter(c => picked.includes(c.id));
-    const next = [
+    const chosen = candidates.filter(c => picked.includes(c.id));
+    const force = chosen.some(c => c.conflict);
+    const localPlaceholder = [
       ...rows,
       ...chosen.map(c => ({
         id: `LOCAL-${c.id}-${Date.now()}`,
@@ -135,13 +163,14 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin }) {
       })),
     ];
     try {
-      await inviteReviewers(manuscriptId, { reviewer_ids: picked });
+      const created = await inviteReviewers(manuscriptId, { reviewer_ids: picked, force });
+      setRows([...rows, ...created]);
       setFlash(`Invited ${chosen.length} reviewer${chosen.length === 1 ? '' : 's'}.`);
     } catch {
       setFlash('Recorded locally — the assignment service is unavailable, so no invitations were sent.');
+      saveAssignments(manuscriptId, localPlaceholder);
+      setRows(localPlaceholder);
     }
-    saveAssignments(manuscriptId, next);
-    setRows(next);
     setPicked([]);
     setInviting(false);
     setBusy(false);
@@ -287,7 +316,8 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin }) {
             conflicts before inviting anyone.
           </div>
 
-          {candidates.map(c => (
+          {!candidatesLoaded && <div className="card-meta">Loading candidates…</div>}
+          {rankedCandidates.map(c => (
             <CandidateRow
               key={c.id}
               candidate={c}

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { saveTokens } from '../api/auth';
 import { landingRoute } from '../auth/roles';
 import { API_URL } from '../config';
+import TagPicker from '../components/TagPicker.jsx';
 
 // ── Shared icons ──────────────────────────────────────────────────────────────
 const EyeOpen = () => (
@@ -184,6 +185,7 @@ export default function RegisterPage() {
   const [position, setPosition]               = useState('');
   const [reviewerState, setReviewerState]     = useState('');
   const [availability, setAvailability]       = useState('');
+  const [specialtyTags, setSpecialtyTags]     = useState([]);
 
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -252,6 +254,7 @@ export default function RegisterPage() {
         body.programme           = position;
         body.state               = reviewerState;
         body.availability_status = availability;
+        body.specialty_tags      = specialtyTags;
         if (dateOfBirth) body.date_of_birth = dateOfBirth;
       }
 
@@ -710,7 +713,14 @@ export default function RegisterPage() {
                   </label>
                   <input className="field-input" type="text" placeholder="e.g. Deep Learning, Biomedical Engineering"
                     value={expertiseAreas} onChange={e => setExpertiseAreas(e.target.value)} required />
-                  <div className="field-hint">Used to match you with relevant manuscripts to review.</div>
+                  <div className="field-hint">A short description authors and editors can read.</div>
+                </div>
+                <div className="field">
+                  <label className="field-label">Specialty tags</label>
+                  <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+                    This is what actually drives manuscript matching — pick every area that applies.
+                  </div>
+                  <TagPicker value={specialtyTags} onChange={setSpecialtyTags} />
                 </div>
                 <PasswordField
                   label="Password" value={password} onChange={e => setPassword(e.target.value)}

@@ -27,6 +27,22 @@ def send_editor_invite_email(invite):
     )
 
 
+def send_reviewer_approved_email(user):
+    """Notice for a reviewer application an admin has just approved."""
+    send_mail(
+        subject='Your PaperBridge reviewer account is active',
+        message=(
+            f'{_greeting(user.get_full_name())}\n\n'
+            'An administrator has reviewed and approved your reviewer application. '
+            'Your account is now active — log in to see the reviewer workspace and '
+            'receive review invitations.\n'
+        ),
+        from_email=None,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+
 def send_editor_role_added_email(user):
     """Notice for an existing account that was granted the editor role."""
     send_mail(

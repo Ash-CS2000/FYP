@@ -2,8 +2,6 @@ import logging
 
 from botocore.exceptions import BotoCoreError, ClientError
 from django.db import transaction
-from django.db.models import Q
-from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -12,20 +10,35 @@ from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+
 from apps.notifications.models import Notification
+from apps.reviews.matching import compute_conflict, rank_candidates
+from apps.reviews.models import Review, ReviewAssignment
+from apps.reviews.notifications import (
+    REVIEW_INVITE_BODY, REVIEW_INVITE_TITLE, REVIEW_REMINDER_BODY, REVIEW_REMINDER_TITLE,
+    REVIEW_EXTENSION_GRANTED_BODY, REVIEW_EXTENSION_GRANTED_TITLE, REVIEW_EXTENSION_REFUSED_BODY,
+    REVIEW_EXTENSION_REFUSED_TITLE, REVIEW_SUBMITTED_BODY, REVIEW_SUBMITTED_TITLE,
+)
+from apps.reviews.serializers import (
+    AuthorReviewSerializer, InviteReviewersSerializer, ManuscriptAssignmentSerializer,
+    ManuscriptForReviewerSerializer, ManuscriptReviewSerializer, ReviewCreateSerializer,
+    reviewer_labels_for,
+)
+from apps.users.permissions import is_reviewer
 
 from .models import Decision, Manuscript, PlagiarismCheck, ScreeningAction
 from .notifications import (
-    DECISION_NOTIFICATION_BODIES, DECISION_NOTIFICATION_TITLES, PUBLICATION_NOTIFICATION_BODY,
-    PUBLICATION_NOTIFICATION_TITLE, REVISION_SUBMITTED_NOTIFICATION_BODY,
+    DECISION_NOTIFICATION_BODIES, DECISION_NOTIFICATION_TITLES, REVISION_SUBMITTED_NOTIFICATION_BODY,
     REVISION_SUBMITTED_NOTIFICATION_TITLE, SCREENING_NOTIFICATION_BODIES, SCREENING_NOTIFICATION_TITLES,
 )
 from .permissions import IsEditorOrAdmin, is_editor, is_editor_or_admin
 from .serializers import (
     DecisionCreateSerializer, DecisionSerializer, ManuscriptEditorSerializer,
     ManuscriptRevisionCreateSerializer, ManuscriptRevisionSerializer, ManuscriptSerializer,
-    ManuscriptSubmitSerializer, PublishedManuscriptSerializer, ScreeningActionCreateSerializer,
-    ScreeningActionSerializer,
+    ManuscriptSubmitSerializer, PublishedManuscriptSerializer,
+    ScreeningActionCreateSerializer, ScreeningActionSerializer,
 )
 from .services.noplag_client import get_check_status, get_check_report, NoPlagClientError
 from .services.plagiarism import sync_accepted_manuscript_to_corpus
@@ -67,107 +80,6 @@ class ManuscriptListView(generics.ListAPIView):
 
     def get_queryset(self):
         return Manuscript.objects.filter(owner=self.request.user).order_by('-submitted_at')
-
-
-class PublishedManuscriptListView(generics.ListAPIView):
-    """
-    GET /api/manuscripts/published/ → the published corpus, newest first.
-
-    The only unauthenticated endpoint in this app. It backs the author's
-    Discover page, the public /search results and the landing page, all three of
-    which are reachable logged out — hence AllowAny, which has to be stated
-    because DEFAULT_PERMISSION_CLASSES is IsAuthenticated.
-
-    'published' only. An accepted manuscript has cleared review but has not been
-    released, and a discovery surface that shows it leaks the paper early.
-
-    Query params, all optional:
-      q         substring over title / abstract / keywords / author institution
-      category  exact match on Manuscript.category
-      limit     1..100, applied after filtering
-    """
-    serializer_class = PublishedManuscriptSerializer
-    permission_classes = [permissions.AllowAny]
-    # No authentication at all, not merely optional. A token buys nothing here,
-    # and DRF authenticates before it checks permissions — so with JWT auth left
-    # on, a visitor carrying an expired token would get a 401 from a page that
-    # is supposed to be public. Empty list, no such failure mode.
-    authentication_classes = []
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'discovery'
-
-    # Nothing paginates in this project and adding a global page size would
-    # reshape every existing list response, so the ceiling is a hard slice.
-    # Revisit when the corpus outgrows it.
-    MAX_RESULTS = 200
-
-    def get_queryset(self):
-        # prefetch is load-bearing, not an optimisation: the serializer walks
-        # authors → affiliations on every row, so without it this is an N+1 on
-        # the one endpoint anonymous traffic can reach.
-        queryset = (
-            Manuscript.objects
-            .filter(status=Manuscript.Status.PUBLISHED)
-            .prefetch_related('authors__affiliations')
-            .order_by('-published_at', '-id')  # -id keeps the ordering total
-        )
-
-        params = self.request.query_params
-
-        term = params.get('q', '').strip()
-        if term:
-            queryset = queryset.filter(
-                Q(title__icontains=term)
-                | Q(abstract__icontains=term)
-                | Q(keywords__icontains=term)
-                | Q(authors__affiliations__institution__icontains=term)
-            ).distinct()  # the affiliation join fans a manuscript out per match
-
-        category = params.get('category', '').strip()
-        if category:
-            queryset = queryset.filter(category=category)
-
-        return queryset[:self._limit(params.get('limit'))]
-
-    def _limit(self, raw):
-        if raw is None:
-            return self.MAX_RESULTS
-        try:
-            return max(1, min(int(raw), self.MAX_RESULTS))
-        except (TypeError, ValueError):
-            return self.MAX_RESULTS
-
-
-class PublishedCategoryListView(APIView):
-    """
-    GET /api/manuscripts/published/categories/ → every research category that
-    has at least one published paper, A-Z. A bare string[].
-
-    Its own endpoint rather than something the client derives from a filtered
-    list: once the caller filters by category the response contains only that
-    category, so a dropdown built from the rows would collapse to the single
-    option the user just picked.
-
-    Derived from the data, never hardcoded — the seeded corpus and the
-    submission form's category <select> do not agree, so any vocabulary written
-    down in the frontend would be wrong on day one. 'All' is not in here; that
-    is a UI sentinel, not a category.
-    """
-    permission_classes = [permissions.AllowAny]
-    authentication_classes = []
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'discovery'
-
-    def get(self, request):
-        categories = (
-            Manuscript.objects
-            .filter(status=Manuscript.Status.PUBLISHED)
-            .exclude(category='')
-            .order_by('category')
-            .values_list('category', flat=True)
-            .distinct()
-        )
-        return Response(list(categories))
 
 
 class ManuscriptDetailView(generics.RetrieveAPIView):
@@ -238,13 +150,20 @@ class ManuscriptDecisionView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # TODO(reviews-app): the frontend spec also calls for a 422 when
-        # desk-rejecting a manuscript that already has reviews, but apps.reviews
-        # has no model yet — nothing to check against server-side until it does.
-
         serializer = DecisionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+
+        # Matches the frontend's own definition of "has reviews" (DecisionPanel's
+        # hasReviewers: counts invitations, not submitted reviews — the moment
+        # anyone has been asked, "rejected without troubling a reviewer" is no
+        # longer true). The UI already hides desk-reject once an invitation
+        # exists; this makes the server agree instead of silently allowing it.
+        if data['type'] == Decision.Type.DESK_REJECT and manuscript.review_assignments.exists():
+            return Response(
+                {'detail': 'This manuscript already has reviewers involved and cannot be desk rejected.'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
 
         with transaction.atomic():
             decision = Decision.objects.create(manuscript=manuscript, decided_by=request.user, **data)
@@ -446,6 +365,269 @@ class ManuscriptScreeningView(APIView):
         return Response(ScreeningActionSerializer(screening).data, status=status.HTTP_201_CREATED)
 
 
+class ManuscriptReviewerCandidatesView(APIView):
+    """
+    GET /api/manuscripts/<int:pk>/reviewer-candidates/ → every active
+    reviewer, ranked by specialty-tag overlap. Editor/admin only.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsEditorOrAdmin]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        return Response(rank_candidates(manuscript))
+
+
+class ManuscriptAssignmentListCreateView(APIView):
+    """
+    GET  /api/manuscripts/<int:pk>/assignments/ → who is currently invited to
+    or reviewing this manuscript. Editor/admin only.
+    POST /api/manuscripts/<int:pk>/assignments/ → invite reviewers. Editor
+    only — unlike a decision, an admin must not be able to do this by hand.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        if not is_editor_or_admin(request.user):
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        rows = manuscript.review_assignments.select_related('reviewer').all()
+        return Response(ManuscriptAssignmentSerializer(rows, many=True).data)
+
+    def post(self, request, pk):
+        if not is_editor(request.user):
+            return Response(
+                {'detail': 'You do not have permission to invite reviewers.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+
+        serializer = InviteReviewersSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        reviewer_ids = data['reviewer_ids']
+
+        already_assigned = set(
+            manuscript.review_assignments.filter(reviewer_id__in=reviewer_ids).values_list('reviewer_id', flat=True)
+        )
+        if already_assigned:
+            return Response(
+                {'detail': 'One or more of these reviewers is already assigned to this manuscript.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        User = get_user_model()
+        reviewers = list(User.objects.filter(pk__in=reviewer_ids).select_related('profile'))
+        if not data['force']:
+            conflicted = [u for u in reviewers if compute_conflict(manuscript, u)]
+            if conflicted:
+                return Response(
+                    {'detail': 'One or more reviewers have a recorded conflict and were not force-overridden.'},
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+
+        respond_by = timezone.now() + timezone.timedelta(days=data['respond_by_days'])
+        created = []
+        with transaction.atomic():
+            for reviewer in reviewers:
+                assignment = ReviewAssignment.objects.create(
+                    manuscript=manuscript,
+                    reviewer=reviewer,
+                    invited_by=request.user,
+                    respond_by=respond_by,
+                    due_days=data['due_days'],
+                )
+                created.append(assignment)
+                Notification.objects.create(
+                    recipient=reviewer,
+                    category=Notification.Category.REVIEW_INVITE,
+                    title=REVIEW_INVITE_TITLE,
+                    body=REVIEW_INVITE_BODY.format(
+                        title=manuscript.title, respond_by=respond_by.strftime('%d %b %Y'),
+                    ),
+                    manuscript=manuscript,
+                )
+
+        return Response(ManuscriptAssignmentSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
+
+
+class ManuscriptAssignmentRemindView(APIView):
+    """
+    POST /api/manuscripts/<int:pk>/assignments/<assignment_id>/remind/
+    Editor-only. 409 if reminded within the last 24h.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk, assignment_id):
+        if not is_editor(request.user):
+            return Response({'detail': 'You do not have permission to send reminders.'}, status=status.HTTP_403_FORBIDDEN)
+        assignment = get_object_or_404(ReviewAssignment, pk=assignment_id, manuscript_id=pk)
+
+        if assignment.reminded_at and timezone.now() - assignment.reminded_at < timezone.timedelta(hours=24):
+            return Response(
+                {'detail': 'A reminder was already sent within the last 24 hours.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        assignment.reminded_at = timezone.now()
+        assignment.save(update_fields=['reminded_at'])
+        Notification.objects.create(
+            recipient=assignment.reviewer,
+            category=Notification.Category.REVIEW_INVITE,
+            title=REVIEW_REMINDER_TITLE,
+            body=REVIEW_REMINDER_BODY.format(title=assignment.manuscript.title),
+            manuscript=assignment.manuscript,
+        )
+        return Response({'reminded_at': assignment.reminded_at})
+
+
+class ManuscriptAssignmentExtensionDecideView(APIView):
+    """
+    PATCH /api/manuscripts/<int:pk>/assignments/<assignment_id>/extension/
+    body {status: 'granted'|'refused'}. Editor-only.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk, assignment_id):
+        if not is_editor(request.user):
+            return Response({'detail': 'You do not have permission to decide on an extension.'}, status=status.HTTP_403_FORBIDDEN)
+        assignment = get_object_or_404(ReviewAssignment, pk=assignment_id, manuscript_id=pk)
+
+        if assignment.extension_status != ReviewAssignment.ExtensionStatus.PENDING:
+            return Response({'detail': 'No pending extension request.'}, status=status.HTTP_404_NOT_FOUND)
+
+        new_status = request.data.get('status')
+        if new_status not in (ReviewAssignment.ExtensionStatus.GRANTED, ReviewAssignment.ExtensionStatus.REFUSED):
+            return Response({'detail': "status must be 'granted' or 'refused'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            assignment.extension_status = new_status
+            if new_status == ReviewAssignment.ExtensionStatus.GRANTED and assignment.due_at:
+                assignment.due_at = assignment.due_at + timezone.timedelta(days=assignment.extension_requested_days)
+            assignment.save()
+            Notification.objects.create(
+                recipient=assignment.reviewer,
+                category=Notification.Category.REVIEW_EXTENSION,
+                title=REVIEW_EXTENSION_GRANTED_TITLE if new_status == ReviewAssignment.ExtensionStatus.GRANTED else REVIEW_EXTENSION_REFUSED_TITLE,
+                body=(REVIEW_EXTENSION_GRANTED_BODY if new_status == ReviewAssignment.ExtensionStatus.GRANTED else REVIEW_EXTENSION_REFUSED_BODY).format(
+                    title=assignment.manuscript.title,
+                ),
+                manuscript=assignment.manuscript,
+            )
+
+        return Response(ManuscriptAssignmentSerializer(assignment).data)
+
+
+class ManuscriptReviewListCreateView(APIView):
+    """
+    GET  /api/manuscripts/<int:pk>/reviews/ → one row per ReviewAssignment
+    with status accepted/submitted, review content null until submitted.
+    Editor/admin only.
+    POST /api/manuscripts/<int:pk>/reviews/ → the calling reviewer submits
+    their review. Only for their own accepted assignment on this manuscript.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        if not is_editor_or_admin(request.user):
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        rows = (
+            manuscript.review_assignments
+            .filter(status__in=[ReviewAssignment.Status.ACCEPTED, ReviewAssignment.Status.SUBMITTED])
+            .select_related('review')
+        )
+        labels = reviewer_labels_for(manuscript)
+        return Response(ManuscriptReviewSerializer(rows, many=True, context={'labels': labels}).data)
+
+    def post(self, request, pk):
+        if not is_reviewer(request.user):
+            return Response({'detail': 'You do not have permission to submit a review.'}, status=status.HTTP_403_FORBIDDEN)
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+
+        assignment = ReviewAssignment.objects.filter(manuscript=manuscript, reviewer=request.user).first()
+        if assignment is None:
+            return Response(
+                {'detail': 'You do not have an assignment on this manuscript.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if getattr(assignment, 'review', None) is not None:
+            return Response({'detail': 'You have already submitted this review.'}, status=status.HTTP_409_CONFLICT)
+        if assignment.status != ReviewAssignment.Status.ACCEPTED:
+            return Response(
+                {'detail': 'You do not have an accepted assignment on this manuscript.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = ReviewCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        with transaction.atomic():
+            review = Review.objects.create(assignment=assignment, **data)
+            assignment.status = ReviewAssignment.Status.SUBMITTED
+            assignment.save(update_fields=['status'])
+            if assignment.invited_by_id:
+                Notification.objects.create(
+                    recipient_id=assignment.invited_by_id,
+                    category=Notification.Category.REVIEW_SUBMITTED,
+                    title=REVIEW_SUBMITTED_TITLE,
+                    body=REVIEW_SUBMITTED_BODY.format(
+                        reviewer=request.user.get_full_name() or request.user.email,
+                        title=manuscript.title,
+                    ),
+                    manuscript=manuscript,
+                )
+
+        labels = reviewer_labels_for(manuscript)
+        return Response(
+            ManuscriptReviewSerializer(assignment, context={'labels': labels}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ManuscriptAuthorReviewsView(APIView):
+    """
+    GET /api/manuscripts/<int:pk>/reviews/author/ → the reviews an author is
+    permitted to read on their own manuscript. 404 until a decision exists —
+    reviews are released to the author only once one does, never before.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        if manuscript.owner_id != request.user.id:
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        if not manuscript.decisions.exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        reviews = Review.objects.filter(
+            assignment__manuscript=manuscript, assignment__status=ReviewAssignment.Status.SUBMITTED,
+        ).select_related('assignment')
+        labels = reviewer_labels_for(manuscript)
+        return Response(AuthorReviewSerializer(reviews, many=True, context={'labels': labels}).data)
+
+
+class ManuscriptReviewerViewView(APIView):
+    """
+    GET /api/manuscripts/<int:pk>/reviewer-view/ → the manuscript content a
+    reviewer is permitted to read: title/abstract/category/file, nothing
+    that identifies the author. Accepted or already-submitted only (a
+    reviewer who has submitted may still want to reference the manuscript —
+    matches AssignmentGate.jsx, which only ever blocked 'invited'/'declined').
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        has_access = ReviewAssignment.objects.filter(
+            manuscript=manuscript, reviewer=request.user,
+            status__in=[ReviewAssignment.Status.ACCEPTED, ReviewAssignment.Status.SUBMITTED],
+        ).exists()
+        if not has_access:
+            return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        return Response(ManuscriptForReviewerSerializer(manuscript).data)
+
+
 class ManuscriptPublishView(APIView):
     """
     POST /api/manuscripts/<int:pk>/publish/ → release an accepted manuscript to
@@ -494,3 +676,104 @@ class ManuscriptPublishView(APIView):
             'status': manuscript.status,
             'published_at': manuscript.published_at,
         })
+
+
+class PublishedManuscriptListView(generics.ListAPIView):
+    """
+    GET /api/manuscripts/published/ → the published corpus, newest first.
+
+    The only unauthenticated endpoint in this app. It backs the author's
+    Discover page, the public /search results and the landing page, all three of
+    which are reachable logged out — hence AllowAny, which has to be stated
+    because DEFAULT_PERMISSION_CLASSES is IsAuthenticated.
+
+    'published' only. An accepted manuscript has cleared review but has not been
+    released, and a discovery surface that shows it leaks the paper early.
+
+    Query params, all optional:
+      q         substring over title / abstract / keywords / author institution
+      category  exact match on Manuscript.category
+      limit     1..100, applied after filtering
+    """
+    serializer_class = PublishedManuscriptSerializer
+    permission_classes = [permissions.AllowAny]
+    # No authentication at all, not merely optional. A token buys nothing here,
+    # and DRF authenticates before it checks permissions — so with JWT auth left
+    # on, a visitor carrying an expired token would get a 401 from a page that
+    # is supposed to be public. Empty list, no such failure mode.
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'discovery'
+
+    # Nothing paginates in this project and adding a global page size would
+    # reshape every existing list response, so the ceiling is a hard slice.
+    # Revisit when the corpus outgrows it.
+    MAX_RESULTS = 200
+
+    def get_queryset(self):
+        # prefetch is load-bearing, not an optimisation: the serializer walks
+        # authors → affiliations on every row, so without it this is an N+1 on
+        # the one endpoint anonymous traffic can reach.
+        queryset = (
+            Manuscript.objects
+            .filter(status=Manuscript.Status.PUBLISHED)
+            .prefetch_related('authors__affiliations')
+            .order_by('-published_at', '-id')  # -id keeps the ordering total
+        )
+
+        params = self.request.query_params
+
+        term = params.get('q', '').strip()
+        if term:
+            queryset = queryset.filter(
+                Q(title__icontains=term)
+                | Q(abstract__icontains=term)
+                | Q(keywords__icontains=term)
+                | Q(authors__affiliations__institution__icontains=term)
+            ).distinct()  # the affiliation join fans a manuscript out per match
+
+        category = params.get('category', '').strip()
+        if category:
+            queryset = queryset.filter(category=category)
+
+        return queryset[:self._limit(params.get('limit'))]
+
+    def _limit(self, raw):
+        if raw is None:
+            return self.MAX_RESULTS
+        try:
+            return max(1, min(int(raw), self.MAX_RESULTS))
+        except (TypeError, ValueError):
+            return self.MAX_RESULTS
+
+
+class PublishedCategoryListView(APIView):
+    """
+    GET /api/manuscripts/published/categories/ → every research category that
+    has at least one published paper, A-Z. A bare string[].
+
+    Its own endpoint rather than something the client derives from a filtered
+    list: once the caller filters by category the response contains only that
+    category, so a dropdown built from the rows would collapse to the single
+    option the user just picked.
+
+    Derived from the data, never hardcoded — the seeded corpus and the
+    submission form's category <select> do not agree, so any vocabulary written
+    down in the frontend would be wrong on day one. 'All' is not in here; that
+    is a UI sentinel, not a category.
+    """
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'discovery'
+
+    def get(self, request):
+        categories = (
+            Manuscript.objects
+            .filter(status=Manuscript.Status.PUBLISHED)
+            .exclude(category='')
+            .order_by('category')
+            .values_list('category', flat=True)
+            .distinct()
+        )
+        return Response(list(categories))

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import TagPicker from '../components/TagPicker.jsx';
 import { API_URL } from '../config';
 import {
   getProgress,
@@ -119,6 +120,7 @@ export default function UserSubmit() {
   const [category, setCategory] = useState(d.category || 'Computer Science — AI & ML');
   const [subCategory, setSubCategory] = useState(d.subCategory || 'Medical Imaging');
   const [keywords, setKeywords] = useState(d.keywords || '');
+  const [specialtyTags, setSpecialtyTags] = useState(d.specialtyTags || []);
 
   // Step 2 — Authors
   const [authors, setAuthors] = useState(() =>
@@ -161,7 +163,7 @@ export default function UserSubmit() {
   // deliberately — see the note at the top of data/drafts.js — so a resumed
   // draft asks for the file again rather than silently losing it.
   const draftPayload = () => ({
-    articleType, title, runningTitle, abstract, category, subCategory, keywords,
+    articleType, title, runningTitle, abstract, category, subCategory, keywords, specialtyTags,
     authors, coverLetter,
     noFunding, funder, grantNo, noCompeting, competing, ethicsNA, ethics, dataStatement,
   });
@@ -367,6 +369,7 @@ export default function UserSubmit() {
       formData.append('category', category);
       formData.append('sub_category', subCategory);
       formData.append('keywords', keywords);
+      formData.append('specialty_tags', JSON.stringify(specialtyTags));
       formData.append('authors', JSON.stringify(authorsPayload));
       formData.append('manuscript', file);
       supplementary.forEach((f) => formData.append('supplementary', f));
@@ -557,6 +560,13 @@ export default function UserSubmit() {
                   onChange={(e) => setKeywords(e.target.value)}
                 />
                 <div className="field-hint">These help with discoverability and reviewer matching.</div>
+              </div>
+              <div className="field">
+                <label className="field-label">Specialty tags <span className="req">*</span></label>
+                <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+                  Pick 1–3 — this is what actually drives reviewer matching.
+                </div>
+                <TagPicker value={specialtyTags} onChange={setSpecialtyTags} max={3} />
               </div>
             </>
           )}

@@ -16,7 +16,7 @@ urlpatterns = [
     # served from here, and nothing served from here has been peer-reviewed
     # by us.
     path('api/discover/', include('apps.discovery.urls')),
-    path('api/reviews/', include('apps.reviews.urls')),
+    path('api/reviewer/', include('apps.reviews.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/analysis/', include('apps.analysis.urls')),
     path('api/publications/', include('apps.publications.urls')),

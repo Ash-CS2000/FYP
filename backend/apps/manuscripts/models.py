@@ -21,6 +21,7 @@ class Manuscript(models.Model):
     category = models.CharField(max_length=255, blank=True)
     sub_category = models.CharField(max_length=255, blank=True)
     keywords = models.CharField(max_length=500, blank=True)
+    specialty_tags = models.JSONField(default=list, blank=True)
 
     # Step 3 — Manuscript file (Supabase Storage, not MEDIA_ROOT)
     file_key = models.CharField(max_length=1024)

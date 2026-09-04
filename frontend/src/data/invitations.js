@@ -137,94 +137,18 @@ export const ASSIGNMENTS = [
 
 // ── The reviewer pool the editor picks from ─────────────────────────────────
 //
-//   GET /api/manuscripts/:id/reviewer-candidates/  → Candidate[]  (editor only)
-//
+// Real now — GET /api/manuscripts/:id/reviewer-candidates/ (editor only), see
+// listCandidates() in api/invitations.js and backend/apps/reviews/matching.py.
 // `match_score` is produced server-side and the frontend deliberately treats it
-// as an opaque 0–100 number it only sorts and displays. That matters: ranking
-// reviewers by fit is a modelling problem, not an endpoint, and however it ends
-// up working — embedding similarity on abstracts, keyword overlap, citation
-// graph, or a hand-tuned heuristic to begin with — no screen here needs to
-// change. `match_reasons` is what the UI actually shows, because a bare 87% is
-// not something an editor can sanity-check; a reason they can read is.
+// as an opaque 0–100 number it only sorts and displays — ranking reviewers by
+// fit is a modelling problem, not an endpoint, and however it ends up working,
+// no screen here needs to change. `match_reasons` is what the UI actually
+// shows, because a bare 87% is not something an editor can sanity-check; a
+// reason they can read is.
 //
 // Candidates must be filterable by the editor without the backend having already
 // excluded conflicts silently — `conflict` is surfaced, not hidden, so the editor
 // sees that a strong match was ruled out and why.
-
-export const REVIEWER_POOL = [
-  {
-    id: 'RVR-1',
-    name: 'Dr. Lim Wei Ping',
-    institution: 'Universiti Malaya',
-    expertise: ['Machine Learning', 'Medical Imaging', 'Computer Vision'],
-    match_score: 94,
-    match_reasons: ['Expertise overlap on 3 of 4 manuscript keywords', 'Reviewed 4 similar submissions'],
-    active_reviews: 2,
-    avg_turnaround_days: 11,
-    availability: 'available',
-    conflict: null,
-  },
-  {
-    id: 'RVR-2',
-    name: 'Dr. Sarah Rahman',
-    institution: 'Universiti Putra Malaysia',
-    expertise: ['Deep Learning', 'Biomedical Engineering'],
-    match_score: 88,
-    match_reasons: ['Expertise overlap on 2 of 4 manuscript keywords', 'Published in this area in 2025'],
-    active_reviews: 1,
-    avg_turnaround_days: 9,
-    availability: 'available',
-    conflict: null,
-  },
-  {
-    id: 'RVR-3',
-    name: 'Prof. James Tan',
-    institution: 'Universiti Malaya',
-    expertise: ['Computer Vision', 'Image Processing'],
-    match_score: 82,
-    match_reasons: ['Expertise overlap on 2 of 4 manuscript keywords'],
-    active_reviews: 4,
-    avg_turnaround_days: 21,
-    availability: 'busy',
-    conflict: null,
-  },
-  {
-    id: 'RVR-4',
-    name: 'Dr. Nurul Aina',
-    institution: 'Universiti Teknologi Malaysia',
-    expertise: ['Medical Imaging', 'Signal Processing'],
-    match_score: 79,
-    match_reasons: ['Expertise overlap on 2 of 4 manuscript keywords'],
-    active_reviews: 0,
-    avg_turnaround_days: 14,
-    availability: 'available',
-    conflict: 'Same institution as a listed co-author',
-  },
-  {
-    id: 'RVR-5',
-    name: 'Dr. Tan Boon Hock',
-    institution: 'Universiti Sains Malaysia',
-    expertise: ['Data Mining', 'Health Informatics'],
-    match_score: 71,
-    match_reasons: ['Expertise overlap on 1 of 4 manuscript keywords'],
-    active_reviews: 1,
-    avg_turnaround_days: 16,
-    availability: 'available',
-    conflict: null,
-  },
-  {
-    id: 'RVR-6',
-    name: 'Dr. Chong Mei Fong',
-    institution: 'Universiti Kebangsaan Malaysia',
-    expertise: ['Statistics', 'Clinical Trials'],
-    match_score: 64,
-    match_reasons: ['Methodological fit rather than topic fit'],
-    active_reviews: 3,
-    avg_turnaround_days: 12,
-    availability: 'unavailable',
-    conflict: null,
-  },
-];
 
 export const AVAILABILITY_LABELS = {
   available:   'Available',
@@ -285,16 +209,11 @@ export function saveResponse(assignmentId, patch) {
   return map[assignmentId];
 }
 
-// Who the editor has invited, per manuscript. Layered over data/reviews.js the
-// same way responses layer over ASSIGNMENTS.
-export function loadAssignments() {
-  return loadMap(ASSIGNMENTS_KEY);
-}
-
-export function assignmentsFor(manuscriptId) {
-  return loadAssignments()[manuscriptId] || [];
-}
-
+// Offline write-only fallback for the editor's invite action (ReviewerPanel.jsx)
+// — who was invited, per manuscript, when the real POST failed. Read back
+// only as a last resort by whoever calls it; the normal path is the real
+// GET /api/manuscripts/:id/assignments/ (api/invitations.js's
+// listManuscriptAssignments), which is what actually powers the panel now.
 export function saveAssignments(manuscriptId, rows) {
   const map = loadMap(ASSIGNMENTS_KEY);
   map[manuscriptId] = rows;

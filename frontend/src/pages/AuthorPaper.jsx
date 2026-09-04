@@ -1,9 +1,7 @@
 // src/pages/AuthorPaper.jsx
 // One of the author's own papers: where it stands, the decision (if one has
-// been made), and the originality check result. Reviewer comments are NOT
-// wired to a real backend yet — there is no reviews API on the Manuscript
-// model as of this writing, so that section is shown as "not available yet"
-// rather than faked from mock data.
+// been made), the originality check result, and — once a decision exists —
+// the reviews themselves.
 //
 // This screen is the author side of the double-blind boundary, so what it does
 // NOT show is as deliberate as what it does:
@@ -20,6 +18,10 @@
 //   · decision letter: shown below, sourced live from
 //     /api/manuscripts/<id>/decision/ — same double-blind allow-list the editor
 //     side reads from, see data/editorial.js
+//   · reviews: shown below, sourced live from
+//     /api/manuscripts/<id>/reviews/author/ — 404 until a decision exists,
+//     stripped to {id, label, summary, strengths, weaknesses} server-side,
+//     see getAuthorReviews in api/editorial.js
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -30,7 +32,7 @@ import { withdrawSubmission } from '../api/submissions.js';
 import { getPlagiarismStatus, pollPlagiarismStatus } from '../api/similarity.js';
 import { bandFor, DEFAULT_THRESHOLDS, BAND_LABELS, BAND_HINTS, SIMILARITY_TONE } from '../data/similarity.js';
 import { TERMINAL_STATUSES, statusLabel, statusPillClass } from '../data/manuscriptStatus.js';
-import { getDecision } from '../api/editorial.js';
+import { getAuthorReviews, getDecision } from '../api/editorial.js';
 import { DECISION_LABELS, DECISION_TONE, formatDecidedAt } from '../data/editorial.js';
 import DecisionHistory from '../components/DecisionHistory.jsx';
 
@@ -348,6 +350,83 @@ function DecisionCard({ manuscriptId }) {
   );
 }
 
+// Reviews, live from the backend. Same state-machine shape as DecisionCard:
+// loading, none, ready and failed. 'none' is the normal state for a paper
+// still in review — reviews are released only once a decision exists, see
+// the header comment above and getAuthorReviews in api/editorial.js.
+function ReviewsCard({ manuscriptId }) {
+  const [state, setState] = useState('loading'); // loading | none | ready | failed
+  const [reviews, setReviews] = useState([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getAuthorReviews(manuscriptId)
+      .then(rows => { if (!controller.signal.aborted) { setReviews(rows); setState('ready'); } })
+      .catch(err => {
+        if (controller.signal.aborted) return;
+        if (err.status === 404) setState('none');
+        else { setError(err.message || 'Could not load your reviews.'); setState('failed'); }
+      });
+    return () => controller.abort();
+  }, [manuscriptId]);
+
+  if (state === 'loading') {
+    return (
+      <div className="card">
+        <div className="card-header"><div className="card-title">Reviews</div></div>
+        <div className="card-meta">Loading…</div>
+      </div>
+    );
+  }
+
+  if (state === 'none') return null;
+
+  if (state === 'failed') {
+    return (
+      <div className="card">
+        <div className="card-header"><div className="card-title">Reviews</div></div>
+        <div className="card-meta" style={{ color: 'var(--red-800)' }}>{error}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title">Reviews</div>
+          <div className="card-meta">{reviews.length} review{reviews.length === 1 ? '' : 's'}.</div>
+        </div>
+      </div>
+      {reviews.length === 0 ? (
+        <div className="card-meta">No reviews were released with this decision.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {reviews.map(r => (
+            <div key={r.id} style={{ paddingTop: 14, borderTop: '1px solid var(--ink-100)' }}>
+              <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--navy-900)', marginBottom: 8 }}>{r.label}</div>
+              {r.summary && <p style={{ fontSize: 13.5, color: 'var(--navy-900)', lineHeight: 1.65, marginBottom: 8 }}>{r.summary}</p>}
+              {r.strengths && (
+                <div style={{ marginBottom: 8 }}>
+                  <div className="ap-meta-label" style={{ marginBottom: 4 }}>Strengths</div>
+                  <p style={{ fontSize: 13, color: 'var(--navy-900)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{r.strengths}</p>
+                </div>
+              )}
+              {r.weaknesses && (
+                <div>
+                  <div className="ap-meta-label" style={{ marginBottom: 4 }}>Weaknesses & suggestions</div>
+                  <p style={{ fontSize: 13, color: 'var(--navy-900)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{r.weaknesses}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // A resubmit prompt while the paper is awaiting a revision — the entry
 // point into Revision.jsx.
 function ResubmitCallout({ manuscript }) {
@@ -469,6 +548,8 @@ export default function AuthorPaper() {
         <OriginalityCard manuscriptId={manuscript.id} />
 
         <DecisionCard manuscriptId={manuscript.id} />
+
+        <ReviewsCard manuscriptId={manuscript.id} />
 
         <ResubmitCallout manuscript={manuscript} />
 

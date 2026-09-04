@@ -25,6 +25,7 @@ class UserProfile(models.Model):
     research_areas = models.TextField(blank=True)
     expertise_areas = models.TextField(blank=True)
     availability_status = models.CharField(max_length=50, blank=True)
+    specialty_tags = models.JSONField(default=list, blank=True)
 
     # Registration-form fields (added by teammate, restored here)
     affiliation_type = models.CharField(max_length=20, blank=True)
@@ -35,17 +36,21 @@ class UserProfile(models.Model):
     degree = models.CharField(max_length=100, blank=True)
 
     # ── Account section ──────────────────────────────────────────────────────
+    # Both sides of this merge added these four independently; keeping one
+    # definition, with the explicit default='' from origin/main since that is
+    # what the live columns carry.
+    #
     # The name of record lives on auth_user (first_name/last_name) and appears on
     # submissions, decision letters and certificates, so it is not self-editable.
     # This is the display name the UI renders instead — a nickname, changeable at
     # will, with no bearing on the published record.
-    display_name = models.CharField(max_length=50, blank=True)
-    bio = models.TextField(blank=True)
+    display_name = models.CharField(max_length=50, blank=True, default='')
+    bio = models.TextField(blank=True, default='')
 
     # A Supabase Storage key, not an ImageField — the project has no MEDIA_ROOT
     # and Render's filesystem is ephemeral. Same convention as
     # ManuscriptSupplementaryFile.file_key. Read through GET /api/users/<pk>/avatar/.
-    avatar_key = models.CharField(max_length=255, blank=True)
+    avatar_key = models.CharField(max_length=255, blank=True, default='')
 
     # Language, timezone, notification and privacy choices — one blob rather than
     # a column per toggle, because they are read and written together and none of
@@ -101,6 +106,12 @@ class EditorInvite(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     accepted_at = models.DateTimeField(null=True, blank=True)
+
+    # Profile fields an admin fills in at invite time (see EditorOnboardView),
+    # carried over onto UserProfile when the invite is accepted.
+    institution = models.CharField(max_length=255, blank=True)
+    specialty_tags = models.JSONField(default=list, blank=True)
+    orcid_id = models.CharField(max_length=50, blank=True)
 
     class Meta:
         ordering = ['-created_at']

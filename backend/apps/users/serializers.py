@@ -4,6 +4,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import UserProfile, UserRole
+from .taxonomy import SPECIALTY_TAG_SLUGS
 
 User = get_user_model()
 
@@ -33,6 +34,18 @@ class UserSerializer(serializers.ModelSerializer):
     institution = serializers.CharField(
         source='profile.institution', required=False, allow_blank=True
     )
+    expertise_areas = serializers.CharField(
+        source='profile.expertise_areas', required=False, allow_blank=True
+    )
+    research_areas = serializers.CharField(
+        source='profile.research_areas', required=False, allow_blank=True
+    )
+    availability_status = serializers.CharField(
+        source='profile.availability_status', required=False, allow_blank=True, max_length=50
+    )
+    specialty_tags = serializers.ListField(
+        source='profile.specialty_tags', child=serializers.CharField(), required=False,
+    )
 
     # Self-editable profile fields. `name`/`email` deliberately are not: they are
     # the name of record on submissions, decision letters and certificates.
@@ -45,9 +58,6 @@ class UserSerializer(serializers.ModelSerializer):
     )
     website = serializers.URLField(
         source='profile.website', required=False, allow_blank=True
-    )
-    research_areas = serializers.CharField(
-        source='profile.research_areas', required=False, allow_blank=True
     )
     preferences = serializers.JSONField(source='profile.preferences', required=False)
 
@@ -75,6 +85,9 @@ class UserSerializer(serializers.ModelSerializer):
             'research_areas',
             'preferences',
             'avatar_key',
+            'expertise_areas',
+            'availability_status',
+            'specialty_tags',
             'roles',
             'reviewer_status',
         )
@@ -109,11 +122,26 @@ class UserSerializer(serializers.ModelSerializer):
         reviewer_role = obj.roles.filter(role=UserProfile.Role.REVIEWER).first()
         return reviewer_role.status if reviewer_role else ''
 
+    def validate_specialty_tags(self, value):
+        unknown = sorted(set(value) - SPECIALTY_TAG_SLUGS)
+        if unknown:
+            raise serializers.ValidationError(f'Unknown specialty tag(s): {", ".join(unknown)}')
+        return value
+
     def update(self, instance, validated_data):
         profile_data = validated_data.pop('profile', {})
         instance = super().update(instance, validated_data)
         if profile_data:
-            profile, _ = UserProfile.objects.get_or_create(user=instance)
+            # Reuse instance.profile (creating it if missing) rather than a
+            # separate get_or_create() query, so the object we mutate is the
+            # same one Django's reverse-o2o cache hands back on any later
+            # instance.profile access in this request/response cycle —
+            # otherwise a stale, pre-update profile can be re-serialized.
+            try:
+                profile = instance.profile
+            except UserProfile.DoesNotExist:
+                profile = UserProfile.objects.create(user=instance)
+
             # Preferences are one column holding many independent settings, so a
             # PATCH carrying only the changed keys must merge rather than
             # replace — otherwise saving a timezone would wipe every notification
@@ -135,6 +163,15 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     reviewer_status = serializers.SerializerMethodField()
     institution = serializers.CharField(source='profile.institution', default='', read_only=True)
     avatar_key = serializers.CharField(source='profile.avatar_key', default='', read_only=True)
+    specialty_tags = serializers.ListField(
+        source='profile.specialty_tags', child=serializers.CharField(), default=list, read_only=True,
+    )
+    orcid_id = serializers.CharField(source='profile.orcid_id', default='', read_only=True)
+    website = serializers.CharField(source='profile.website', default='', read_only=True)
+    expertise_areas = serializers.CharField(source='profile.expertise_areas', default='', read_only=True)
+    research_areas = serializers.CharField(source='profile.research_areas', default='', read_only=True)
+    degree = serializers.CharField(source='profile.degree', default='', read_only=True)
+    professional_type = serializers.CharField(source='profile.professional_type', default='', read_only=True)
     status = serializers.SerializerMethodField()
     joined = serializers.DateTimeField(source='date_joined', read_only=True)
 
@@ -142,7 +179,9 @@ class AdminUserListSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'name', 'email', 'roles', 'reviewer_status',
-            'institution', 'avatar_key', 'status', 'is_active', 'joined',
+            'institution', 'avatar_key', 'specialty_tags', 'orcid_id', 'website',
+            'expertise_areas', 'research_areas', 'degree', 'professional_type',
+            'status', 'is_active', 'joined',
         )
 
     def get_name(self, obj):
@@ -195,8 +234,15 @@ class RegisterSerializer(serializers.Serializer):
     expertise_areas     = serializers.CharField(required=False, allow_blank=True)
     availability_status = serializers.CharField(required=False, allow_blank=True, max_length=50)
     degree              = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    specialty_tags      = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 
     # ── Field validation ─────────────────────────────────────────────────────
+
+    def validate_specialty_tags(self, value):
+        unknown = sorted(set(value) - SPECIALTY_TAG_SLUGS)
+        if unknown:
+            raise serializers.ValidationError(f'Unknown specialty tag(s): {", ".join(unknown)}')
+        return value
 
     def validate_email(self, value):
         email = value.strip().lower()
@@ -242,6 +288,7 @@ class RegisterSerializer(serializers.Serializer):
         expertise_areas     = validated_data.pop('expertise_areas', '')
         availability_status = validated_data.pop('availability_status', '')
         degree              = validated_data.pop('degree', '')
+        specialty_tags      = validated_data.pop('specialty_tags', [])
 
         name_parts = full_name.split(maxsplit=1)
         first_name = name_parts[0]
@@ -255,27 +302,37 @@ class RegisterSerializer(serializers.Serializer):
             password=password,
         )
 
-        UserProfile.objects.update_or_create(
-            user=user,
-            defaults={
-                'role':              role,
-                'status':            UserProfile.Status.ACTIVE,
-                'institution':       institution,
-                'affiliation_type':  affiliation_type,
-                'student_level':     student_level,
-                'professional_type': professional_type,
-                'programme':         programme,
-                'research_areas':      research_areas,
-                'state':               state,
-                'date_of_birth':       date_of_birth,
-                'expertise_areas':     expertise_areas,
-                'availability_status': availability_status,
-                'degree':              degree,
-            },
-        )
+        # Reuse user.profile rather than a separate update_or_create() query.
+        # The post_save signal (signals.py) already created a blank profile
+        # and cached it onto `user` the moment create_user() ran above — a
+        # second, separately-fetched object here would update the DB row
+        # correctly but leave that cached instance stale, so to_representation()
+        # below (which reads back through user.profile) would report defaults
+        # no matter what was actually saved.
+        profile = user.profile
+        profile.role = role
+        profile.status = UserProfile.Status.ACTIVE
+        profile.institution = institution
+        profile.affiliation_type = affiliation_type
+        profile.student_level = student_level
+        profile.professional_type = professional_type
+        profile.programme = programme
+        profile.research_areas = research_areas
+        profile.state = state
+        profile.date_of_birth = date_of_birth
+        profile.expertise_areas = expertise_areas
+        profile.availability_status = availability_status
+        profile.degree = degree
+        profile.specialty_tags = specialty_tags
+        profile.save()
 
-        # Reviewers are activated immediately on registration — no admin approval gate.
-        UserRole.objects.create(user=user, role=role, status=UserRole.Status.ACTIVE)
+        # Authors are active immediately. Reviewers — whether registering
+        # directly or applying later via ApplyReviewerView — always land
+        # PENDING until an admin reviews their background and approves.
+        initial_status = (
+            UserRole.Status.PENDING if role == UserProfile.Role.REVIEWER else UserRole.Status.ACTIVE
+        )
+        UserRole.objects.create(user=user, role=role, status=initial_status)
 
         return user
 

@@ -150,7 +150,9 @@ export function requestExtension(assignmentId, { days, reason }) {
  * Candidate reviewers for a manuscript, ranked by fit.
  *
  *   GET /api/manuscripts/:id/reviewer-candidates/
- *   200  Candidate[]  — see REVIEWER_POOL in data/invitations.js
+ *   200  Candidate[] — [{ id, name, institution, specialty_tags, match_score,
+ *        match_reasons, active_reviews, avg_turnaround_days, availability,
+ *        conflict }], see backend/apps/reviews/matching.py
  *   403  caller is not an editor
  *
  * `match_score` is an opaque 0–100 the frontend only sorts and displays, so the
@@ -167,22 +169,43 @@ export function listCandidates(manuscriptId) {
 }
 
 /**
+ * Who is currently invited to or reviewing this manuscript.
+ *
+ *   GET /api/manuscripts/:id/assignments/
+ *   200  [{ id, reviewer_id, name, status, invited_at, due_at, extension }]
+ *   403  caller is not an editor or admin
+ *
+ * Not in the original candidate/invite contract above — added so the editor's
+ * reviewer panel survives a reload instead of only reflecting whatever this
+ * browser optimistically wrote to localStorage after its own invite() calls.
+ * Same reasoning as the added GET on the screening endpoint (api/editorial.js).
+ */
+export function listManuscriptAssignments(manuscriptId) {
+  return request(`/api/manuscripts/${encodeURIComponent(manuscriptId)}/assignments/`);
+}
+
+/**
  * Invite reviewers to a manuscript.
  *
  *   POST /api/manuscripts/:id/assignments/
- *   body   { reviewer_ids, respond_by_days, due_days }
+ *   body   { reviewer_ids, respond_by_days, due_days, force }
+ *          force  invite anyway despite a recorded conflict on one of the
+ *                 reviewer_ids. The candidate list already shows the conflict
+ *                 inline rather than blocking the checkbox — checking someone
+ *                 after seeing it is the override, so pass force whenever any
+ *                 selected candidate carries one.
  *   201    Assignment[]  the created invitations
  *   403    caller is not an editor
  *   409    one of these reviewers is already assigned to this manuscript
- *   422    a reviewer has a recorded conflict and was not force-overridden
+ *   422    a reviewer has a recorded conflict and force was not set
  *
  * Sends the invitation email. The reviewer sees title, category and abstract
  * only until they accept.
  */
-export function inviteReviewers(manuscriptId, { reviewer_ids, respond_by_days = 7, due_days = 21 }) {
+export function inviteReviewers(manuscriptId, { reviewer_ids, respond_by_days = 7, due_days = 21, force = false }) {
   return request(`/api/manuscripts/${encodeURIComponent(manuscriptId)}/assignments/`, {
     method: 'POST',
-    body: JSON.stringify({ reviewer_ids, respond_by_days, due_days }),
+    body: JSON.stringify({ reviewer_ids, respond_by_days, due_days, force }),
   });
 }
 

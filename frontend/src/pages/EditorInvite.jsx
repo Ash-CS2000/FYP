@@ -176,22 +176,13 @@ export default function EditorInvite() {
             <>
               <h1 className="auth-form-title">Set your <em>password</em>.</h1>
               <p className="auth-form-sub">
-                Activating the editor account for <strong>{invite?.email}</strong>.
+                Activating the editor account for{' '}
+                {invite?.name ? <><strong>{invite.name}</strong> ({invite.email})</> : <strong>{invite?.email}</strong>}.
               </p>
 
               {error && <div className="auth-error">{error}</div>}
 
               <form onSubmit={handleSubmit} noValidate>
-                {invite?.name && (
-                  <div className="field">
-                    <label className="field-label">Name</label>
-                    <input className="field-input" type="text" value={invite.name} disabled />
-                  </div>
-                )}
-                <div className="field">
-                  <label className="field-label">Email</label>
-                  <input className="field-input" type="email" value={invite?.email || ''} disabled />
-                </div>
                 <div className="field">
                   <label className="field-label">New password</label>
                   <div className="pw-wrap">

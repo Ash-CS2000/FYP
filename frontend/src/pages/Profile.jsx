@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import Avatar from '../components/Avatar.jsx';
+import TagPicker from '../components/TagPicker.jsx';
 import EditableCard, { ReadRow } from '../components/EditableCard.jsx';
 import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 import { ROLE_LABELS } from '../auth/roles';
 import {
-  updateMe, updatePreferences, uploadAvatar, removeAvatar,
+  updateMe, uploadAvatar, removeAvatar,
   AVATAR_MAX_BYTES, AVATAR_TYPES, DEFAULT_PREFERENCES,
 } from '../api/account';
 import { API_URL } from '../config';
@@ -279,11 +280,14 @@ function ReviewerProfileCard({ user, setUser }) {
     unavailable_until: prefs.unavailable_until || '',
     max_concurrent: prefs.max_concurrent ?? 3,
     credentials: prefs.credentials || '',
+    // A real column (users/0007_userprofile_specialty_tags), unlike the four
+    // above — so it is split back out of the preferences blob on save.
+    specialty_tags: user?.specialty_tags || [],
   };
 
-  const save = async (draft) => setUser(await updatePreferences({
-    ...draft,
-    max_concurrent: Number(draft.max_concurrent) || 0,
+  const save = async ({ specialty_tags, ...draft }) => setUser(await updateMe({
+    specialty_tags,
+    preferences: { ...draft, max_concurrent: Number(draft.max_concurrent) || 0 },
   }));
 
   const labelFor = id => AVAILABILITY_OPTIONS.find(o => o.id === id)?.label || id;
@@ -352,6 +356,17 @@ function ReviewerProfileCard({ user, setUser }) {
             </div>
           </div>
 
+          <div className="field">
+            <label className="field-label">Specialty tags</label>
+            <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+              What drives manuscript matching. Keep this current as your interests change.
+            </div>
+            <TagPicker
+              value={draft.specialty_tags}
+              onChange={(tags) => set({ specialty_tags: tags })}
+            />
+          </div>
+
           <div className="field" style={{ marginBottom: 0 }}>
             <label className="field-label" htmlFor="pf-credentials">Credentials</label>
             <textarea
@@ -377,6 +392,7 @@ function ReviewerProfileCard({ user, setUser }) {
               : undefined}
           />
           <ReadRow label="Most reviews at once" value={String(values.max_concurrent)} />
+          <ReadRow label="Specialty tags" value={(values.specialty_tags || []).join(', ')} />
           <ReadRow label="Credentials" value={values.credentials} />
         </>
       ))}
@@ -388,6 +404,7 @@ function ReviewerProfileCard({ user, setUser }) {
 
 function BecomeReviewerCard({ user, setUser }) {
   const [expertise, setExpertise] = useState(user?.expertise_areas || '');
+  const [applyTags, setApplyTags] = useState(user?.specialty_tags || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -401,7 +418,7 @@ function BecomeReviewerCard({ user, setUser }) {
     try {
       const res = await authFetch(`${API_URL}/api/users/apply-reviewer/`, {
         method: 'POST',
-        body: JSON.stringify({ expertise_areas: expertise }),
+        body: JSON.stringify({ expertise_areas: expertise, specialty_tags: applyTags }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.detail || 'Failed to submit application.');
@@ -464,7 +481,14 @@ function BecomeReviewerCard({ user, setUser }) {
               value={expertise}
               onChange={e => setExpertise(e.target.value)}
             />
-            <div className="field-hint">Help us match you with relevant manuscripts.</div>
+            <div className="field-hint">Free text, for an admin reading your application.</div>
+          </div>
+          <div className="field">
+            <label className="field-label">Specialty tags</label>
+            <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+              This is what actually drives manuscript matching.
+            </div>
+            <TagPicker value={applyTags} onChange={setApplyTags} />
           </div>
           {error && <div className="alert alert-error">{error}</div>}
           <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>

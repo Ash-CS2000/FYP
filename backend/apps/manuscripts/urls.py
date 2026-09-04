@@ -1,10 +1,12 @@
 from django.urls import path
 
 from .views import (
-    ManuscriptDecisionHistoryView, ManuscriptDecisionView, ManuscriptDetailView, ManuscriptEditorListView,
-    ManuscriptListView, ManuscriptPublishView, ManuscriptRevisionView, ManuscriptScreeningView,
-    ManuscriptUploadView, PlagiarismCheckStatusView, PublishedCategoryListView,
-    PublishedManuscriptListView,
+    ManuscriptAssignmentExtensionDecideView, ManuscriptAssignmentListCreateView, ManuscriptAssignmentRemindView,
+    ManuscriptAuthorReviewsView, ManuscriptDecisionHistoryView, ManuscriptDecisionView, ManuscriptDetailView,
+    ManuscriptEditorListView, ManuscriptListView, ManuscriptPublishView, ManuscriptRevisionView,
+    ManuscriptReviewerCandidatesView, ManuscriptReviewerViewView, ManuscriptReviewListCreateView,
+    ManuscriptScreeningView, ManuscriptUploadView, PlagiarismCheckStatusView,
+    PublishedCategoryListView, PublishedManuscriptListView,
 )
 
 urlpatterns = [
@@ -21,4 +23,11 @@ urlpatterns = [
     path('<int:pk>/decisions/', ManuscriptDecisionHistoryView.as_view(), name='manuscript-decision-history'),
     path('<int:pk>/revision/', ManuscriptRevisionView.as_view(), name='manuscript-revision'),
     path('<int:pk>/screening/', ManuscriptScreeningView.as_view(), name='manuscript-screening'),
+    path('<int:pk>/reviewer-candidates/', ManuscriptReviewerCandidatesView.as_view(), name='manuscript-reviewer-candidates'),
+    path('<int:pk>/assignments/', ManuscriptAssignmentListCreateView.as_view(), name='manuscript-assignment-list-create'),
+    path('<int:pk>/assignments/<int:assignment_id>/remind/', ManuscriptAssignmentRemindView.as_view(), name='manuscript-assignment-remind'),
+    path('<int:pk>/assignments/<int:assignment_id>/extension/', ManuscriptAssignmentExtensionDecideView.as_view(), name='manuscript-assignment-extension-decide'),
+    path('<int:pk>/reviews/', ManuscriptReviewListCreateView.as_view(), name='manuscript-review-list-create'),
+    path('<int:pk>/reviews/author/', ManuscriptAuthorReviewsView.as_view(), name='manuscript-author-reviews'),
+    path('<int:pk>/reviewer-view/', ManuscriptReviewerViewView.as_view(), name='manuscript-reviewer-view'),
 ]

@@ -1,38 +1,84 @@
 // The manuscript is reached only through an accepted assignment — auth/AssignmentGate
 // redirects anyone else back to the assignment list before this component renders.
-// The gate is a courtesy; the server still has to check (see api/invitations.js).
+// The gate is a courtesy; the server still has to check (see api/reviews.js).
 
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
-import {
-  assignmentForManuscript,
-  saveResponse,
-  deadlineState,
-  formatDate,
-} from '../data/invitations.js';
+import { deadlineState, formatDate } from '../data/invitations.js';
+import { RATING_CRITERIA } from '../data/reviews.js';
+import { getManuscriptForReview, submitReview } from '../api/reviews.js';
 
 export default function ReviewForm() {
   const { id } = useParams();
-  const assignment = assignmentForManuscript(id);
+  const assignment = useOutletContext();
+  const navigate = useNavigate();
+
+  const [manuscript, setManuscript] = useState(null);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    getManuscriptForReview(id)
+      .then((m) => { if (!cancelled) setManuscript(m); })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load this manuscript.'); });
+    return () => { cancelled = true; };
+  }, [id]);
+
   const [ratings, setRatings] = useState({ originality: 4, technical: 3, clarity: 4, relevance: 5 });
+  const [summary, setSummary] = useState('');
+  const [strengths, setStrengths] = useState('');
+  const [weaknesses, setWeaknesses] = useState('');
   const [recommendation, setRecommendation] = useState('minor');
   const [confidential, setConfidential] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
+  const [error, setError] = useState('');
 
   const composite = ((ratings.originality + ratings.technical + ratings.clarity + ratings.relevance) / 4).toFixed(1);
   const due = deadlineState(assignment?.due_at);
+  const alreadySubmitted = assignment?.status === 'submitted';
 
   const handleSubmit = async () => {
+    if (!summary.trim() || !strengths.trim() || !weaknesses.trim()) {
+      setError('Summary, strengths, and weaknesses are all required.');
+      return;
+    }
     setSubmitting(true);
-    // POST /api/manuscripts/:id/reviews/ — see data/reviews.js for the record
-    // shape. The endpoint does not exist yet, so the assignment is closed out
-    // locally and the editor is not notified until it does.
-    saveResponse(assignment.id, { status: 'submitted', submitted_at: new Date().toISOString() });
-    setSubmitting(false);
-    navigate('/reviewer/assignments');
+    setError('');
+    try {
+      await submitReview(id, {
+        ...ratings,
+        recommendation,
+        summary: summary.trim(),
+        strengths: strengths.trim(),
+        weaknesses: weaknesses.trim(),
+        confidential_to_editor: confidential.trim(),
+      });
+      navigate('/reviewer/assignments');
+    } catch (err) {
+      setError(err.message || 'Could not submit the review. Please try again.');
+      setSubmitting(false);
+    }
   };
+
+  if (loadError) {
+    return (
+      <AppShell role="reviewer" searchPlaceholder="Search...">
+        <div className="page-header fade-up">
+          <h1 className="page-title">{loadError}</h1>
+          <Link to="/reviewer/assignments" className="btn btn-ghost btn-sm">← Back to assignments</Link>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!assignment || !manuscript) {
+    return (
+      <AppShell role="reviewer" searchPlaceholder="Search...">
+        <div className="card fade-up"><div style={{ padding: 24 }}>Loading…</div></div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell role="reviewer" searchPlaceholder="Search...">
@@ -51,21 +97,24 @@ export default function ReviewForm() {
 
       <div className="page-header fade-up">
         <div>
-          <span className="eyebrow">Review · {assignment.manuscript_id}</span>
+          <span className="eyebrow">Review · #{assignment.manuscript_id}</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>
-            <em className="serif-italic">{assignment.title}</em>.
+            <em className="serif-italic">{manuscript.title}</em>.
           </h1>
           <p className="page-subtitle">
-            Evaluate the manuscript and submit your recommendation.
-            {assignment.due_at
-              ? <> Due {formatDate(assignment.due_at)}.</>
-              : <> Your deadline is set once the editor registers your acceptance.</>}
+            {alreadySubmitted
+              ? 'You already submitted your review for this manuscript.'
+              : <>Evaluate the manuscript and submit your recommendation.
+                {assignment.due_at
+                  ? <> Due {formatDate(assignment.due_at)}.</>
+                  : <> Your deadline is set once the editor registers your acceptance.</>}
+              </>}
           </p>
         </div>
         <Link to="/reviewer/assignments" className="btn btn-ghost btn-sm">← Back to assignments</Link>
       </div>
 
-      {due.tone === 'overdue' && (
+      {!alreadySubmitted && due.tone === 'overdue' && (
         <div className="lms-banner is-todo fade-up">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
             <circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" />
@@ -89,14 +138,16 @@ export default function ReviewForm() {
         </div>
       )}
 
+      {alreadySubmitted ? (
+        <div className="card fade-up delay-1">
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-600)' }}>
+            Your review has been submitted and cannot be edited.
+          </div>
+        </div>
+      ) : (
       <div className="split-grid fade-up delay-1" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
         <div className="card">
-          {[
-            { key: 'originality', label: 'Originality & significance', hint: 'Does the paper present novel ideas or significant contributions?' },
-            { key: 'technical', label: 'Technical quality', hint: 'Are the methods sound and the analysis rigorous?' },
-            { key: 'clarity', label: 'Clarity & presentation', hint: 'Is the paper well-written and well-organized?' },
-            { key: 'relevance', label: 'Relevance to journal scope', hint: '' },
-          ].map(c => (
+          {RATING_CRITERIA.map(c => (
             <div key={c.key} className="field">
               <label className="field-label">{c.label} <span className="req">*</span></label>
               {c.hint && <div className="field-hint" style={{ marginTop: 0, marginBottom: 8 }}>{c.hint}</div>}
@@ -128,22 +179,37 @@ export default function ReviewForm() {
 
           <div className="field">
             <label className="field-label">Summary of contributions <span className="req">*</span></label>
-            <textarea className="field-textarea" rows="3" defaultValue="The paper presents a comparative study of three deep learning architectures applied to three medical imaging benchmarks." />
+            <textarea
+              className="field-textarea"
+              rows="3"
+              value={summary}
+              onChange={e => setSummary(e.target.value)}
+              placeholder="What does this paper contribute?"
+            />
           </div>
           <div className="field">
             <label className="field-label">Strengths <span className="req">*</span></label>
-            <textarea className="field-textarea" rows="3" defaultValue="- Clear motivation and well-defined research questions
-- Strong experimental design with three benchmark datasets
-- Reproducibility: code and data are publicly available" />
+            <textarea
+              className="field-textarea"
+              rows="3"
+              value={strengths}
+              onChange={e => setStrengths(e.target.value)}
+              placeholder="What does the paper do well?"
+            />
           </div>
           <div className="field">
             <label className="field-label">Weaknesses & suggestions <span className="req">*</span></label>
-            <textarea className="field-textarea" rows="4" defaultValue="- The methodology section needs more detail on data preprocessing
-- Statistical significance tests should be reported with effect sizes" />
+            <textarea
+              className="field-textarea"
+              rows="4"
+              value={weaknesses}
+              onChange={e => setWeaknesses(e.target.value)}
+              placeholder="What should the authors address?"
+            />
           </div>
 
           {/* Editor-only channel. The author never sees this — see
-              data/reviews.js for the contract the backend must honour. */}
+              api/reviews.js for the contract the backend must honour. */}
           <div className="field confidential-field">
             <label className="field-label">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: '-2px', marginRight: 6 }}>
@@ -182,17 +248,14 @@ export default function ReviewForm() {
             </div>
           </div>
 
-          <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--ink-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="row" style={{ gap: 8, fontSize: 13, color: 'var(--ink-500)' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
-              Auto-saved 2 minutes ago
-            </div>
-            <div className="row">
-              <button className="btn btn-ghost">Save Draft</button>
-              <button onClick={handleSubmit} className="btn btn-primary" disabled={submitting}>
-                {submitting ? 'Submitting…' : 'Submit Review →'}
-              </button>
-            </div>
+          {error && (
+            <div className="field-hint" style={{ color: 'var(--red-800)', marginTop: 12 }}>{error}</div>
+          )}
+
+          <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--ink-200)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <button onClick={handleSubmit} className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Submitting…' : 'Submit Review →'}
+            </button>
           </div>
         </div>
 
@@ -204,17 +267,16 @@ export default function ReviewForm() {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--navy-900)' }}>Manuscript_v1.pdf</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-500)' }}>3.2 MB · 24 pages</div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--navy-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{manuscript.file_name}</div>
               </div>
-              <button className="btn btn-ghost btn-sm">Open</button>
+              <a href={manuscript.file_url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">Open</a>
             </div>
           </div>
 
           <div className="card">
             <div className="card-header"><div className="card-title">Paper Metadata</div></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div><div className="label" style={{ marginBottom: 4 }}>Category</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)', fontWeight: 500 }}>{assignment.category}</div></div>
+              <div><div className="label" style={{ marginBottom: 4 }}>Category</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)', fontWeight: 500 }}>{manuscript.category}</div></div>
               <div><div className="label" style={{ marginBottom: 4 }}>You accepted</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>{formatDate(assignment.invited_at)}</div></div>
               <div><div className="label" style={{ marginBottom: 4 }}>Review due</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>{formatDate(assignment.due_at)}</div></div>
             </div>
@@ -225,6 +287,7 @@ export default function ReviewForm() {
 
         </div>
       </div>
+      )}
     </AppShell>
   );
 }
