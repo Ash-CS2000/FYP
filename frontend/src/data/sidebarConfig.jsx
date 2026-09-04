@@ -31,6 +31,7 @@ const ICONS = {
   award: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>,
   search: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>,
   exam: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,
+  mail: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 6l10 7 10-7"/></svg>,
 };
 
 export function getMergedSidebar(roles = []) {
@@ -143,6 +144,8 @@ export const SIDEBAR_CONFIG = {
         items: [
           { id: 'dashboard', label: 'Dashboard', to: '/admin/dashboard', icon: ICONS.dashboard },
           { id: 'users', label: 'Manage Users', to: '/admin/users', icon: ICONS.users },
+          { id: 'reviewer-approvals', label: 'Reviewer Approvals', to: '/admin/reviewer-approvals', icon: ICONS.check },
+          { id: 'invites', label: 'Invite Editor', to: '/admin/invites', icon: ICONS.mail },
           { id: 'submissions', label: 'Submissions', to: '/admin/submissions', icon: ICONS.papers },
         ],
       },

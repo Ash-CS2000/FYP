@@ -1,22 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import AppShell from '../components/AppShell.jsx';
-import { patchReviewerStatus, patchUserRole, patchUserStatus, onboardEditor, listEditorInvites, cancelEditorInvite, listUsers, listAuditLog } from '../api/admin.js';
+import { patchUserRole, patchUserStatus, listUsers, listAuditLog } from '../api/admin.js';
 import { getStoredUser } from '../auth/roles';
-
-const DEMO_USERS = [
-  { id: 1, initials: 'AR', name: 'Ahmad Razif', email: 'ahmad@utm.edu.my', roles: ['author'], institution: 'UTM', date: '12 Jan 2026', status: 'active', reviewer_status: '' },
-  { id: 2, initials: 'LW', name: 'Dr. Lim Wei Ping', email: 'lim.wp@um.edu.my', roles: ['reviewer'], institution: 'Universiti Malaya', date: '04 Mar 2024', status: 'active', reviewer_status: 'active' },
-  { id: 3, initials: 'HI', name: 'Prof. Hassan Ibrahim', email: 'hassan.i@usm.my', roles: ['editor'], institution: 'USM', date: '15 Aug 2023', status: 'active', reviewer_status: '' },
-  { id: 4, initials: 'SR', name: 'Dr. Sarah Rahman', email: 'sarah.r@upm.edu.my', roles: ['reviewer'], institution: 'UPM', date: '22 Sep 2024', status: 'active', reviewer_status: 'active' },
-  { id: 5, initials: 'RT', name: 'Roslan Tahir', email: 'r.tahir@uitm.edu.my', roles: ['author'], institution: 'UiTM', date: '3 May 2026', status: 'active', reviewer_status: 'pending' },
-  { id: 6, initials: 'SK', name: 'Siti Khadijah', email: 'siti.k@iium.edu.my', roles: ['author'], institution: 'IIUM', date: '18 Apr 2026', status: 'active', reviewer_status: '' },
-  { id: 7, initials: 'JT', name: 'Prof. James Tan', email: 'james.t@um.edu.my', roles: ['author', 'reviewer'], institution: 'UM', date: '02 Feb 2025', status: 'active', reviewer_status: 'pending' },
-  { id: 8, initials: 'WM', name: 'Wong Mei Ling', email: 'wong.ml@upm.edu.my', roles: ['author'], institution: 'UPM', date: '11 Jan 2026', status: 'active', reviewer_status: '' },
-  // The seeded administrator. Present so the protections around admin rows are
-  // visible rather than theoretical: no promotion, no demotion, and no suspending
-  // each other. See patchUserStatus in api/admin.js for why.
-  { id: 9, initials: 'SA', name: 'System Admin', email: 'admin@paperbridge.edu.my', roles: ['admin'], institution: 'PaperBridge', date: '01 Jan 2023', status: 'active', reviewer_status: '' },
-];
 
 function getPrimaryRole(u) {
   if (u.roles?.includes('admin'))    return 'Admin';
@@ -78,21 +63,22 @@ const ACTION_TEXT = {
 
 export default function AdminUsers() {
   const [filter, setFilter]   = useState('all');
-  const [users, setUsers]     = useState(DEMO_USERS);
+  const [users, setUsers]     = useState([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersError, setUsersError] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [audit, setAudit]     = useState([]);
   const [auditLive, setAuditLive] = useState(false);
-  const [invites, setInvites] = useState([]);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editorNotice, setEditorNotice] = useState('');
-  const [cancelling, setCancelling] = useState(null);
 
   const actor = getStoredUser();
 
-  function refreshInvites() {
-    listEditorInvites()
-      .then(rows => { if (Array.isArray(rows)) setInvites(rows); })
-      .catch(() => { /* backend unavailable */ });
+  function loadUsers() {
+    setUsersLoading(true);
+    setUsersError('');
+    listUsers()
+      .then(rows => setUsers(Array.isArray(rows) ? rows.map(toRow) : []))
+      .catch(() => setUsersError('Could not load users from the server.'))
+      .finally(() => setUsersLoading(false));
   }
 
   useEffect(() => {
@@ -101,10 +87,7 @@ export default function AdminUsers() {
     listAuditLog({ limit: 10 })
       .then(rows => { if (Array.isArray(rows)) { setAudit(rows); setAuditLive(true); } })
       .catch(() => { /* backend unavailable — stay on local entries */ });
-    refreshInvites();
-    listUsers()
-      .then(rows => { if (Array.isArray(rows) && rows.length) setUsers(rows.map(toRow)); })
-      .catch(() => { /* backend unavailable — keep the demo rows */ });
+    loadUsers();
   }, []);
 
   // One path for every user mutation: try the server, fall back to a local
@@ -120,22 +103,6 @@ export default function AdminUsers() {
       if (auditRow) setAudit(prev => [auditRow, ...prev]);
       setActionLoading(null);
     }
-  }
-
-  function handleReviewerAction(userId, action) {
-    const target = users.find(u => u.id === userId);
-    return applyUserChange({
-      key: `${userId}-${action}`,
-      request: () => patchReviewerStatus(userId, action),
-      fallback: (u) => {
-        if (u.id !== userId) return u;
-        const roles = action === 'approve'
-          ? [...new Set([...(u.roles || []), 'reviewer'])]
-          : (u.roles || []).filter(r => r !== 'reviewer');
-        return { ...u, reviewer_status: action === 'approve' ? 'active' : 'rejected', roles };
-      },
-      auditRow: localAudit(actor, action, 'reviewer', target),
-    });
   }
 
   // Editors are made here and nowhere else — there is no editor registration.
@@ -170,41 +137,6 @@ export default function AdminUsers() {
     });
   }
 
-  async function handleOnboardEditor({ name, email }) {
-    setEditorNotice('');
-    try {
-      const res = await onboardEditor({ name, email });
-      if (res?.status === 'invited') {
-        setEditorNotice(`Invitation sent to ${email}. The link expires in 72 hours.`);
-        refreshInvites();
-      } else if (res?.status === 'role_added') {
-        setEditorNotice(`${email} already had an account — the editor role was added and they were emailed.`);
-      } else if (res?.status === 'already_editor') {
-        setEditorNotice(`${email} already holds the editor role.`);
-      } else {
-        setEditorNotice(`Editor onboarding submitted for ${email}.`);
-      }
-      setAudit(prev => [localAudit(actor, 'invite', 'editor', { name, email }), ...prev]);
-    } catch (err) {
-      setEditorNotice(err?.message || 'Could not onboard the editor. Please try again.');
-    }
-  }
-
-  async function handleCancelInvite(inviteId) {
-    setCancelling(inviteId);
-    try {
-      await cancelEditorInvite(inviteId);
-      setInvites(prev => prev.filter(i => i.id !== inviteId));
-      setEditorNotice('Invite cancelled.');
-    } catch (err) {
-      setEditorNotice(err?.message || 'Could not cancel the invite.');
-    } finally {
-      setCancelling(null);
-    }
-  }
-
-  const pendingReviewers = users.filter(u => u.reviewer_status === 'pending');
-
   const filtered = users.filter(u => {
     if (filter === 'all') return true;
     return (u.roles || []).includes(filter);
@@ -212,12 +144,8 @@ export default function AdminUsers() {
 
   const roleCounts = role => users.filter(u => (u.roles || []).includes(role)).length;
 
-  const headerActions = (
-    <button className="btn btn-primary btn-sm" onClick={() => setEditorOpen(true)}>+ Onboard Editor</button>
-  );
-
   return (
-    <AppShell role="admin" searchPlaceholder="Search users..." topbarActions={headerActions}>
+    <AppShell role="admin" searchPlaceholder="Search users...">
       <style>{`
         .adm-menu-wrap { position:relative; display:inline-block; }
         .adm-menu { position:absolute; right:0; top:34px; z-index:40; min-width:210px; background:var(--navy-950); border:1px solid rgba(255,255,255,0.12); border-radius:var(--r-md); box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,0.35)); padding:6px; }
@@ -234,110 +162,19 @@ export default function AdminUsers() {
         .adm-audit-row:last-child { border-bottom:none; }
         .adm-audit-time { margin-left:auto; font-size:11.5px; color:var(--ink-600); white-space:nowrap; }
         .adm-tag-local { font-size:10px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; padding:1px 6px; border-radius:99px; background:var(--ink-100); color:var(--ink-700); }
-        .adm-modal-back { position:fixed; inset:0; background:rgba(10,20,40,0.55); display:flex; align-items:center; justify-content:center; z-index:120; padding:24px; }
-        .adm-modal { background:var(--white); border-radius:var(--r-lg); max-width:440px; width:100%; padding:26px; }
-        .adm-modal h2 { font-family:var(--font-display); font-size:22px; font-weight:500; color:var(--navy-900); margin-bottom:6px; }
-        .adm-modal p.sub { font-size:13.5px; color:var(--ink-600); line-height:1.6; margin-bottom:18px; }
-        .adm-modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
       `}</style>
 
       <div className="page-header fade-up">
         <div>
           <span className="eyebrow">User Management</span>
           <h1 className="page-title" style={{ marginTop: 8 }}>Manage <em className="serif-italic">Users</em>.</h1>
-          <p className="page-subtitle">Approve reviewers and onboard editors.</p>
+          <p className="page-subtitle">The full account roster — roles, institutions, and status.</p>
         </div>
       </div>
 
-      {editorNotice && (
-        <div className="card fade-up delay-1" style={{ borderLeft: '3px solid var(--teal-600)', padding: '12px 18px', fontSize: 13.5, color: 'var(--navy-900)' }}>
-          {editorNotice}
-        </div>
-      )}
-
-      {pendingReviewers.length > 0 && (
-        <div className="card fade-up delay-1" style={{ borderLeft: '3px solid var(--amber-500)' }}>
-          <div className="card-header">
-            <div className="card-title">
-              Reviewer Applications
-              <span style={{ marginLeft: 8, background: 'var(--amber-500)', color: 'var(--navy-950)', fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 99 }}>{pendingReviewers.length}</span>
-            </div>
-          </div>
-          <table className="data-table">
-            <thead><tr><th>Applicant</th><th>Institution</th><th>Roles</th><th>Expertise</th><th>Actions</th></tr></thead>
-            <tbody>
-              {pendingReviewers.map(u => (
-                <tr key={u.id} style={{ background: '#fffbeb' }}>
-                  <td>
-                    <div className="row">
-                      <div className="avatar">{u.initials || getInitials(u.name)}</div>
-                      <div style={{ marginLeft: 4 }}>
-                        <div className="table-title">{u.name}</div>
-                        <div className="table-meta">{u.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span className="muted">{u.institution}</span></td>
-                  <td><span style={{ fontSize: 12.5, fontWeight: 500 }}>{(u.roles || []).map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(' + ')}</span></td>
-                  <td><span className="muted">{u.expertise_areas || '—'}</span></td>
-                  <td>
-                    <div className="row" style={{ gap: 6 }}>
-                      <button
-                        className="btn btn-sm"
-                        style={{ background: 'var(--teal-600)', color: '#fff', border: 'none' }}
-                        disabled={actionLoading === `${u.id}-approve`}
-                        onClick={() => handleReviewerAction(u.id, 'approve')}
-                      >
-                        {actionLoading === `${u.id}-approve` ? '…' : 'Approve'}
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ color: 'var(--red-700)', borderColor: 'var(--red-200)' }}
-                        disabled={actionLoading === `${u.id}-reject`}
-                        onClick={() => handleReviewerAction(u.id, 'reject')}
-                      >
-                        {actionLoading === `${u.id}-reject` ? '…' : 'Reject'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {invites.length > 0 && (
-        <div className="card fade-up delay-1">
-          <div className="card-header"><div className="card-title">Pending editor invites</div></div>
-          <div style={{ padding: '4px 20px 18px' }}>
-            {invites.map(inv => (
-              <div key={inv.id} className="adm-audit-row">
-                {inv.name && <span style={{ fontWeight: 600, color: 'var(--navy-900)' }}>{inv.name}</span>}
-                <span className="muted">{inv.email}</span>
-                {inv.expired && <span className="adm-tag-local" style={{ color: 'var(--red-700)' }}>expired</span>}
-                <span className="adm-audit-time">
-                  {inv.expired
-                    ? 'Link expired'
-                    : `Expires ${new Date(inv.expires_at).toLocaleDateString()}`}
-                </span>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ color: 'var(--red-700)', borderColor: 'var(--red-200)', marginLeft: 10 }}
-                  disabled={cancelling === inv.id}
-                  onClick={() => handleCancelInvite(inv.id)}
-                >
-                  {cancelling === inv.id ? '…' : 'Cancel'}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="card fade-up delay-2">
         <div className="card-header">
-          <div><div className="card-title">{filtered.length} users</div></div>
+          <div><div className="card-title">{usersLoading ? 'Loading users…' : `${filtered.length} users`}</div></div>
           <div className="row">
             {[
               { id: 'all',      label: 'All',       count: users.length },
@@ -355,7 +192,18 @@ export default function AdminUsers() {
         <table className="data-table">
           <thead><tr><th>User</th><th>Role(s)</th><th>Institution</th><th>Joined</th><th>Status</th><th></th></tr></thead>
           <tbody>
-            {filtered.map(u => (
+            {usersLoading ? (
+              <tr><td colSpan={6}><p className="muted" style={{ fontSize: 13, padding: '16px 0' }}>Loading users…</p></td></tr>
+            ) : usersError ? (
+              <tr><td colSpan={6}>
+                <div style={{ padding: '16px 0', fontSize: 13 }}>
+                  <span style={{ color: 'var(--red-700)' }}>{usersError}</span>{' '}
+                  <button className="btn btn-ghost btn-sm" onClick={loadUsers}>Retry</button>
+                </div>
+              </td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={6}><p className="muted" style={{ fontSize: 13, padding: '16px 0' }}>No users match this filter.</p></td></tr>
+            ) : filtered.map(u => (
               <tr key={u.id}>
                 <td>
                   <div className="row">
@@ -427,13 +275,6 @@ export default function AdminUsers() {
           })}
         </div>
       </div>
-
-      {editorOpen && (
-        <OnboardEditorModal
-          onClose={() => setEditorOpen(false)}
-          onSubmit={handleOnboardEditor}
-        />
-      )}
     </AppShell>
   );
 }
@@ -599,58 +440,6 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Onboard editor ───────────────────────────────────────────────────────────
-// Editors are never self-registered. Token generation, expiry and email
-// delivery are all backend responsibilities — this form only submits the
-// request.
-function OnboardEditorModal({ onClose, onSubmit }) {
-  const [name, setName]   = useState('');
-  const [email, setEmail] = useState('');
-  const [error, setError] = useState('');
-  const [sending, setSending] = useState(false);
-
-  async function submit(e) {
-    e.preventDefault();
-    if (name.trim().length < 2)        return setError('Please enter the invitee’s full name.');
-    if (!/^\S+@\S+\.\S+$/.test(email)) return setError('Please enter a valid email address.');
-    setError('');
-    setSending(true);
-    await onSubmit({ name: name.trim(), email: email.trim().toLowerCase() });
-    setSending(false);
-    onClose();
-  }
-
-  return (
-    <div className="adm-modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="adm-modal" role="dialog" aria-modal="true" aria-label="Onboard an editor">
-        <h2>Onboard an editor</h2>
-        <p className="sub">
-          Enter the editor&apos;s name and email. If they already have an account the
-          editor role is added; otherwise they receive a secure link to set their
-          own password. The link expires in 72 hours.
-        </p>
-        <form onSubmit={submit}>
-          <div className="field">
-            <label className="field-label">Full name</label>
-            <input className="field-input" type="text" value={name} placeholder="Nur Aisyah" onChange={e => setName(e.target.value)} />
-          </div>
-          <div className="field">
-            <label className="field-label">Email address</label>
-            <input className="field-input" type="email" value={email} placeholder="name@university.edu.my" onChange={e => setEmail(e.target.value)} />
-          </div>
-          {error && <div className="field-hint" style={{ color: 'var(--red-700)' }}>{error}</div>}
-          <div className="adm-modal-actions">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={sending}>
-              {sending ? 'Sending…' : 'Send invite'}
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

@@ -35,6 +35,15 @@ class UserProfile(models.Model):
     student_level = models.CharField(max_length=50, blank=True)
     degree = models.CharField(max_length=100, blank=True)
 
+    # Present on the live database (added directly there, outside any
+    # migration in this repo) but never wired into the model — every
+    # UserProfile insert was failing NOT NULL on display_name until these
+    # were added here. Restored to match actual column types/lengths.
+    display_name = models.CharField(max_length=50, blank=True, default='')
+    bio = models.TextField(blank=True, default='')
+    avatar_key = models.CharField(max_length=255, blank=True, default='')
+    preferences = models.JSONField(default=dict, blank=True)
+
     def __str__(self):
         return f'{self.user.get_full_name() or self.user.email} ({self.role})'
 
@@ -79,6 +88,12 @@ class EditorInvite(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     accepted_at = models.DateTimeField(null=True, blank=True)
+
+    # Profile fields an admin fills in at invite time (see EditorOnboardView),
+    # carried over onto UserProfile when the invite is accepted.
+    institution = models.CharField(max_length=255, blank=True)
+    specialty_tags = models.JSONField(default=list, blank=True)
+    orcid_id = models.CharField(max_length=50, blank=True)
 
     class Meta:
         ordering = ['-created_at']

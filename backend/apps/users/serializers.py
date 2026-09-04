@@ -93,6 +93,15 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
     reviewer_status = serializers.SerializerMethodField()
     institution = serializers.CharField(source='profile.institution', default='', read_only=True)
+    specialty_tags = serializers.ListField(
+        source='profile.specialty_tags', child=serializers.CharField(), default=list, read_only=True,
+    )
+    orcid_id = serializers.CharField(source='profile.orcid_id', default='', read_only=True)
+    website = serializers.CharField(source='profile.website', default='', read_only=True)
+    expertise_areas = serializers.CharField(source='profile.expertise_areas', default='', read_only=True)
+    research_areas = serializers.CharField(source='profile.research_areas', default='', read_only=True)
+    degree = serializers.CharField(source='profile.degree', default='', read_only=True)
+    professional_type = serializers.CharField(source='profile.professional_type', default='', read_only=True)
     status = serializers.SerializerMethodField()
     joined = serializers.DateTimeField(source='date_joined', read_only=True)
 
@@ -100,7 +109,9 @@ class AdminUserListSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'name', 'email', 'roles', 'reviewer_status',
-            'institution', 'status', 'is_active', 'joined',
+            'institution', 'specialty_tags', 'orcid_id', 'website',
+            'expertise_areas', 'research_areas', 'degree', 'professional_type',
+            'status', 'is_active', 'joined',
         )
 
     def get_name(self, obj):
@@ -245,8 +256,13 @@ class RegisterSerializer(serializers.Serializer):
         profile.specialty_tags = specialty_tags
         profile.save()
 
-        # Reviewers are activated immediately on registration — no admin approval gate.
-        UserRole.objects.create(user=user, role=role, status=UserRole.Status.ACTIVE)
+        # Authors are active immediately. Reviewers — whether registering
+        # directly or applying later via ApplyReviewerView — always land
+        # PENDING until an admin reviews their background and approves.
+        initial_status = (
+            UserRole.Status.PENDING if role == UserProfile.Role.REVIEWER else UserRole.Status.ACTIVE
+        )
+        UserRole.objects.create(user=user, role=role, status=initial_status)
 
         return user
 

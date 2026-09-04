@@ -109,23 +109,32 @@ export function inviteAdmin({ email, name }) {
 }
 
 /**
- * Onboard an editor. Admin enters a name + email:
- *   - email already has an account  → editor role added, they get an email
- *   - new person                    → a pending invite + activation-link email
+ * Onboard an editor. Admin enters a name + email, plus profile fields to
+ * carry over (looked up from an existing user or typed fresh):
+ *   - email already has an account  → editor role added, profile fields
+ *                                      applied, they get an email
+ *   - new person                    → a pending invite (carrying the same
+ *                                      fields) + activation-link email
  *
  *   POST /api/users/editors/
- *   body     { email, name }
- *   201      { status: 'invited', email, expires_at }
+ *   body     { email, name, institution?, specialty_tags?, orcid_id? }
+ *   201      { status: 'invited', email, expires_at, institution, specialty_tags, orcid_id }
  *   200      { status: 'role_added' | 'already_editor', email, detail }
- *   400      invalid email
+ *   400      invalid email or unknown specialty tag
  *   403      caller is not an admin
  *
  * Token generation, expiry and email delivery are entirely server-side.
  */
-export function onboardEditor({ email, name }) {
+export function onboardEditor({ email, name, institution = '', specialty_tags = [], orcid_id = '' }) {
   return request('/api/users/editors/', {
     method: 'POST',
-    body: JSON.stringify({ email: String(email).trim().toLowerCase(), name: String(name).trim() }),
+    body: JSON.stringify({
+      email: String(email).trim().toLowerCase(),
+      name: String(name).trim(),
+      institution: String(institution).trim(),
+      specialty_tags,
+      orcid_id: String(orcid_id).trim(),
+    }),
   });
 }
 
@@ -133,7 +142,7 @@ export function onboardEditor({ email, name }) {
  * Pending (unaccepted) editor invites.
  *
  *   GET /api/users/editors/
- *   200  { id, email, name, created_at, expires_at, expired }[]
+ *   200  { id, email, name, institution, specialty_tags, orcid_id, created_at, expires_at, expired }[]
  *   403  caller is not an admin
  */
 export function listEditorInvites() {
@@ -203,8 +212,8 @@ export function patchUserStatus(userId, status, reason) {
  * Every user, newest first. Admin only.
  *
  *   GET /api/users/
- *   200  { id, name, email, roles, reviewer_status, institution, status,
- *          is_active, joined }[]
+ *   200  { id, name, email, roles, reviewer_status, institution,
+ *          specialty_tags, orcid_id, status, is_active, joined }[]
  *   403  caller is not an admin
  */
 export function listUsers() {

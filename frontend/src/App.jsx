@@ -14,6 +14,8 @@ import EditorDashboard from './pages/EditorDashboard.jsx';
 import EditorSubmissions from './pages/EditorSubmissions.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
+import AdminInvites from './pages/AdminInvites.jsx';
+import AdminReviewerApprovals from './pages/AdminReviewerApprovals.jsx';
 import Notifications from './pages/Notifications.jsx';
 import Profile from './pages/Profile.jsx';
 import Settings from './pages/Settings.jsx';
@@ -145,6 +147,8 @@ export default function App() {
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/users" element={<AdminUsers />} />
+        <Route path="/admin/invites" element={<AdminInvites />} />
+        <Route path="/admin/reviewer-approvals" element={<AdminReviewerApprovals />} />
         <Route path="/admin/audit" element={<AdminAudit />} />
         <Route path="/admin/submissions" element={<EditorSubmissions role="admin" />} />
         {/* Admin oversight is read-only — decisions stay with the editor. */}

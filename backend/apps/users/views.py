@@ -19,7 +19,7 @@ from django.utils import timezone
 from apps.notifications.models import Notification
 
 from . import orcid_service
-from .emails import send_editor_invite_email, send_editor_role_added_email
+from .emails import send_editor_invite_email, send_editor_role_added_email, send_reviewer_approved_email
 from .permissions import IsAdmin, is_admin
 from .taxonomy import SPECIALTY_TAG_SLUGS
 from .serializers import (
@@ -229,6 +229,9 @@ class ReviewerApprovalView(APIView):
     """
     PATCH /api/users/<pk>/reviewer-status/
     Admin only. Body: { "action": "approve" | "reject" }
+
+    On approve: activates the reviewer role, and notifies the applicant
+    in-app and by email that their account is active and they can log in.
     """
     permission_classes = [permissions.IsAdminUser]
     throttle_classes = [UserRateThrottle]
@@ -253,6 +256,18 @@ class ReviewerApprovalView(APIView):
             user=user, role=UserProfile.Role.REVIEWER,
             defaults={'status': new_status},
         )
+
+        if action == 'approve':
+            Notification.objects.create(
+                recipient=user,
+                category=Notification.Category.ROLE,
+                title='Your reviewer account is active',
+                body='An administrator approved your reviewer application. You can now receive review invitations.',
+            )
+            try:
+                send_reviewer_approved_email(user)
+            except Exception:
+                logger.exception('reviewer-approved email failed for %s', user.email)
 
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
 
@@ -478,20 +493,38 @@ def _invite_dict(invite):
         'id': invite.id,
         'email': invite.email,
         'name': invite.name,
+        'institution': invite.institution,
+        'specialty_tags': invite.specialty_tags,
+        'orcid_id': invite.orcid_id,
         'created_at': invite.created_at,
         'expires_at': invite.expires_at,
         'expired': not invite.is_valid(),
     }
 
 
+def _clean_specialty_tags(raw):
+    """Validate an incoming specialty_tags list against the shared taxonomy.
+    Returns (tags, error_detail) — error_detail is None on success."""
+    if raw is None:
+        return [], None
+    unknown = sorted(set(raw) - SPECIALTY_TAG_SLUGS)
+    if unknown:
+        return None, f'Unknown specialty tag(s): {", ".join(unknown)}'
+    return list(raw), None
+
+
 class EditorOnboardView(APIView):
     """
     GET  /api/users/editors/   (admin only) → pending (unaccepted) editor invites
     POST /api/users/editors/   (admin only)
-    Body: { email, name }
+    Body: { email, name, institution?, specialty_tags?, orcid_id? }
 
-    - email already has an account → add the editor role, email them.
-    - otherwise → create a pending invite and email an activation link.
+    - email already has an account → add the editor role, email them, and
+      apply any of institution/specialty_tags/orcid_id that were supplied to
+      their existing profile.
+    - otherwise → create a pending invite (carrying those same fields) and
+      email an activation link. The fields land on the new UserProfile when
+      the invite is accepted.
     """
     permission_classes = [IsAdmin]
     throttle_classes = [UserRateThrottle]
@@ -503,12 +536,29 @@ class EditorOnboardView(APIView):
     def post(self, request):
         email = (request.data.get('email') or '').strip().lower()
         name = (request.data.get('name') or '').strip()
+        institution = (request.data.get('institution') or '').strip()
+        orcid_id = (request.data.get('orcid_id') or '').strip()
+        specialty_tags, tag_error = _clean_specialty_tags(request.data.get('specialty_tags'))
+        if tag_error:
+            return Response({'detail': tag_error}, status=status.HTTP_400_BAD_REQUEST)
         if not email or '@' not in email:
             return Response({'detail': 'A valid email is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         existing = User.objects.filter(email__iexact=email).first()
         if existing is not None:
             added = _grant_editor_role(existing)
+            if institution or specialty_tags or orcid_id:
+                try:
+                    profile = existing.profile
+                except UserProfile.DoesNotExist:
+                    profile = UserProfile.objects.create(user=existing)
+                if institution:
+                    profile.institution = institution
+                if specialty_tags:
+                    profile.specialty_tags = specialty_tags
+                if orcid_id:
+                    profile.orcid_id = orcid_id
+                profile.save()
             if added:
                 Notification.objects.create(
                     recipient=existing,
@@ -536,6 +586,9 @@ class EditorOnboardView(APIView):
         invite = EditorInvite.objects.create(
             email=email,
             name=name,
+            institution=institution,
+            specialty_tags=specialty_tags,
+            orcid_id=orcid_id,
             token=secrets.token_urlsafe(32),
             invited_by=request.user,
             expires_at=timezone.now() + EDITOR_INVITE_TTL,
@@ -693,7 +746,13 @@ class EditorInviteView(APIView):
             )
             UserProfile.objects.update_or_create(
                 user=user,
-                defaults={'role': UserProfile.Role.EDITOR, 'status': UserProfile.Status.ACTIVE},
+                defaults={
+                    'role': UserProfile.Role.EDITOR,
+                    'status': UserProfile.Status.ACTIVE,
+                    'institution': invite.institution,
+                    'specialty_tags': invite.specialty_tags,
+                    'orcid_id': invite.orcid_id,
+                },
             )
             UserRole.objects.update_or_create(
                 user=user,

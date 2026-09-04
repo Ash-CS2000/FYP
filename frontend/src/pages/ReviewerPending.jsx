@@ -72,12 +72,11 @@ export default function ReviewerPending() {
           ))}
         </div>
 
-        <div className="rp-actions">
-          {otherRoles.length > 0 && (
+        {otherRoles.length > 0 && (
+          <div className="rp-actions">
             <Link to="/select-workspace" className="btn btn-accent btn-sm">Use another workspace</Link>
-          )}
-          <Link to="/" className="btn btn-ghost btn-sm">Browse papers</Link>
-        </div>
+          </div>
+        )}
 
         <div className="rp-foot">
           <button type="button" className="rp-signout" onClick={handleSignOut}>Sign out</button>
