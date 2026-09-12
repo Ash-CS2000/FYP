@@ -2,6 +2,7 @@ import logging
 
 from botocore.exceptions import BotoCoreError, ClientError
 from django.db import transaction
+from django.db.models import Count
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -79,21 +80,34 @@ class ManuscriptListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Manuscript.objects.filter(owner=self.request.user).order_by('-submitted_at')
+        # prefetch/annotate are load-bearing, not an optimisation: ManuscriptSerializer
+        # walks authors → affiliations and supplementary_files on every row, and
+        # current_review_round counts revisions — without these this is an N+1
+        # on the author's own dashboard/My Papers list.
+        return (
+            Manuscript.objects.filter(owner=self.request.user)
+            .prefetch_related('authors__affiliations', 'supplementary_files')
+            .annotate(revision_count=Count('revisions'))
+            .order_by('-submitted_at')
+        )
 
 
 class ManuscriptDetailView(generics.RetrieveAPIView):
     """
     GET /api/manuscripts/<int:pk>/ → retrieve one of the authenticated user's own
-    submissions, or any submission if the caller is an editor/admin.
+    submissions, or any submission if the caller is an editor/admin. Reached by
+    every role that opens a single manuscript's detail page.
     """
     serializer_class = ManuscriptSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        if is_editor_or_admin(self.request.user):
-            return Manuscript.objects.all()
-        return Manuscript.objects.filter(owner=self.request.user)
+        base = Manuscript.objects.all() if is_editor_or_admin(self.request.user) else Manuscript.objects.filter(owner=self.request.user)
+        return (
+            base
+            .prefetch_related('authors__affiliations', 'supplementary_files')
+            .annotate(revision_count=Count('revisions'))
+        )
 
 
 class ManuscriptEditorListView(generics.ListAPIView):
@@ -207,11 +221,13 @@ class ManuscriptRevisionView(APIView):
     GET  /api/manuscripts/<int:pk>/revision/ → every ManuscriptRevision on
     this manuscript, newest first. Readable by the editor/admin or the
     manuscript's owner.
-    POST /api/manuscripts/<int:pk>/revision/ → the owner uploads a revised
-    file (multipart/form-data: manuscript file, optional response_letter).
-    Only allowed while the manuscript is awaiting a revision. Repoints the
-    manuscript's file, flips its status back to under_review, and notifies
-    the editor who requested the revision.
+    POST /api/manuscripts/<int:pk>/revision/ → the owner resubmits, with the
+    same field contract as the original upload (title, abstract, authors,
+    declarations, ...) plus a required fresh manuscript file and an optional
+    response_letter — see ManuscriptRevisionCreateSerializer. Only allowed
+    while the manuscript is awaiting a revision. Overwrites the manuscript's
+    editable fields and file, flips its status back to under_review, and
+    notifies the editor who requested the revision.
     """
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
@@ -406,12 +422,20 @@ class ManuscriptAssignmentListCreateView(APIView):
         data = serializer.validated_data
         reviewer_ids = data['reviewer_ids']
 
+        # 1 for the original submission, 2+ after each resubmission — see
+        # ReviewAssignment.round. Scoping "already assigned" to this round
+        # (rather than ever) is what lets an editor reassign the same
+        # reviewer to a resubmitted manuscript instead of being stuck with
+        # their now-superseded round-1 assignment forever.
+        current_round = manuscript.revisions.count() + 1
         already_assigned = set(
-            manuscript.review_assignments.filter(reviewer_id__in=reviewer_ids).values_list('reviewer_id', flat=True)
+            manuscript.review_assignments
+            .filter(reviewer_id__in=reviewer_ids, round=current_round)
+            .values_list('reviewer_id', flat=True)
         )
         if already_assigned:
             return Response(
-                {'detail': 'One or more of these reviewers is already assigned to this manuscript.'},
+                {'detail': 'One or more of these reviewers is already assigned for this round.'},
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -435,6 +459,7 @@ class ManuscriptAssignmentListCreateView(APIView):
                     invited_by=request.user,
                     respond_by=respond_by,
                     due_days=data['due_days'],
+                    round=current_round,
                 )
                 created.append(assignment)
                 Notification.objects.create(

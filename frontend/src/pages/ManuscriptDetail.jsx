@@ -581,6 +581,7 @@ export default function ManuscriptDetail({ role = 'editor' }) {
             manuscriptId={manuscript.id}
             reviews={reviews}
             isAdmin={isAdmin}
+            currentRound={manuscript.current_review_round}
           />
         </div>
 

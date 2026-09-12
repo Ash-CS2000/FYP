@@ -29,6 +29,12 @@ class ReviewAssignment(models.Model):
     invited_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='review_invites_sent',
     )
+    # 1 for the original submission, 2 once the author has resubmitted once,
+    # and so on — always manuscript.revisions.count() + 1 at invite time. This
+    # is what lets an editor reassign the *same* reviewer after a revision:
+    # each round is its own row, so the round-1 row (and its Review) is kept
+    # as history rather than overwritten.
+    round = models.PositiveSmallIntegerField(default=1)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.INVITED)
     invited_at = models.DateTimeField(auto_now_add=True)
     respond_by = models.DateTimeField()
@@ -52,11 +58,14 @@ class ReviewAssignment(models.Model):
     reminded_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        unique_together = ('manuscript', 'reviewer')
+        unique_together = ('manuscript', 'reviewer', 'round')
         ordering = ['-invited_at']
 
     def __str__(self):
-        return f'ReviewAssignment(manuscript={self.manuscript_id}, reviewer={self.reviewer_id}, status={self.status})'
+        return (
+            f'ReviewAssignment(manuscript={self.manuscript_id}, reviewer={self.reviewer_id}, '
+            f'round={self.round}, status={self.status})'
+        )
 
 
 class Review(models.Model):

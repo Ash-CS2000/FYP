@@ -54,7 +54,7 @@ function DeadlineText({ iso }) {
 // One candidate in the recommended list. Conflicts are shown, never filtered
 // out: an editor needs to see that a strong match was ruled out and why —
 // silently dropping them looks exactly like the person not existing.
-function CandidateRow({ candidate, checked, onToggle, alreadyOn }) {
+function CandidateRow({ candidate, checked, onToggle, alreadyOn, priorRound }) {
   const tone = AVAILABILITY_TONE[candidate.availability];
   const blocked = alreadyOn || candidate.availability === 'unavailable';
   const expertiseLabels = (candidate.specialty_tags || []).map(s => SPECIALTY_TAG_LABELS[s] || s);
@@ -90,13 +90,16 @@ function CandidateRow({ candidate, checked, onToggle, alreadyOn }) {
         {candidate.conflict && (
           <span className="rp-conflict">Conflict: {candidate.conflict}</span>
         )}
-        {alreadyOn && <span className="rp-cand-note">Already on this manuscript.</span>}
+        {alreadyOn && <span className="rp-cand-note">Already on this round.</span>}
+        {!alreadyOn && priorRound && (
+          <span className="rp-cand-note">Reviewed round {priorRound} — free to reassign.</span>
+        )}
       </span>
     </label>
   );
 }
 
-export default function ReviewerPanel({ manuscriptId, reviews, isAdmin }) {
+export default function ReviewerPanel({ manuscriptId, reviews, isAdmin, currentRound = 1 }) {
   const [rows, setRows] = useState([]);
   const [candidates, setCandidates] = useState([]);
   const [candidatesLoaded, setCandidatesLoaded] = useState(false);
@@ -138,7 +141,20 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin }) {
   }));
   const all = [...seeded, ...rows];
 
-  const namesOn = new Set(all.map(a => a.name));
+  // Blocking is scoped to the current round, by reviewer id — not by name —
+  // so a reviewer whose only assignment is from an earlier, now-superseded
+  // round shows up as reassignable rather than permanently "already on this
+  // manuscript". See ReviewAssignment.round on the backend.
+  const onCurrentRound = new Set(
+    rows.filter(r => r.round === currentRound).map(r => r.reviewer_id),
+  );
+  const priorRoundByReviewerId = new Map();
+  rows.forEach((r) => {
+    if (r.round < currentRound) {
+      const prev = priorRoundByReviewerId.get(r.reviewer_id) || 0;
+      if (r.round > prev) priorRoundByReviewerId.set(r.reviewer_id, r.round);
+    }
+  });
   const rankedCandidates = [...candidates].sort((a, b) => b.match_score - a.match_score);
 
   const toggle = (id) =>
@@ -155,6 +171,7 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin }) {
         reviewer_id: c.id,
         name: c.name,
         status: 'invited',
+        round: currentRound,
         invited_at: new Date().toISOString(),
         // The server owns the real deadline; this is a display placeholder that
         // matches the default respond_by_days / due_days in the contract.
@@ -268,6 +285,7 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin }) {
       {all.map(row => (
         <div className="rp-row" key={row.id}>
           <span className="rp-name">{row.name}</span>
+          {row.round > 1 && <span className="muted" style={{ fontSize: 12 }}>round {row.round}</span>}
           <span className="rp-status" style={{ background: STATUS_TONE[row.status]?.bg, color: STATUS_TONE[row.status]?.fg }}>
             {STATUS_LABELS[row.status]}
           </span>
@@ -323,7 +341,8 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin }) {
               candidate={c}
               checked={picked.includes(c.id)}
               onToggle={toggle}
-              alreadyOn={namesOn.has(c.name)}
+              alreadyOn={onCurrentRound.has(c.id)}
+              priorRound={priorRoundByReviewerId.get(c.id)}
             />
           ))}
 

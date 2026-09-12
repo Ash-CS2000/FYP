@@ -49,6 +49,7 @@ class ManuscriptAssignmentSerializer(serializers.Serializer):
     reviewer_id = serializers.IntegerField()
     name = serializers.SerializerMethodField()
     status = serializers.CharField()
+    round = serializers.IntegerField()
     invited_at = serializers.DateTimeField()
     due_at = serializers.DateTimeField(allow_null=True)
     extension = serializers.SerializerMethodField()

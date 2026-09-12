@@ -10,15 +10,25 @@ from botocore.config import Config
 from django.conf import settings
 
 
+_client_instance = None
+
+
 def _client():
-    return boto3.client(
-        's3',
-        endpoint_url=settings.SUPABASE_S3_ENDPOINT_URL,
-        aws_access_key_id=settings.SUPABASE_S3_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.SUPABASE_S3_SECRET_ACCESS_KEY,
-        region_name=settings.SUPABASE_S3_REGION,
-        config=Config(signature_version='s3v4', s3={'addressing_style': 'path'}),
-    )
+    # Built once per process and reused — constructing a boto3 client isn't
+    # free (it resolves credentials and loads service definitions), and every
+    # serializer that computes a file_url calls this, often many times in one
+    # request (once per manuscript, once per supplementary file, ...).
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = boto3.client(
+            's3',
+            endpoint_url=settings.SUPABASE_S3_ENDPOINT_URL,
+            aws_access_key_id=settings.SUPABASE_S3_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.SUPABASE_S3_SECRET_ACCESS_KEY,
+            region_name=settings.SUPABASE_S3_REGION,
+            config=Config(signature_version='s3v4', s3={'addressing_style': 'path'}),
+        )
+    return _client_instance
 
 def download_file(key):
     """Downloads a file from Supabase Storage and returns its raw bytes."""

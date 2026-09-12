@@ -81,7 +81,6 @@ export const SIDEBAR_CONFIG = {
           { id: 'papers',    label: 'My Papers',   to: '/author/papers',    icon: ICONS.papers },
           { id: 'discover', label: 'Discover Topics', to: '/author/discover', icon: ICONS.search },
           { id: 'submit',    label: 'Submit Paper', to: '/author/submit',    icon: ICONS.plus },
-          { id: 'revision',  label: 'Revisions',   to: '/author/revision',  icon: ICONS.refresh, badge: 1 },
         ],
       },
       {

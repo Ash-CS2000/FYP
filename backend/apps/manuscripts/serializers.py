@@ -11,6 +11,7 @@ from .models import (
     ManuscriptSupplementaryFile, PlagiarismCheck, ScreeningAction,
 )
 from .services.noplag_client import submit_check, NoPlagClientError
+from .services.plagiarism import restart_check_for_resubmission
 
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB — mirrors the frontend's MAX_UPLOAD_SIZE
 
@@ -22,6 +23,39 @@ def validate_pdf_file(value):
     if value.size > MAX_UPLOAD_SIZE:
         raise serializers.ValidationError('File exceeds the 20MB size limit.')
     return value
+
+
+def validate_authors_json(value):
+    """Shared by ManuscriptSubmitSerializer and ManuscriptRevisionCreateSerializer
+    — a revision lets the author edit the byline the same way the original
+    submission does, so the JSON contract and its validation must match exactly."""
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        raise serializers.ValidationError('authors must be valid JSON.')
+    if not isinstance(parsed, list) or not parsed:
+        raise serializers.ValidationError('At least one author is required.')
+
+    serializer = ManuscriptAuthorInputSerializer(data=parsed, many=True)
+    serializer.is_valid(raise_exception=True)
+
+    if not any(a.get('corresponding') for a in serializer.validated_data):
+        raise serializers.ValidationError('Mark one author as the corresponding author.')
+
+    return serializer.validated_data
+
+
+def validate_specialty_tags_json(value):
+    try:
+        parsed = json.loads(value) if value else []
+    except (TypeError, ValueError):
+        raise serializers.ValidationError('specialty_tags must be valid JSON.')
+    if not isinstance(parsed, list):
+        raise serializers.ValidationError('specialty_tags must be a list.')
+    unknown = sorted(set(parsed) - SPECIALTY_TAG_SLUGS)
+    if unknown:
+        raise serializers.ValidationError(f'Unknown specialty tag(s): {", ".join(unknown)}')
+    return parsed
 
 
 # ── Output (read) ────────────────────────────────────────────────────────────
@@ -55,6 +89,7 @@ class ManuscriptSerializer(serializers.ModelSerializer):
     authors = ManuscriptAuthorSerializer(many=True, read_only=True)
     supplementary_files = ManuscriptSupplementaryFileSerializer(many=True, read_only=True)
     file_url = serializers.SerializerMethodField()
+    current_review_round = serializers.SerializerMethodField()
 
     class Meta:
         model = Manuscript
@@ -63,11 +98,24 @@ class ManuscriptSerializer(serializers.ModelSerializer):
             'keywords', 'specialty_tags', 'file_name', 'file_size', 'file_url', 'cover_letter',
             'no_funding', 'funder', 'grant_no', 'no_competing', 'competing',
             'ethics_na', 'ethics', 'data_statement', 'status', 'submitted_at', 'updated_at',
-            'published_at', 'authors', 'supplementary_files',
+            'published_at', 'authors', 'supplementary_files', 'current_review_round',
         )
 
     def get_file_url(self, obj):
         return storage.get_file_url(obj.file_key)
+
+    def get_current_review_round(self, obj):
+        # 1 for the original submission, 2 once the author has resubmitted
+        # once, etc. — matches ReviewAssignment.round, so the editor's invite
+        # picker can tell "already on this round" apart from "reviewed an
+        # earlier round". Prefer the queryset's annotate(revision_count=...)
+        # when present (see ManuscriptListView/ManuscriptDetailView) so this
+        # doesn't cost an extra query per row; fall back to a direct count
+        # for any caller that hasn't annotated it.
+        count = getattr(obj, 'revision_count', None)
+        if count is None:
+            count = obj.revisions.count()
+        return count + 1
 
 
 class ManuscriptEditorSerializer(serializers.ModelSerializer):
@@ -270,35 +318,13 @@ class ManuscriptSubmitSerializer(serializers.Serializer):
     # ── Field validation ─────────────────────────────────────────────────────
 
     def validate_authors(self, value):
-        try:
-            parsed = json.loads(value)
-        except (TypeError, ValueError):
-            raise serializers.ValidationError('authors must be valid JSON.')
-        if not isinstance(parsed, list) or not parsed:
-            raise serializers.ValidationError('At least one author is required.')
-
-        serializer = ManuscriptAuthorInputSerializer(data=parsed, many=True)
-        serializer.is_valid(raise_exception=True)
-
-        if not any(a.get('corresponding') for a in serializer.validated_data):
-            raise serializers.ValidationError('Mark one author as the corresponding author.')
-
-        return serializer.validated_data
+        return validate_authors_json(value)
 
     def validate_manuscript(self, value):
         return validate_pdf_file(value)
 
     def validate_specialty_tags(self, value):
-        try:
-            parsed = json.loads(value) if value else []
-        except (TypeError, ValueError):
-            raise serializers.ValidationError('specialty_tags must be valid JSON.')
-        if not isinstance(parsed, list):
-            raise serializers.ValidationError('specialty_tags must be a list.')
-        unknown = sorted(set(parsed) - SPECIALTY_TAG_SLUGS)
-        if unknown:
-            raise serializers.ValidationError(f'Unknown specialty tag(s): {", ".join(unknown)}')
-        return parsed
+        return validate_specialty_tags_json(value)
 
     # ── Create ───────────────────────────────────────────────────────────────
 
@@ -373,24 +399,79 @@ class ManuscriptRevisionSerializer(serializers.ModelSerializer):
 
 class ManuscriptRevisionCreateSerializer(serializers.Serializer):
     """
-    POST /api/manuscripts/<pk>/revision/ — multipart/form-data fields:
-      manuscript (file, required, PDF, <=20MB), response_letter (optional)
+    POST /api/manuscripts/<pk>/revision/ — multipart/form-data. Same field
+    contract as ManuscriptSubmitSerializer (the author may revise any of their
+    original answers — title, abstract, authors, declarations, etc.), plus one
+    addition and one deliberate omission:
+      + response_letter (optional) — addressed to the editor, new on a revision
+      - manuscript (file) is never prefilled — the author must upload again,
+        even if the content didn't change, so there is no ambiguity about
+        which file is under review
     Expects context={'manuscript': <Manuscript instance>}.
     """
+    article_type = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    title = serializers.CharField(max_length=500)
+    running_title = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    abstract = serializers.CharField()
+    category = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    sub_category = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    keywords = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    specialty_tags = serializers.CharField(required=False, allow_blank=True, default='[]')
+
+    authors = serializers.CharField(write_only=True)
+
     manuscript = serializers.FileField(write_only=True)
+    supplementary = serializers.ListField(
+        child=serializers.FileField(), required=False, default=list, write_only=True,
+    )
+    cover_letter = serializers.CharField(required=False, allow_blank=True)
+
+    no_funding = serializers.BooleanField(required=False, default=False)
+    funder = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    grant_no = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    no_competing = serializers.BooleanField(required=False, default=False)
+    competing = serializers.CharField(required=False, allow_blank=True)
+    ethics_na = serializers.BooleanField(required=False, default=False)
+    ethics = serializers.CharField(required=False, allow_blank=True)
+    data_statement = serializers.CharField(required=False, allow_blank=True)
+
+    agreed_original = serializers.BooleanField(required=False, default=False)
+    agreed_not_under_review = serializers.BooleanField(required=False, default=False)
+    agreed_all_approve = serializers.BooleanField(required=False, default=False)
+    agreed_policies = serializers.BooleanField(required=False, default=False)
+
     response_letter = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate_authors(self, value):
+        return validate_authors_json(value)
 
     def validate_manuscript(self, value):
         return validate_pdf_file(value)
 
+    def validate_specialty_tags(self, value):
+        return validate_specialty_tags_json(value)
+
     def create(self, validated_data):
         target = self.context['manuscript']
         owner = target.owner
-        file = validated_data['manuscript']
-        response_letter = validated_data.get('response_letter', '')
+        file = validated_data.pop('manuscript')
+        supplementary_files = validated_data.pop('supplementary', [])
+        authors_data = validated_data.pop('authors')
+        response_letter = validated_data.pop('response_letter', '')
+
+        # Read once, here, so the plagiarism restart below reuses these bytes
+        # instead of re-downloading the file we just pushed to storage.
+        file_bytes = file.read()
+        file.seek(0)
 
         key = storage.build_key(owner.id, 'revision', file.name)
         storage.upload_file(file, key, content_type=file.content_type)
+
+        uploaded_supplementary = []
+        for f in supplementary_files:
+            supp_key = storage.build_key(owner.id, 'supplementary', f.name)
+            storage.upload_file(f, supp_key, content_type=f.content_type)
+            uploaded_supplementary.append((supp_key, f.name, f.size))
 
         with transaction.atomic():
             round_number = target.revisions.count() + 1
@@ -402,11 +483,34 @@ class ManuscriptRevisionCreateSerializer(serializers.Serializer):
                 file_size=file.size,
                 response_letter=response_letter,
             )
+
+            # Every remaining field is a 1:1 Manuscript attribute — same
+            # contract as ManuscriptSubmitSerializer.create() below.
+            for field, value in validated_data.items():
+                setattr(target, field, value)
             target.file_key = key
             target.file_name = file.name
             target.file_size = file.size
             target.status = Manuscript.Status.UNDER_REVIEW
-            target.save(update_fields=['file_key', 'file_name', 'file_size', 'status', 'updated_at'])
+            target.save()
+
+            # Authors/affiliations are replaced wholesale rather than diffed —
+            # the author may have added, removed or reordered them.
+            target.authors.all().delete()
+            for i, author_data in enumerate(authors_data):
+                affiliations_data = author_data.pop('affiliations', [])
+                author = ManuscriptAuthor.objects.create(manuscript=target, order=i, **author_data)
+                for aff in affiliations_data:
+                    ManuscriptAffiliation.objects.create(author=author, **aff)
+
+            for supp_key, name, size in uploaded_supplementary:
+                ManuscriptSupplementaryFile.objects.create(
+                    manuscript=target, file_key=supp_key, file_name=name, file_size=size,
+                )
+
+        # Best-effort, outside the transaction — a noplag outage should not
+        # block the resubmission itself, only leave the check in 'failed'.
+        restart_check_for_resubmission(target, file_bytes=file_bytes)
 
         return revision
 
