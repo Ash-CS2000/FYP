@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import AppShell from '../components/AppShell.jsx';
+import SearchField from '../components/SearchField.jsx';
 import { patchUserRole, patchUserStatus, listUsers, listAuditLog } from '../api/admin.js';
 import { getStoredUser } from '../auth/roles';
 
@@ -63,6 +64,7 @@ const ACTION_TEXT = {
 
 export default function AdminUsers() {
   const [filter, setFilter]   = useState('all');
+  const [search, setSearch]   = useState('');
   const [users, setUsers]     = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [usersError, setUsersError] = useState('');
@@ -137,15 +139,18 @@ export default function AdminUsers() {
     });
   }
 
+  const query = search.trim().toLowerCase();
   const filtered = users.filter(u => {
-    if (filter === 'all') return true;
-    return (u.roles || []).includes(filter);
+    if (filter !== 'all' && !(u.roles || []).includes(filter)) return false;
+    if (!query) return true;
+    return (u.name || '').toLowerCase().includes(query)
+      || (u.email || '').toLowerCase().includes(query);
   });
 
   const roleCounts = role => users.filter(u => (u.roles || []).includes(role)).length;
 
   return (
-    <AppShell role="admin" searchPlaceholder="Search users...">
+    <AppShell role="admin">
       <style>{`
         .adm-menu-wrap { position:relative; display:inline-block; }
         .adm-menu { position:absolute; right:0; top:34px; z-index:40; min-width:210px; background:var(--navy-950); border:1px solid rgba(255,255,255,0.12); border-radius:var(--r-md); box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,0.35)); padding:6px; }
@@ -162,6 +167,8 @@ export default function AdminUsers() {
         .adm-audit-row:last-child { border-bottom:none; }
         .adm-audit-time { margin-left:auto; font-size:11.5px; color:var(--ink-600); white-space:nowrap; }
         .adm-tag-local { font-size:10px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; padding:1px 6px; border-radius:99px; background:var(--ink-100); color:var(--ink-700); }
+        /* .card-header is global and has no gap/wrap; scope both to this one. */
+        .adm-toolbar { gap:16px; flex-wrap:wrap; }
       `}</style>
 
       <div className="page-header fade-up">
@@ -173,8 +180,22 @@ export default function AdminUsers() {
       </div>
 
       <div className="card fade-up delay-2">
-        <div className="card-header">
-          <div><div className="card-title">{usersLoading ? 'Loading users…' : `${filtered.length} users`}</div></div>
+        <div className="card-header adm-toolbar">
+          <div>
+            <div className="card-title">
+              {usersLoading
+                ? 'Loading users…'
+                : query
+                  ? `${filtered.length} of ${users.length} users`
+                  : `${filtered.length} users`}
+            </div>
+          </div>
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            placeholder="Search by name or email…"
+            label="Search users by name or email"
+          />
           <div className="row">
             {[
               { id: 'all',      label: 'All',       count: users.length },
@@ -202,7 +223,9 @@ export default function AdminUsers() {
                 </div>
               </td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6}><p className="muted" style={{ fontSize: 13, padding: '16px 0' }}>No users match this filter.</p></td></tr>
+              <tr><td colSpan={6}><p className="muted" style={{ fontSize: 13, padding: '16px 0' }}>
+                {query ? `No users match “${search.trim()}”.` : 'No users match this filter.'}
+              </p></td></tr>
             ) : filtered.map(u => (
               <tr key={u.id}>
                 <td>

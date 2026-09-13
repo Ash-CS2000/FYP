@@ -439,9 +439,9 @@ export default function Revision() {
             <div className="field" style={{ marginBottom: 0 }}>
               <label className="field-label">Specialty tags</label>
               <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
-                Pick 1–3 — this is what drives reviewer matching.
+                Pick 1–3.
               </div>
-              <TagPicker value={specialtyTags} onChange={setSpecialtyTags} max={3} />
+              <TagPicker value={specialtyTags} onChange={setSpecialtyTags} max={3} collapsible />
             </div>
           </div>
 

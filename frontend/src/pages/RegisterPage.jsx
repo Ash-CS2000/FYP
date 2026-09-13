@@ -719,10 +719,7 @@ export default function RegisterPage() {
                 </div>
                 <div className="field">
                   <label className="field-label">Specialty tags</label>
-                  <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
-                    This is what actually drives manuscript matching — pick every area that applies.
-                  </div>
-                  <TagPicker value={specialtyTags} onChange={setSpecialtyTags} />
+                  <TagPicker value={specialtyTags} onChange={setSpecialtyTags} collapsible />
                 </div>
                 <PasswordField
                   label="Password" value={password} onChange={e => setPassword(e.target.value)}

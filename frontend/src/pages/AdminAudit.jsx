@@ -68,7 +68,7 @@ export default function AdminAudit() {
   }, [type, actor]);
 
   return (
-    <AppShell role="admin" searchPlaceholder="Search the audit log...">
+    <AppShell role="admin">
       <style>{`
         .au-row { display: grid; grid-template-columns: 150px 110px 1fr 180px; gap: 14px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--ink-100); font-size: 13px; }
         .au-row:last-child { border-bottom: none; }

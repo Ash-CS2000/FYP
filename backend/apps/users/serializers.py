@@ -187,12 +187,17 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     def get_name(self, obj):
         return obj.get_full_name() or obj.email
 
+    # Both read obj.roles.all(), never .filter(): .filter() discards the view's
+    # prefetch_related('roles') cache and costs a query per row, which on the
+    # full admin list meant ~2 round-trips x every user.
     def get_roles(self, obj):
-        return list(obj.roles.filter(status=UserRole.Status.ACTIVE).values_list('role', flat=True))
+        return [r.role for r in obj.roles.all() if r.status == UserRole.Status.ACTIVE]
 
     def get_reviewer_status(self, obj):
-        reviewer_role = obj.roles.filter(role=UserProfile.Role.REVIEWER).first()
-        return reviewer_role.status if reviewer_role else ''
+        for role in obj.roles.all():
+            if role.role == UserProfile.Role.REVIEWER:
+                return role.status
+        return ''
 
     def get_status(self, obj):
         return 'active' if obj.is_active else 'deactivated'

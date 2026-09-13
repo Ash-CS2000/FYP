@@ -9,7 +9,7 @@ import {
   publicationState,
   submitPublication,
 } from '../data/trainingProgress.js';
-import { getDemoSession } from '../data/demoAccounts.js';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 import { TRAINING_UNITS, PUBLICATION_WINDOW_DAYS } from '../data/trainingContent.js';
 import { draftFor, saveDraft, deleteDraft, formatSavedAt } from '../data/drafts.js';
 import { saveDraftRemote } from '../api/submissions.js';
@@ -92,6 +92,8 @@ export default function UserSubmit() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const progress = getProgress();
+  const { user: currentUser } = useCurrentUser();
+  const currentUserName = currentUser?.display_name || currentUser?.name || '';
 
   // Resuming a draft. Read once, before any state is initialised, so every field
   // below can seed from it. `d` is empty for a fresh submission, which is why
@@ -126,7 +128,7 @@ export default function UserSubmit() {
   const [authors, setAuthors] = useState(() =>
     d.authors?.length
       ? d.authors
-      : [emptyAuthor({ ...splitName(getDemoSession()?.name), corresponding: true })],
+      : [emptyAuthor({ ...splitName(currentUserName), corresponding: true })],
   );
 
   // Step 3 — Files
@@ -408,7 +410,7 @@ export default function UserSubmit() {
     if (draftId) deleteDraft(draftId);
 
     if (fulfillingRequirement) {
-      submitPublication(title, getDemoSession()?.name || 'JSRMS Student');
+      submitPublication(title, currentUserName || 'JSRMS Student');
       alert(
         'Paper submitted — and that completes your certification! Your training ' +
           'certificate has been issued. Reviewers will follow up on the paper itself.',
@@ -564,9 +566,9 @@ export default function UserSubmit() {
               <div className="field">
                 <label className="field-label">Specialty tags <span className="req">*</span></label>
                 <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
-                  Pick 1–3 — this is what actually drives reviewer matching.
+                  Pick 1–3.
                 </div>
-                <TagPicker value={specialtyTags} onChange={setSpecialtyTags} max={3} />
+                <TagPicker value={specialtyTags} onChange={setSpecialtyTags} max={3} collapsible />
               </div>
             </>
           )}

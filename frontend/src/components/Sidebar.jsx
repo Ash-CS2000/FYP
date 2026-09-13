@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { getMergedSidebar } from '../data/sidebarConfig.jsx';
-import { clearDemoSession, getDemoSession } from '../data/demoAccounts.js';
+import { clearDemoSession } from '../data/demoAccounts.js';
 import { clearSession } from '../api/auth';
 import { workspaceEntry, ROLE_LABELS, setActiveRole } from '../auth/roles';
 import Avatar from './Avatar.jsx';
@@ -28,17 +28,12 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificati
   const cfg = getMergedSidebar([role]);
   if (!cfg) return null;
 
-  const session = getDemoSession();
   // The nickname is what this is for — it is the name someone chose to be known
   // by. Falls back to the name of record, then the email, never to a fictional
   // person.
-  const displayUser = session || storedUser;
-  const displayName = session
-    ? session.name
-    : storedUser?.display_name || storedUser?.name || storedUser?.email || '';
-  const subtitle = session
-    ? session.role
-    : storedUser?.institution || cfg.role;
+  const displayUser = storedUser;
+  const displayName = storedUser?.display_name || storedUser?.name || storedUser?.email || '';
+  const subtitle = storedUser?.institution || cfg.role;
   const availableRoles = storedUser?.roles?.length ? storedUser.roles : [role];
   const canSwitchRole = availableRoles.length > 1;
 
