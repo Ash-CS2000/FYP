@@ -69,7 +69,7 @@ const RESOURCES = [
 const TYPE_COLORS = {
   'Writing Aid': { bg: 'var(--navy-100)',   color: 'var(--navy-800)'   },
   'Discovery':   { bg: 'var(--teal-50)',    color: 'var(--teal-800)'   },
-  'Reviewing':   { bg: '#FAEEDA',           color: 'var(--amber-800)'  },
+  'Reviewing':   { bg: 'var(--amber-100)',  color: 'var(--amber-800)'  },
   'Publishing':  { bg: 'var(--purple-50)',  color: 'var(--purple-800)' },
   'Reference':   { bg: 'var(--green-50)',   color: 'var(--green-800)'  },
 };
@@ -134,7 +134,7 @@ export default function ResourcesPage() {
             })}
           </div>
 
-          <div className="res-cta">
+          <div className="res-cta fixed-palette">
             <div>
               <div className="res-cta-title">Access more with a <em>free account</em>.</div>
               <div className="res-cta-sub">Create an account to unlock training modules, track your progress, and discover papers.</div>

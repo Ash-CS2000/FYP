@@ -45,10 +45,12 @@ import AdminAudit from './pages/AdminAudit.jsx';
 import EditorInvite from './pages/EditorInvite.jsx';
 import AdminInviteAccept from './pages/AdminInviteAccept.jsx';
 import { NotificationsProvider } from './hooks/useNotifications.jsx';
+import { ThemeProvider } from './theme/ThemeContext.jsx';
 
 export default function App() {
   return (
     <CurrentUserProvider>
+    <ThemeProvider>
     <Routes>
       {/* Public */}
       <Route path="/" element={<HomePage />} />
@@ -179,6 +181,7 @@ export default function App() {
       {/* Fallback */}
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </ThemeProvider>
     </CurrentUserProvider>
   );
 }

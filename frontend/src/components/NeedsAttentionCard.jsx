@@ -120,7 +120,7 @@ export default function NeedsAttentionCard({ data, state, health, onRetry, onVie
         .na-item-title { font-size:13.5px; font-weight:600; color:var(--navy-900); line-height:1.35; }
         .na-sev { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; margin-left:8px;
           padding:1px 6px; border-radius:4px; vertical-align:2px; }
-        .na-item.critical .na-sev { background:var(--red-700); color:var(--white); }
+        .na-item.critical .na-sev { background:var(--fill-danger); color:var(--on-fill); }
         .na-item-detail { font-size:12.5px; color:var(--ink-600); margin-top:3px; line-height:1.5; }
         .na-action { flex-shrink:0; display:inline-flex; align-items:center; gap:5px; padding:7px 12px; border-radius:var(--r-md);
           border:1px solid var(--ink-200); background:var(--white); font-size:12.5px; font-weight:600; color:var(--navy-800);

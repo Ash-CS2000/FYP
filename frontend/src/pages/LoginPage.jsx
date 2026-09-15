@@ -119,8 +119,8 @@ export default function LoginPage() {
         .auth-submit { width:100%; padding:13px; font-size:14.5px; }
         .auth-submit:disabled { opacity:.6; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
         .auth-switch { text-align:center; font-size:13.5px; color:var(--ink-600); margin-top:20px; }
-        .auth-error   { background:var(--red-50); border:1px solid #f5c6c6; border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--red-700); }
-        .auth-success { background:var(--teal-50); border:1px solid #a8dcc8; border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--teal-800); }
+        .auth-error   { background:var(--red-50); border:1px solid var(--red-border); border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--red-700); }
+        .auth-success { background:var(--teal-50); border:1px solid var(--teal-border); border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--teal-800); }
         .divider { display:flex; align-items:center; gap:12px; margin:18px 0; color:var(--ink-400); font-size:12px; }
         .divider::before, .divider::after { content:""; flex:1; height:1px; background:var(--ink-200); }
         .orcid-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:12px; border:1.5px solid #a6ce39; border-radius:var(--r-md); background:#a6ce39; color:#1a1a1a; font-size:14px; font-weight:600; cursor:pointer; transition:all var(--t-fast); }
@@ -129,7 +129,7 @@ export default function LoginPage() {
         @media(max-width:900px){ .auth-page{grid-template-columns:1fr;} .auth-brand{display:none;} .auth-form-side{padding:40px 24px;} }
       `}</style>
 
-      <aside className="auth-brand">
+      <aside className="auth-brand fixed-palette">
         <div className="auth-brand-inner">
           <Link to="/" className="auth-brand-logo">
             <span className="auth-brand-name">PaperBridge</span>

@@ -62,7 +62,7 @@ export default function SelectWorkspace() {
   if (!user || roles.length <= 1) return null;
 
   return (
-    <div className="ws-page">
+    <div className="ws-page fixed-palette">
       <style>{`
         .ws-page { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--navy-950); padding:32px; }
         .ws-card { max-width:520px; width:100%; }

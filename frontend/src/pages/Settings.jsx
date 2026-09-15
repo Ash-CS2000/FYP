@@ -28,8 +28,9 @@ const DATE_FORMATS = [
 ];
 const THEMES = [
   ['light', 'Light'],
-  ['system', 'Match system'],
+  ['dark', 'Dark'],
 ];
+// Anything other than 'dark' (such as an old 'system') counts as light.
 
 const labelOf = (pairs, id) => pairs.find(([v]) => v === id)?.[1] || id;
 
@@ -38,7 +39,7 @@ function PreferencesCard({ prefs, save }) {
     language: prefs.language,
     timezone: prefs.timezone,
     date_format: prefs.date_format,
-    theme: prefs.theme,
+    theme: prefs.theme === 'dark' ? 'dark' : 'light',
   };
 
   return (
@@ -78,6 +79,7 @@ function PreferencesCard({ prefs, save }) {
                     onChange={e => set({ theme: e.target.value })}>
               {THEMES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
+            <div className="field-hint">You can also switch it from the sidebar.</div>
           </div>
         </div>
       ) : (
@@ -368,7 +370,7 @@ function DangerZoneCard() {
   }
 
   return (
-    <div className="card" style={{ borderColor: '#f0c9c9' }}>
+    <div className="card" style={{ borderColor: 'var(--red-150)' }}>
       <div className="card-header">
         <div>
           <div className="card-title" style={{ color: 'var(--red-700)' }}>Delete account</div>
@@ -382,7 +384,7 @@ function DangerZoneCard() {
 
       {!confirming ? (
         <button className="btn btn-ghost btn-sm"
-                style={{ color: 'var(--red-700)', borderColor: '#f0c9c9' }}
+                style={{ color: 'var(--red-700)', borderColor: 'var(--red-150)' }}
                 onClick={() => setConfirming(true)}>
           Delete my account
         </button>

@@ -5,7 +5,13 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-:root {
+/* The light colours. Also re-applied inside anything marked .fixed-palette (and
+   avatars) when dark mode is on, so those keep their original look — the navy
+   sidebar, dark pop-up menus and banners are already dark by design. */
+:root,
+:root[data-theme="dark"] .fixed-palette,
+:root[data-theme="dark"] .sidebar,
+:root[data-theme="dark"] .avatar {
   /* Navy palette */
   --navy-950: #021A33;
   --navy-900: #042C53;
@@ -57,6 +63,36 @@
   --ink-50:  #F8FAFC;
   --white:   #FFFFFF;
 
+  /* Tints that used to be typed in as raw hex around the app */
+  --amber-25:      #FFF8EC;
+  --amber-100:     #FAEEDA;
+  --amber-border:  #F5DBA8;
+  --red-100:       #FDE2E1;
+  --green-100:     #E3F5E9;
+  --hover-soft:    #F7F9FB;
+  --warn-50:       #FFFBEB;
+  --warn-100:      #FEF3C7;
+  --warn-border:   #F0D58C;
+  --warn-800:      #92600A;
+  --indigo-50:     #EEF2FF;
+  --indigo-800:    #3730A3;
+  --red-150:       #F0C9C9;
+  --red-border:    #F5C6C6;
+  --teal-border:   #A8DCC8;
+
+  /* Colours named for their job. Unlike the scales above, these do not flip in
+     dark mode (text on a coloured button stays white); the fills only get a
+     slightly brighter shade so they still stand out on a dark page. */
+  --on-fill:       #FFFFFF;   /* text on a saturated button */
+  --on-amber:      #042C53;   /* text on an amber button or badge */
+  --fill-success:  #16855F;   /* "Approve", "Promote" */
+  --fill-danger:   #A32D2D;   /* "Delete", "Revoke", "Sign out everyone" */
+  --overlay:       rgba(2, 26, 51, 0.42);     /* behind drawers and dialogs */
+  --surface-glass: rgba(255, 255, 255, 0.94); /* sticky headers over a list */
+  --nav-glass:     rgba(255, 255, 255, 0.85); /* the see-through public top bar */
+  --hero-gradient: linear-gradient(145deg, #FFFDF8 0%, #F5F8FF 55%, #EEF2FF 100%); /* home page banner */
+  --soft-page-gradient: linear-gradient(180deg, #FBFCFE 0%, #F1F4F8 100%);         /* "page not found" */
+
   /* Type */
   --font-display: 'Fraunces', 'Times New Roman', serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -79,6 +115,121 @@
   --t-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --t-base: 220ms cubic-bezier(0.4, 0, 0.2, 1);
   --t-slow: 360ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ================================================
+   Dark mode
+   Switched on by data-theme="dark" on <html> (see theme/ThemeContext.jsx).
+
+   Every colour scale is written light-to-dark, and the app uses the light
+   steps for backgrounds and the dark steps for text. Dark mode flips each
+   scale, so the same class that painted "light card, dark text" now paints
+   "dark card, light text" — without touching the thousands of places that use
+   these colours. The few things that must not flip are handled below.
+================================================ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Navy — now the text and link colours */
+  --navy-950: #F3F7FC;
+  --navy-900: #E6EEF7;
+  --navy-800: #C9DAEE;
+  --navy-700: #8CBAEC;
+  --navy-600: #6EA6E6;
+  --navy-500: #4A96E2;
+  --navy-300: #2C5580;
+  --navy-200: #1E3A5A;
+  --navy-100: #13283F;
+
+  --amber-50:  #33260F;
+  --amber-500: #F0A63A;
+  --amber-600: #F4B456;
+  --amber-700: #F2B55C;
+  --amber-800: #F7C77F;
+
+  --teal-500: #2BB488;
+  --teal-600: #34BE92;
+  --teal-700: #4FCBA2;
+  --teal-800: #7ADBB9;
+  --teal-50:  #0F2C25;
+
+  --green-50:  #1C2912;
+  --green-700: #9BCB6A;
+  --green-800: #B5DB8C;
+
+  --purple-50:  #24224A;
+  --purple-700: #A59DF0;
+  --purple-800: #C0BAF7;
+
+  --red-50:  #371719;
+  --red-200: #5E2729;
+  --red-500: #EF6665;
+  --red-700: #F08585;
+  --red-800: #F5A5A5;
+
+  /* Neutrals — deep navy-grey rather than pure black */
+  --ink-900: #EBF0F5;
+  --ink-800: #D6DDE6;
+  --ink-700: #BEC8D5;
+  --ink-600: #A1AEBF;
+  --ink-500: #8494A8;
+  --ink-400: #5E6F84;
+  --ink-300: #2E4158;
+  --ink-200: #213246;
+  --ink-100: #172536;
+  --ink-50:  #0A1320;   /* page background */
+  --white:   #111C2B;   /* card background */
+
+  --amber-25:     #2A200F;
+  --amber-100:    #3A2B14;
+  --amber-border: #5C4618;
+  --red-100:      #3D1A1B;
+  --green-100:    #173024;
+  --hover-soft:   #152233;
+  --warn-50:      #33290F;
+  --warn-100:     #3B2F10;
+  --warn-border:  #5C4816;
+  --warn-800:     #F2C66D;
+  --indigo-50:    #232845;
+  --indigo-800:   #AEB4FA;
+  --red-150:      #5A2426;
+  --red-border:   #5A2426;
+  --teal-border:  #1D4D3E;
+
+  --fill-success:  #1B8F69;
+  --fill-danger:   #C0393A;
+  --overlay:       rgba(0, 0, 0, 0.6);
+  --surface-glass: rgba(17, 28, 43, 0.94);
+  --nav-glass:     rgba(10, 19, 32, 0.85);
+  --hero-gradient: linear-gradient(145deg, #15161A 0%, #0E1726 55%, #111A33 100%);
+  --soft-page-gradient: linear-gradient(180deg, #0A1320 0%, #0E1929 100%);
+
+  /* Training workspace */
+  --lms-border: #2E4158;
+  --lms-bar:    #172536;
+  --lms-ink:    #D6DDE6;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.4), 0 24px 56px rgba(0, 0, 0, 0.45);
+}
+
+/* Coloured buttons keep white text. */
+:root[data-theme="dark"] .btn-success { background: var(--fill-success); color: var(--on-fill); }
+:root[data-theme="dark"] .btn-success:hover { background: #157A59; }
+:root[data-theme="dark"] .btn-danger { background: var(--fill-danger); color: var(--on-fill); }
+:root[data-theme="dark"] .btn-danger:hover { background: #A83132; }
+
+/* Toggle switches: a white knob, and a blue track when on. */
+:root[data-theme="dark"] .switch-thumb { background: #FFFFFF; }
+:root[data-theme="dark"] .switch input:checked ~ .switch-track { background: var(--navy-500); }
+
+/* The sidebar keeps its navy colours (see .fixed-palette above) but moves a
+   shade closer to the dark page, with a hairline so the edge stays visible. */
+:root[data-theme="dark"] .sidebar {
+  background: #06101C;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -159,7 +310,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 .btn-accent {
   background: var(--amber-500);
-  color: var(--navy-900);
+  color: var(--on-amber);
   font-weight: 600;
 }
 .btn-accent:hover {
@@ -206,7 +357,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   background: currentColor;
 }
 .pill-approved { background: var(--green-50); color: var(--green-800); }
-.pill-review   { background: #FAEEDA; color: var(--amber-800); }
+.pill-review   { background: var(--amber-100); color: var(--amber-800); }
 .pill-revision { background: var(--purple-50); color: var(--purple-800); }
 .pill-rejected { background: var(--red-50); color: var(--red-800); }
 .pill-pending  { background: var(--navy-100); color: var(--navy-800); }
@@ -215,7 +366,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 /* Real Manuscript.status values (backend enum) */
 .pill-submitted           { background: var(--navy-100); color: var(--navy-800); }
-.pill-under_review        { background: #FAEEDA; color: var(--amber-800); }
+.pill-under_review        { background: var(--amber-100); color: var(--amber-800); }
 .pill-revisions_requested { background: var(--purple-50); color: var(--purple-800); }
 .pill-accepted             { background: var(--green-50); color: var(--green-800); }
 .pill-published            { background: var(--teal-50); color: var(--teal-800); }
@@ -227,7 +378,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--nav-glass);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-bottom: 1px solid var(--ink-200);
@@ -279,6 +430,20 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   gap: 10px;
   align-items: center;
 }
+.theme-icon-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--ink-300);
+  color: var(--ink-700);
+  transition: all var(--t-fast);
+}
+.theme-icon-btn svg { width: 16px; height: 16px; }
+.theme-icon-btn:hover { border-color: var(--ink-500); color: var(--navy-900); background: var(--white); }
 .nav-avatar {
   display: inline-flex;
   align-items: center;
@@ -630,6 +795,34 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   background: rgba(255,255,255,0.06);
 }
 
+/* Theme switch (components/ThemeSwitch.jsx) — reuses the workspace toggle look. */
+.sidebar-theme { margin-bottom: 14px; }
+.sidebar-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 4px;
+  font-size: 12px;
+}
+.sidebar-theme-btn svg { flex-shrink: 0; }
+.sidebar-theme-compact {
+  display: none;
+  width: 100%;
+  padding: 10px;
+  justify-content: center;
+  color: var(--navy-300);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: all var(--t-fast);
+}
+.sidebar-theme-compact:hover { color: var(--white); background: rgba(255,255,255,0.06); }
+.sidebar-theme-error { margin-top: 6px; font-size: 11px; color: #FCA5A5; }
+
+.sidebar-collapsed .sidebar-theme .sidebar-role-label,
+.sidebar-collapsed .sidebar-theme-full { display: none; }
+.sidebar-collapsed .sidebar-theme-compact { display: flex; }
+
 .sidebar-collapsed .sidebar-brand {
   padding-left: 12px;
   padding-right: 12px;
@@ -974,7 +1167,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   border-color: var(--navy-900);
   color: var(--white);
 }
-.step.active .step-num { background: var(--amber-500); color: var(--navy-900); }
+.step.active .step-num { background: var(--amber-500); color: var(--on-amber); }
 .step.done { background: var(--teal-50); border-color: var(--teal-500); color: var(--teal-800); }
 .step.done .step-num { background: var(--teal-500); color: var(--white); }
 
@@ -1005,7 +1198,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   flex-shrink: 0;
 }
 .activity-dot svg { width: 16px; height: 16px; }
-.activity-dot.amber { background: #FAEEDA; color: var(--amber-800); }
+.activity-dot.amber { background: var(--amber-100); color: var(--amber-800); }
 .activity-dot.teal { background: var(--teal-50); color: var(--teal-800); }
 .activity-dot.purple { background: var(--purple-50); color: var(--purple-800); }
 .activity-text { font-size: 13.5px; color: var(--ink-800); line-height: 1.5; }
@@ -1043,8 +1236,8 @@ img.avatar { object-fit: cover; display: block; background: var(--ink-100); }
 
 /* Reviewer feedback box */
 .feedback-box {
-  background: linear-gradient(135deg, #FFF8EC 0%, #FAEEDA 100%);
-  border: 1px solid #F5DBA8;
+  background: linear-gradient(135deg, var(--amber-25) 0%, var(--amber-100) 100%);
+  border: 1px solid var(--amber-border);
   border-radius: var(--r-md);
   padding: 16px 18px;
   position: relative;
@@ -1927,7 +2120,7 @@ img.avatar { object-fit: cover; display: block; background: var(--ink-100); }
   border-bottom: none;
 }
 .lms-item:hover {
-  background: #F7F9FB;
+  background: var(--hover-soft);
 }
 .lms-item.active {
   background: var(--navy-100);
@@ -2080,8 +2273,8 @@ img.avatar { object-fit: cover; display: block; background: var(--ink-100); }
   margin-bottom: 0;
 }
 .lms-callout {
-  background: #FFF8EC;
-  border: 1px solid #F5DBA8;
+  background: var(--amber-25);
+  border: 1px solid var(--amber-border);
   border-left: 4px solid var(--amber-500);
   border-radius: var(--r-sm);
   padding: 13px 16px;
@@ -2713,6 +2906,9 @@ button:disabled {
   .sidebar, .topbar, .page-header, .card.fade-up.delay-2 { display: none !important; }
   .app, .main, .page-content { display: block !important; margin: 0 !important; padding: 0 !important; }
   .certificate { box-shadow: none; max-width: 100%; }
+  /* Printing from dark mode: paper is white, so drop the dark page behind the
+     certificate (the certificate itself is always light — .fixed-palette). */
+  body, .main { background: #FFFFFF !important; }
 }
 
 @media (max-width: 760px) {
@@ -2841,9 +3037,9 @@ button:disabled {
   align-items: center;
   gap: 10px;
 }
-.alert-error   { background: var(--red-50);  border: 1px solid #f5c6c6; color: var(--red-700); }
-.alert-success { background: var(--teal-50); border: 1px solid #a8dcc8; color: var(--teal-800); }
-.alert-warning { background: #fffbeb;        border: 1px solid #f0d58c; color: #92600a; }
+.alert-error   { background: var(--red-50);  border: 1px solid var(--red-border); color: var(--red-700); }
+.alert-success { background: var(--teal-50); border: 1px solid var(--teal-border); color: var(--teal-800); }
+.alert-warning { background: var(--warn-50);  border: 1px solid var(--warn-border); color: var(--warn-800); }
 .alert-info    { background: var(--navy-100); border: 1px solid var(--ink-200); color: var(--navy-800); }
 
 /* Toggle rows. Replaces ~40 lines of duplicated inline switch styling that had

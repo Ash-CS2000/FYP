@@ -350,7 +350,7 @@ export default function RegisterPage() {
         .orcid-btn:hover { background:#91b82e; border-color:#91b82e; transform:translateY(-1px); box-shadow:0 4px 12px rgba(166,206,57,0.35); }
         .orcid-badge { width:24px; height:24px; border-radius:50%; background:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#a6ce39; flex-shrink:0; letter-spacing:-0.02em; }
         .orcid-note { font-size:12px; color:var(--ink-500); text-align:center; margin-bottom:16px; }
-        .auth-error { background:var(--red-50); border:1px solid #f5c6c6; border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--red-700); }
+        .auth-error { background:var(--red-50); border:1px solid var(--red-border); border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--red-700); }
         .auth-submit { width:100%; padding:13px; font-size:14.5px; }
         .auth-submit:disabled { opacity:.6; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
         .auth-switch { text-align:center; font-size:13.5px; color:var(--ink-600); margin-top:16px; }
@@ -360,7 +360,7 @@ export default function RegisterPage() {
       `}</style>
 
       {/* ── Brand panel ─────────────────────────────────────────────────────── */}
-      <aside className="auth-brand">
+      <aside className="auth-brand fixed-palette">
         <div className="auth-brand-inner">
           <Link to="/" className="auth-brand-logo">
             <span className="auth-brand-name">PaperBridge</span>

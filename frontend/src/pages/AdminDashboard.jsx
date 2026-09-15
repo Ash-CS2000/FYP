@@ -335,8 +335,9 @@ export default function AdminDashboard() {
         .health-maint { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--ink-100); }
         .health-maint-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .health-maint-title { font-size: 13px; font-weight: 600; color: var(--navy-900); }
-        .health-danger { background: var(--red-700); color: var(--white); border: none; }
+        .health-danger { background: var(--fill-danger); color: var(--on-fill); border: none; }
         .health-danger:hover:not(:disabled) { background: var(--red-800); }
+        :root[data-theme="dark"] .health-danger:hover:not(:disabled) { background: #A83132; }
         .health-danger:disabled { opacity: .45; cursor: not-allowed; }
         .health-confirm { margin-top: 12px; padding: 14px; border: 1px solid var(--red-200); background: var(--red-50); border-radius: var(--r-md); }
         .health-confirm p { font-size: 12.5px; color: var(--red-800); line-height: 1.55; margin-bottom: 10px; }

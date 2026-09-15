@@ -182,7 +182,7 @@ export default function AdminReviewerApprovals() {
             <div className="rva-actions">
               <button
                 className="btn btn-sm"
-                style={{ background: 'var(--teal-600)', color: '#fff', border: 'none' }}
+                style={{ background: 'var(--fill-success)', color: 'var(--on-fill)', border: 'none' }}
                 disabled={actionLoading === `${u.id}-approve`}
                 onClick={() => handleAction(u.id, 'approve')}
               >

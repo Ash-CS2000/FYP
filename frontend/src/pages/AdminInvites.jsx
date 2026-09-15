@@ -52,7 +52,7 @@ export default function AdminInvites() {
         .inv-card { padding:22px 24px; margin:0; }
         .inv-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:16px; }
         .inv-link { font-size:12.5px; font-weight:600; color:var(--navy-700); white-space:nowrap; }
-        .inv-count { margin-left:8px; background:var(--amber-500); color:var(--navy-950); font-family:var(--font-body); font-size:11px;
+        .inv-count { margin-left:8px; background:var(--amber-500); color:var(--on-amber); font-family:var(--font-body); font-size:11px;
           font-weight:700; padding:2px 7px; border-radius:99px; vertical-align:3px; }
         .inv-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
         .inv-form-grid .field { margin-bottom:4px; }
@@ -75,9 +75,9 @@ export default function AdminInvites() {
         .inv-dot.pending { background:var(--amber-500); }
         .inv-dot.expired { background:var(--red-500); }
         .inv-dot.accept, .inv-dot.grant { background:var(--teal-500); }
-        .inv-chip { margin-left:6px; font-size:10.5px; font-weight:600; padding:1px 7px; border-radius:99px; background:#eef2ff; color:#3730a3; vertical-align:1px; }
+        .inv-chip { margin-left:6px; font-size:10.5px; font-weight:600; padding:1px 7px; border-radius:99px; background:var(--indigo-50); color:var(--indigo-800); vertical-align:1px; }
         .inv-chip.tag { background:var(--ink-100); color:var(--ink-700); }
-        .inv-danger { background:var(--red-700); color:var(--white); border:none; }
+        .inv-danger { background:var(--fill-danger); color:var(--on-fill); border:none; }
 
         .inv-lookup { position:relative; }
         .inv-lookup-menu { position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:30; background:var(--white); border:1px solid var(--ink-200); border-radius:var(--r-md); box-shadow:var(--shadow-lg); max-height:240px; overflow-y:auto; }

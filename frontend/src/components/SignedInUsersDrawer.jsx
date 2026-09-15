@@ -84,7 +84,7 @@ export default function SignedInUsersDrawer({ open, onClose }) {
         .siu-tools .search-field { max-width:none; }
         .siu-chips { display:flex; flex-wrap:wrap; gap:6px; }
         .siu-chips .filter-chip { font-size:12px; padding:5px 11px; }
-        .siu-group { position:sticky; top:0; z-index:1; background:rgba(255,255,255,0.94); backdrop-filter:blur(4px);
+        .siu-group { position:sticky; top:0; z-index:1; background:var(--surface-glass); backdrop-filter:blur(4px);
           padding:12px 24px 6px; font-family:var(--font-mono); font-size:10.5px; letter-spacing:0.1em;
           text-transform:uppercase; color:var(--ink-500); display:flex; gap:8px; }
         .siu-group span { color:var(--ink-400); }
@@ -98,8 +98,8 @@ export default function SignedInUsersDrawer({ open, onClose }) {
         .siu-email { font-size:12px; color:var(--ink-500); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .siu-role { font-size:10.5px; font-weight:600; padding:1px 7px; border-radius:99px; background:var(--ink-100); color:var(--ink-700); }
         .siu-role.reviewer { background:var(--teal-50); color:var(--teal-800); }
-        .siu-role.editor { background:#eef2ff; color:#3730a3; }
-        .siu-role.admin { background:#fef3c7; color:#92600a; }
+        .siu-role.editor { background:var(--indigo-50); color:var(--indigo-800); }
+        .siu-role.admin { background:var(--warn-100); color:var(--warn-800); }
         .siu-when { text-align:right; flex-shrink:0; }
         .siu-ago { font-size:12.5px; font-weight:600; color:var(--navy-900); white-space:nowrap; }
         .siu-exact { font-size:11px; color:var(--ink-500); margin-top:1px; white-space:nowrap; }

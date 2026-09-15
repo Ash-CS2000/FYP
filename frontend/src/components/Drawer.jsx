@@ -47,7 +47,7 @@ export default function Drawer({ open, onClose, title, eyebrow, children, footer
     <div className="drawer-root">
       <style>{`
         .drawer-root { position:fixed; inset:0; z-index:200; }
-        .drawer-backdrop { position:absolute; inset:0; background:rgba(2,26,51,0.42);
+        .drawer-backdrop { position:absolute; inset:0; background:var(--overlay);
           backdrop-filter:blur(2px); animation:drawerFade var(--t-base) both; }
         .drawer-panel { position:absolute; top:0; right:0; bottom:0; width:min(var(--drawer-w), 100vw);
           background:var(--white); box-shadow:var(--shadow-xl); display:flex; flex-direction:column;

@@ -93,7 +93,7 @@ export default function AboutPage() {
             ))}
           </div>
 
-          <div className="about-cta">
+          <div className="about-cta fixed-palette">
             <div>
               <div className="about-cta-title">Ready to get <em>started</em>?</div>
               <div className="about-cta-sub">Create an account or browse the research library — no sign-in required.</div>

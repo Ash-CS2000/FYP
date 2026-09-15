@@ -66,10 +66,10 @@ function SimilarityLine({ manuscriptId, basePath }) {
 
   const pct = state.similarity_score ?? 0;
   const tone = pct >= 30
-    ? { bg: 'var(--red-100, #fde2e1)', fg: 'var(--red-800, #b3261e)' }
+    ? { bg: 'var(--red-100)', fg: 'var(--red-800)' }
     : pct >= 15
-      ? { bg: 'var(--amber-100, #fdf0d5)', fg: 'var(--amber-800, #8a5a00)' }
-      : { bg: 'var(--green-100, #e3f5e9)', fg: 'var(--green-800, #1e6b3c)' };
+      ? { bg: 'var(--amber-100)', fg: 'var(--amber-800)' }
+      : { bg: 'var(--green-100)', fg: 'var(--green-800)' };
 
   return (
     <span className="row" style={{ gap: 10 }}>

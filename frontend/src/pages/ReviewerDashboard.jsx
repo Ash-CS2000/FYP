@@ -117,7 +117,7 @@ export default function ReviewerDashboard() {
                 const dueColor = { overdue: 'var(--red-700)', due: 'var(--amber-800)', ok: 'var(--ink-600)', none: 'var(--ink-600)' }[due.tone];
                 return (
                   <tr key={a.id} style={due.tone === 'overdue'
-                    ? { background: 'linear-gradient(90deg, rgba(252,235,235,0.4), transparent)' }
+                    ? { background: 'linear-gradient(90deg, color-mix(in srgb, var(--red-50) 40%, transparent), transparent)' }
                     : undefined}>
                     <td>
                       <div className="table-title">{a.title}</div>

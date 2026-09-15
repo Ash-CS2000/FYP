@@ -27,7 +27,7 @@ export default function ReviewerPending() {
   }
 
   return (
-    <div className="rp-page">
+    <div className="rp-page fixed-palette">
       <style>{`
         .rp-page { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--navy-950); padding:32px; }
         .rp-card { max-width:560px; width:100%; }

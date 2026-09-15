@@ -96,7 +96,7 @@ export default function AdminInviteAccept() {
         @media (max-width:900px) { .aia-page { grid-template-columns:1fr; } .aia-brand { display:none; } .aia-main { padding:40px 22px; } }
       `}</style>
 
-      <aside className="aia-brand">
+      <aside className="aia-brand fixed-palette">
         <Link to="/" className="aia-logo">
           <span className="aia-logo-name">PaperBridge</span>
           <span className="aia-logo-tag">Administration</span>

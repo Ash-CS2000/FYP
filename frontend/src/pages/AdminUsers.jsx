@@ -328,7 +328,7 @@ export default function AdminUsers() {
                 <td>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {(u.roles || [getPrimaryRole(u)]).map(r => (
-                      <span key={r} style={{ fontSize: 11.5, fontWeight: 600, padding: '2px 8px', borderRadius: 99, background: r === 'reviewer' ? 'var(--teal-50)' : r === 'editor' ? '#eef2ff' : r === 'admin' ? '#fef3c7' : 'var(--ink-100)', color: r === 'reviewer' ? 'var(--teal-800)' : r === 'editor' ? '#3730a3' : r === 'admin' ? '#92600a' : 'var(--ink-700)' }}>
+                      <span key={r} style={{ fontSize: 11.5, fontWeight: 600, padding: '2px 8px', borderRadius: 99, background: r === 'reviewer' ? 'var(--teal-50)' : r === 'editor' ? 'var(--indigo-50)' : r === 'admin' ? 'var(--warn-100)' : 'var(--ink-100)', color: r === 'reviewer' ? 'var(--teal-800)' : r === 'editor' ? 'var(--indigo-800)' : r === 'admin' ? 'var(--warn-800)' : 'var(--ink-700)' }}>
                         {r.charAt(0).toUpperCase() + r.slice(1)}
                       </span>
                     ))}
@@ -477,7 +477,7 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
       </button>
 
       {open && (
-        <div className="adm-menu" role="menu">
+        <div className="adm-menu fixed-palette" role="menu">
           {isAdmin ? (
             <p className="adm-menu-note">
               Administrator accounts cannot be promoted, demoted or suspended here.

@@ -46,7 +46,7 @@ export default function Notifications({ role = 'author' }) {
             style={{
               display: 'flex', gap: 16, padding: '18px 4px', cursor: n.read ? 'default' : 'pointer',
               borderBottom: i === notifications.length - 1 ? 'none' : '1px solid var(--ink-100)',
-              background: n.read ? 'transparent' : 'rgba(230,241,251,0.3)',
+              background: n.read ? 'transparent' : 'color-mix(in srgb, var(--navy-100) 30%, transparent)',
               margin: n.read ? 0 : '0 -8px',
               paddingLeft: n.read ? 4 : 12,
               paddingRight: n.read ? 4 : 12,

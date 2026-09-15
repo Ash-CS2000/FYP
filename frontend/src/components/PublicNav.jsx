@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Avatar from './Avatar.jsx';
 import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
+import { ThemeIconButton } from './ThemeSwitch.jsx';
 
 const WORKSPACE = {
   student:  { label: 'Training',       route: '/student/training' },
@@ -60,6 +61,7 @@ export default function PublicNav() {
           </button>
         </form>
         <div className="public-nav-cta">
+          <ThemeIconButton />
           {user ? (
             <>
               {workspace && (

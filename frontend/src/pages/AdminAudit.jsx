@@ -42,7 +42,7 @@ const TYPE_TONE = {
   screening:       { bg: 'var(--amber-50)', fg: 'var(--amber-800)' },
   assignment:      { bg: 'var(--teal-50)',  fg: 'var(--teal-800)' },
   login_failure:   { bg: 'var(--red-50)',   fg: 'var(--red-700)' },
-  security:        { bg: 'var(--red-700)',  fg: 'var(--white)' },
+  security:        { bg: 'var(--fill-danger)', fg: 'var(--on-fill)' },
 };
 
 function timestamp(iso) {

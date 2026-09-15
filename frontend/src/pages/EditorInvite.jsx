@@ -106,12 +106,12 @@ export default function EditorInvite() {
         .pw-toggle { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--ink-500); cursor:pointer; padding:4px; font-size:12px; }
         .auth-submit { width:100%; padding:13px; font-size:14.5px; margin-top:4px; }
         .auth-submit:disabled { opacity:.6; cursor:not-allowed; }
-        .auth-error   { background:var(--red-50); border:1px solid #f5c6c6; border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--red-700); }
+        .auth-error   { background:var(--red-50); border:1px solid var(--red-border); border-radius:var(--r-md); padding:11px 14px; margin-bottom:16px; font-size:13px; color:var(--red-700); }
         .auth-switch { text-align:center; font-size:13.5px; color:var(--ink-600); margin-top:20px; }
         @media(max-width:900px){ .auth-page{grid-template-columns:1fr;} .auth-brand{display:none;} .auth-form-side{padding:40px 24px;} }
       `}</style>
 
-      <aside className="auth-brand">
+      <aside className="auth-brand fixed-palette">
         <div className="auth-brand-inner">
           <Link to="/" className="auth-brand-logo">
             <span className="auth-brand-name">PaperBridge</span>

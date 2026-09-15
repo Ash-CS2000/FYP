@@ -49,7 +49,7 @@ export default function HomePage() {
           background: var(--ink-50);
         }
         .portal-hero {
-          background: linear-gradient(145deg, #fffdf8 0%, #f5f8ff 55%, #eef2ff 100%);
+          background: var(--hero-gradient);
           border-bottom: 1px solid var(--ink-200);
           padding: 64px 32px 72px;
         }
@@ -504,7 +504,7 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="site-footer">
+      <footer className="site-footer fixed-palette">
         <div className="footer-inner">
           <div className="footer-top">
             <div className="footer-brand">

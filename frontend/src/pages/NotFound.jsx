@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(180deg, #FBFCFE 0%, #F1F4F8 100%)',
+      background: 'var(--soft-page-gradient)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '40px 24px', position: 'relative', overflow: 'hidden',
     }}>

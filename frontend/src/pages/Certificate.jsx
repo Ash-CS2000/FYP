@@ -86,7 +86,7 @@ export default function Certificate() {
       </div>
 
       <div className="certificate-wrap fade-up delay-1">
-        <div className="certificate">
+        <div className="certificate fixed-palette">
           <div className="certificate-border">
             <div className="certificate-seal">JSRMS</div>
             <div className="certificate-eyebrow">Journal Submission &amp; Review Management System</div>
