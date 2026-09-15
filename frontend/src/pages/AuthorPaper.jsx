@@ -30,7 +30,9 @@ import { getManuscript } from '../api/manuscripts.js';
 import { withdrawalFor, saveWithdrawal, WITHDRAW_REASONS } from '../data/drafts.js';
 import { withdrawSubmission } from '../api/submissions.js';
 import { getPlagiarismStatus, pollPlagiarismStatus } from '../api/similarity.js';
-import { bandFor, DEFAULT_THRESHOLDS, BAND_LABELS, BAND_HINTS, SIMILARITY_TONE } from '../data/similarity.js';
+import { bandFor, BAND_LABELS, BAND_HINTS, SIMILARITY_TONE } from '../data/similarity.js';
+import { thresholdsFrom } from '../data/screeningSettings.js';
+import { useScreeningSettings } from '../hooks/useScreeningSettings.js';
 import { TERMINAL_STATUSES, statusLabel, statusPillClass } from '../data/manuscriptStatus.js';
 import { getAuthorReviews, getDecision } from '../api/editorial.js';
 import { DECISION_LABELS, DECISION_TONE, formatDecidedAt } from '../data/editorial.js';
@@ -163,6 +165,9 @@ function WithdrawCard({ manuscript }) {
 function OriginalityCard({ manuscriptId }) {
   const [state, setState] = useState('loading'); // loading | none | pending | completed | failed
   const [data, setData] = useState(null);
+  // The same bands the editor sees, so the author is never told "clear" about a
+  // score the editor is looking at in amber.
+  const { settings: screeningSettings } = useScreeningSettings();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -228,7 +233,7 @@ function OriginalityCard({ manuscriptId }) {
   }
 
   const pct = normalizeSimilarityScore(data);
-  const band = pct != null ? bandFor(pct, DEFAULT_THRESHOLDS) : null;
+  const band = pct != null ? bandFor(pct, thresholdsFrom(screeningSettings)) : null;
   const tone = band ? SIMILARITY_TONE[band] : null;
   const report = data?.report || {};
   const sources = Array.isArray(report.sources) ? report.sources : [];

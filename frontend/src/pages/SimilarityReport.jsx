@@ -22,7 +22,8 @@ import {
   BAND_HINTS,
   SIMILARITY_TONE,
 } from '../data/similarity.js';
-import { thresholdsFrom, loadLocalSettings } from '../data/screeningSettings.js';
+import { thresholdsFrom } from '../data/screeningSettings.js';
+import { useScreeningSettings } from '../hooks/useScreeningSettings.js';
 import {
   SCREENING_ACTIONS,
   screeningActionFor,
@@ -253,17 +254,25 @@ export default function SimilarityReport({ role = 'editor' }) {
     return () => { cancelled = true; };
   }, [id]);
 
-  const settings = loadLocalSettings();
+  const { settings, status: settingsStatus } = useScreeningSettings();
   const thresholds = thresholdsFrom(settings);
 
-  // Exclusions start from what the server already applied to this report. Changing
-  // one re-requests the report server-side (getReport takes them as query params);
-  // until /api/analysis/ exists they only reflect intent in the UI.
+  // Exclusions start from the platform policy. Changing one only affects this view
+  // of the report — it is an editor exploring the matches, not a policy change.
   const [exclusions, setExclusions] = useState({
     quotes: settings.exclude_quotes,
     bibliography: settings.exclude_bibliography,
     minWords: settings.min_words,
   });
+  // The first render may run before the policy arrives; adopt it once it does.
+  useEffect(() => {
+    if (settingsStatus !== 'ready') return;
+    setExclusions({
+      quotes: settings.exclude_quotes,
+      bibliography: settings.exclude_bibliography,
+      minWords: settings.min_words,
+    });
+  }, [settingsStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (

@@ -14,9 +14,25 @@ class UserProfile(models.Model):
         PENDING = 'pending', 'Pending'
         REJECTED = 'rejected', 'Rejected'
 
+    # Why an account cannot sign in. user.is_active is still what enforces it;
+    # this records which of the two very different reasons applies.
+    class AccountStatus(models.TextChoices):
+        ACTIVE = 'active', 'Active'
+        SUSPENDED = 'suspended', 'Suspended'
+        DEACTIVATED = 'deactivated', 'Deleted'
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.AUTHOR)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    # db_default as well as default: the database is shared, and code from before
+    # this column existed inserts profiles without it. A Python-only default
+    # would leave those inserts violating NOT NULL.
+    account_status = models.CharField(
+        max_length=20, choices=AccountStatus.choices,
+        default=AccountStatus.ACTIVE, db_default=AccountStatus.ACTIVE,
+    )
+    # Only meaningful while suspended; null means an open-ended suspension.
+    suspended_until = models.DateTimeField(null=True, blank=True)
     institution = models.CharField(max_length=255, blank=True)
     student_id = models.CharField(max_length=50, blank=True)
     programme = models.CharField(max_length=255, blank=True)

@@ -84,24 +84,51 @@ export async function pollPlagiarismStatus(manuscriptId, { onUpdate, signal } = 
   return state;
 }
 
-// ── Not implemented on the real backend yet — stubs so Settings.jsx doesn't
-
-const DEFAULT_SCREENING_SETTINGS = {
-  review_threshold: 15,
-  high_threshold: 30,
-  exclude_quotes: false,
-  exclude_bibliography: false,
-  min_words: 0,
-  auto_flag: true,
-};
-
-export async function getScreeningSettings() {
-  return DEFAULT_SCREENING_SETTINGS;
+/**
+ * The platform's similarity screening policy. One shared record — every editor,
+ * author and admin reads the same values, so a score is banded identically on
+ * every screen.
+ *
+ *   GET /api/analysis/screening-settings/
+ *   200  ScreeningSettings
+ *   401  not signed in
+ *
+ *   ScreeningSettings {
+ *     review_threshold      0–100  at or above → amber, for the editor's attention
+ *     high_threshold        0–100  at or above → flagged; must exceed review_threshold
+ *     exclude_quotes        bool
+ *     exclude_bibliography  bool
+ *     min_words             0–200  ignore matches shorter than this many words
+ *     auto_flag             bool
+ *     updated_at            ISO timestamp, or null if never changed
+ *     updated_by_name       string, '' if never changed
+ *   }
+ */
+export function getScreeningSettings() {
+  return request('/api/analysis/screening-settings/', { method: 'GET' });
 }
 
-export async function patchScreeningSettings(patch) {
-  return { ...DEFAULT_SCREENING_SETTINGS, ...patch };
+/**
+ * Change screening policy. Admin only. Send only the fields being changed.
+ *
+ *   PATCH /api/analysis/screening-settings/
+ *   body  any subset of the editable ScreeningSettings fields
+ *   200   the full ScreeningSettings after the change
+ *   400   { field: [message] } — out of range, or review_threshold is not
+ *         lower than high_threshold once the patch is applied
+ *   403   caller is not an admin
+ *
+ * Writes one 'settings_change' audit entry listing each field's old and new
+ * value. A patch that changes nothing writes no entry.
+ */
+export function patchScreeningSettings(patch) {
+  return request('/api/analysis/screening-settings/', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
 }
+
+// ── Not implemented on the real backend yet ──────────────────────────────────
 
 export async function requestDraftCheck(file) {
   throw new Error('Draft self-check is not available yet.');

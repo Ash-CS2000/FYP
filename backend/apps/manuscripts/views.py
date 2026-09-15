@@ -14,6 +14,8 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from apps.audit import services as audit
+from apps.audit.models import AuditLog
 from apps.notifications.models import Notification
 from apps.reviews.matching import compute_conflict, rank_candidates
 from apps.reviews.models import Review, ReviewAssignment
@@ -131,8 +133,10 @@ class ManuscriptDecisionView(APIView):
     """
     GET  /api/manuscripts/<int:pk>/decision/ → the latest Decision on this
     manuscript, if any. Readable by the editor/admin or the manuscript's owner.
-    POST /api/manuscripts/<int:pk>/decision/ → record a decision. Editor/admin
-    only. Updates Manuscript.status and creates a Notification for the owner.
+    POST /api/manuscripts/<int:pk>/decision/ → record a decision. Editor only:
+    admin oversight of the pipeline is read-only, and an admin must not be able
+    to accept or reject a paper. Updates Manuscript.status and creates a
+    Notification for the owner.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -146,7 +150,7 @@ class ManuscriptDecisionView(APIView):
         return Response(DecisionSerializer(decision).data)
 
     def post(self, request, pk):
-        if not is_editor_or_admin(request.user):
+        if not is_editor(request.user):
             return Response(
                 {'detail': 'You do not have permission to record a decision.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -189,6 +193,13 @@ class ManuscriptDecisionView(APIView):
                 title=DECISION_NOTIFICATION_TITLES[data['type']],
                 body=DECISION_NOTIFICATION_BODIES[data['type']].format(title=manuscript.title),
                 manuscript=manuscript,
+            )
+            audit.record(
+                type=AuditLog.Type.DECISION, action=data['type'],
+                summary=f'Recorded "{decision.get_type_display()}" on "{manuscript.title}"',
+                actor=request.user, target=manuscript.owner,
+                details={'manuscript_id': manuscript.pk, 'decision_id': decision.pk},
+                request=request,
             )
 
         # An accepted paper becomes prior art for future checks. Deferred to
@@ -377,6 +388,16 @@ class ManuscriptScreeningView(APIView):
                 body=SCREENING_NOTIFICATION_BODIES[data['action']].format(title=manuscript.title),
                 manuscript=manuscript,
             )
+            audit.record(
+                type=AuditLog.Type.SCREENING, action=data['action'],
+                summary=f'Screening outcome "{screening.get_action_display()}" on "{manuscript.title}"',
+                actor=request.user, target=manuscript.owner,
+                details={
+                    'manuscript_id': manuscript.pk,
+                    'similarity_score': check.similarity_score,
+                },
+                request=request,
+            )
 
         return Response(ScreeningActionSerializer(screening).data, status=status.HTTP_201_CREATED)
 
@@ -441,6 +462,12 @@ class ManuscriptAssignmentListCreateView(APIView):
 
         User = get_user_model()
         reviewers = list(User.objects.filter(pk__in=reviewer_ids).select_related('profile'))
+        # The candidate list already hides these; this stops a crafted request.
+        if any(not r.is_active for r in reviewers):
+            return Response(
+                {'detail': 'One or more of these reviewers has a suspended or deleted account.'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
         if not data['force']:
             conflicted = [u for u in reviewers if compute_conflict(manuscript, u)]
             if conflicted:
@@ -471,6 +498,19 @@ class ManuscriptAssignmentListCreateView(APIView):
                     ),
                     manuscript=manuscript,
                 )
+            count = len(created)
+            audit.record(
+                type=AuditLog.Type.ASSIGNMENT, action='invite',
+                summary=f'Invited {count} reviewer{"s" if count != 1 else ""} to "{manuscript.title}" (round {current_round})',
+                actor=request.user,
+                details={
+                    'manuscript_id': manuscript.pk,
+                    'reviewer_ids': [r.pk for r in reviewers],
+                    'round': current_round,
+                    'forced_past_conflict': bool(data['force']),
+                },
+                request=request,
+            )
 
         return Response(ManuscriptAssignmentSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
 

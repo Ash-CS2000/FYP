@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import SearchField from '../components/SearchField.jsx';
-import { patchReviewerStatus, listUsers } from '../api/admin.js';
+import Pagination from '../components/Pagination.jsx';
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
+import { patchReviewerStatus, listUsers, USERS_PAGE_SIZE } from '../api/admin.js';
 import { SPECIALTY_TAG_LABELS } from '../data/specialtyTags.js';
 
 function getInitials(name = '') {
@@ -9,37 +11,54 @@ function getInitials(name = '') {
 }
 
 export default function AdminReviewerApprovals() {
-  const [users, setUsers] = useState([]);
+  const [pending, setPending] = useState([]);
+  const [total, setTotal] = useState(0);
   const [usersLoading, setUsersLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [usersError, setUsersError] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
+  const query = useDebouncedValue(search.trim(), 300);
+  const [pageState, setPageState] = useState({ key: query, page: 1 });
+  if (pageState.key !== query) setPageState({ key: query, page: 1 });
+  const page = pageState.key === query ? pageState.page : 1;
+  const requestSeq = useRef(0);
 
+  // Only pending applications are fetched — the server filters, pages and
+  // searches, so this stays one small request at any platform size.
   function loadUsers() {
-    setUsersLoading(true);
+    const seq = ++requestSeq.current;
+    setRefreshing(true);
     setUsersError('');
-    listUsers()
-      .then(rows => setUsers(Array.isArray(rows) ? rows : []))
-      .catch(() => setUsersError('Could not load reviewer applications from the server.'))
-      .finally(() => setUsersLoading(false));
+    listUsers({ reviewerStatus: 'pending', page, search: query })
+      .then(res => {
+        if (seq !== requestSeq.current) return;
+        if (res.results.length === 0 && res.total > 0 && page > 1) {
+          setPageState({ key: query, page: Math.ceil(res.total / res.page_size) });
+          return;
+        }
+        setPending(res.results);
+        setTotal(res.total);
+      })
+      .catch(() => { if (seq === requestSeq.current) setUsersError('Could not load reviewer applications from the server.'); })
+      .finally(() => {
+        if (seq === requestSeq.current) {
+          setUsersLoading(false);
+          setRefreshing(false);
+        }
+      });
   }
 
-  useEffect(() => { loadUsers(); }, []);
-
-  const allPending = users.filter(u => u.reviewer_status === 'pending');
-  const query = search.trim().toLowerCase();
-  const pending = query
-    ? allPending.filter(u => (u.name || '').toLowerCase().includes(query)
-        || (u.email || '').toLowerCase().includes(query))
-    : allPending;
+  useEffect(() => { loadUsers(); }, [query, page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAction(userId, action) {
     setNotice('');
     setActionLoading(`${userId}-${action}`);
     try {
       await patchReviewerStatus(userId, action);
-      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, reviewer_status: action === 'approve' ? 'active' : 'rejected' } : u)));
+      setPending(prev => prev.filter(u => u.id !== userId));
+      loadUsers();
       setNotice(
         action === 'approve'
           ? 'Reviewer approved. They have been emailed and can now log in to the reviewer workspace.'
@@ -89,11 +108,9 @@ export default function AdminReviewerApprovals() {
           <div className="card-title">
             {usersLoading
               ? 'Loading applications…'
-              : query
-                ? `${pending.length} of ${allPending.length} pending`
-                : `${pending.length} pending`}
+              : `${total.toLocaleString()} pending${query ? ' matching' : ''}`}
           </div>
-          {!usersLoading && !usersError && allPending.length > 0 && (
+          {!usersLoading && !usersError && (total > 0 || search) && (
             <SearchField
               value={search}
               onChange={setSearch}
@@ -112,7 +129,7 @@ export default function AdminReviewerApprovals() {
           </div>
         ) : pending.length === 0 ? (
           <p className="muted" style={{ fontSize: 13, padding: '16px 22px' }}>
-            {query ? `No pending applications match “${search.trim()}”.` : 'No pending reviewer applications.'}
+            {query ? `No pending applications match “${query}”.` : 'No pending reviewer applications.'}
           </p>
         ) : pending.map(u => (
           <div key={u.id} className="rva-card">
@@ -182,6 +199,18 @@ export default function AdminReviewerApprovals() {
             </div>
           </div>
         ))}
+
+        {!usersLoading && !usersError && (
+          <div style={{ padding: '0 22px 6px' }}>
+            <Pagination
+              page={page}
+              pageSize={USERS_PAGE_SIZE}
+              total={total}
+              busy={refreshing}
+              onChange={(n) => { setPageState({ key: query, page: n }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            />
+          </div>
+        )}
       </div>
     </AppShell>
   );

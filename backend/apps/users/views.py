@@ -1,6 +1,6 @@
 import logging
 import secrets
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -15,10 +15,14 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import CharField, Count, Q, Value
+from django.db.models.functions import Concat
 from django.http import Http404
 from django.shortcuts import redirect
 from django.utils import timezone
 
+from apps.audit import services as audit
+from apps.audit.models import AuditLog
 from apps.manuscripts import storage
 from apps.notifications.models import Notification
 
@@ -33,6 +37,7 @@ from .serializers import (
     RegisterSerializer,
     UserSerializer,
 )
+from .account_status import lift_expired_suspensions, set_account_status
 from .throttles import AuthRateThrottle, PasswordChangeThrottle
 from .models import EditorInvite, UserProfile, UserRole
 
@@ -56,17 +61,6 @@ def _active_admin_count():
         .count()
     )
 
-
-def _set_account_active(user, active):
-    """Soft delete / restore: flips login access, keeps the row and its history."""
-    user.is_active = active
-    user.save(update_fields=['is_active'])
-    profile = getattr(user, 'profile', None)
-    if profile is not None:
-        profile.status = (
-            UserProfile.Status.ACTIVE if active else UserProfile.Status.REJECTED
-        )
-        profile.save(update_fields=['status'])
 
 
 class RegisterView(generics.CreateAPIView):
@@ -102,14 +96,38 @@ class EmailTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [AuthRateThrottle]
 
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
+        try:
+            response = super().post(request, *args, **kwargs)
+        except Exception as exc:
+            if getattr(exc, 'status_code', None) == status.HTTP_401_UNAUTHORIZED:
+                self._record_failure(request)
+            raise
 
         if response.status_code == 200:
             for throttle in self.get_throttles():
                 if hasattr(throttle, 'on_success'):
                     throttle.on_success(request)
+        elif response.status_code == status.HTTP_401_UNAUTHORIZED:
+            self._record_failure(request)
 
         return response
+
+    @staticmethod
+    def _record_failure(request):
+        # Only the address typed is kept, never the password. A failure to write
+        # the entry must not turn a wrong-password reply into a server error.
+        email = str(request.data.get('email', '')).strip().lower()[:254]
+        known = User.objects.filter(email__iexact=email).first() if email else None
+        try:
+            audit.record(
+                type=AuditLog.Type.LOGIN_FAILURE, action='failed',
+                summary=f'Failed sign-in for {email or "(no email given)"}',
+                target=known, target_email=email if '@' in email else '',
+                details={} if known else {'account_exists': False},
+                request=request,
+            )
+        except Exception:
+            logger.exception('could not record failed sign-in')
 
 
 class LogoutView(APIView):
@@ -169,7 +187,11 @@ class MeView(APIView):
                 {'detail': 'You are the only active admin. Assign another admin before deleting your account.'},
                 status=status.HTTP_409_CONFLICT,
             )
-        _set_account_active(user, False)
+        set_account_status(
+            user, UserProfile.AccountStatus.DEACTIVATED, actor=user,
+            reason='Deleted by the account holder.', request=request,
+            summary=f'{user.get_full_name() or user.email} deleted their own account',
+        )
         return Response({'detail': 'Your account has been deleted.'}, status=status.HTTP_200_OK)
 
 
@@ -238,7 +260,10 @@ class ReviewerApprovalView(APIView):
     On approve: activates the reviewer role, and notifies the applicant
     in-app and by email that their account is active and they can log in.
     """
-    permission_classes = [permissions.IsAdminUser]
+    # IsAdmin (the UserRole table), not DRF's IsAdminUser (Django's is_staff flag):
+    # an admin invited later is not staff, and would otherwise be refused here
+    # while every other admin screen let them in.
+    permission_classes = [IsAdmin]
     throttle_classes = [UserRateThrottle]
 
     def patch(self, request, pk):
@@ -257,10 +282,19 @@ class ReviewerApprovalView(APIView):
         new_status = (
             UserRole.Status.ACTIVE if action == 'approve' else UserRole.Status.REJECTED
         )
-        UserRole.objects.update_or_create(
-            user=user, role=UserProfile.Role.REVIEWER,
-            defaults={'status': new_status},
-        )
+        with transaction.atomic():
+            UserRole.objects.update_or_create(
+                user=user, role=UserProfile.Role.REVIEWER,
+                defaults={'status': new_status},
+            )
+            name = user.get_full_name() or user.email
+            audit.record(
+                type=AuditLog.Type.ROLE_CHANGE, action=action,
+                summary=(f'Approved {name} as a reviewer' if action == 'approve'
+                         else f'Rejected the reviewer application from {name}'),
+                actor=request.user, target=user, role=UserProfile.Role.REVIEWER,
+                request=request,
+            )
 
         if action == 'approve':
             Notification.objects.create(
@@ -551,7 +585,20 @@ class EditorOnboardView(APIView):
 
         existing = User.objects.filter(email__iexact=email).first()
         if existing is not None:
-            added = _grant_editor_role(existing)
+            if is_admin(existing):
+                return Response(
+                    {'detail': 'Administrator accounts cannot be given the editor role.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            with transaction.atomic():
+                added = _grant_editor_role(existing)
+                if added:
+                    audit.record(
+                        type=AuditLog.Type.ROLE_CHANGE, action='grant',
+                        summary=f'Promoted {existing.get_full_name() or existing.email} to editor (via editor invitation)',
+                        actor=request.user, target=existing, role=UserProfile.Role.EDITOR,
+                        request=request,
+                    )
             if institution or specialty_tags or orcid_id:
                 try:
                     profile = existing.profile
@@ -608,6 +655,16 @@ class EditorOnboardView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
+        # Recorded only once the email has gone: an invite that never left is
+        # deleted above and never existed as far as the invitee is concerned.
+        audit.record(
+            type=AuditLog.Type.INVITATION, action='invite',
+            summary=f'Invited {name or email} to become an editor',
+            actor=request.user, target_email=email, role=UserProfile.Role.EDITOR,
+            details={'invite_id': invite.pk, 'expires_at': invite.expires_at.isoformat()},
+            request=request,
+        )
+
         return Response(
             {'status': 'invited', **_invite_dict(invite)},
             status=status.HTTP_201_CREATED,
@@ -633,34 +690,129 @@ class EditorInviteDetailView(APIView):
                 {'detail': 'This invite has already been accepted and cannot be cancelled.'},
                 status=status.HTTP_409_CONFLICT,
             )
-        invite.delete()
+        with transaction.atomic():
+            audit.record(
+                type=AuditLog.Type.INVITATION, action='cancel',
+                summary=f'Cancelled the editor invitation for {invite.name or invite.email}',
+                actor=request.user, target_email=invite.email, role=UserProfile.Role.EDITOR,
+                details={'invite_id': invite.pk},
+                request=request,
+            )
+            invite.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ── Admin user management ────────────────────────────────────────────────────
 
-class AdminUserListView(generics.ListAPIView):
-    """GET /api/users/  (admin only) → every user, newest first."""
+def _page_param(raw, default, lo, hi):
+    try:
+        return max(lo, min(hi, int(raw)))
+    except (TypeError, ValueError):
+        return default
+
+
+class AdminUserListView(APIView):
+    """
+    GET /api/users/?page=&page_size=&search=&role=&status=&reviewer_status=
+    (admin only) → one page of users, newest first, plus filter counts.
+
+    See listUsers in api/admin.js for the contract. Every filter and count is a
+    database query, so response size and time stay flat as the user base grows.
+    """
     permission_classes = [IsAdmin]
     throttle_classes = [UserRateThrottle]
-    serializer_class = AdminUserListSerializer
-    pagination_class = None
+    DEFAULT_PAGE_SIZE = 20
+    MAX_PAGE_SIZE = 100
+    ROLES = (UserProfile.Role.AUTHOR, UserProfile.Role.REVIEWER, UserProfile.Role.EDITOR, UserProfile.Role.ADMIN)
 
-    def get_queryset(self):
-        return (
-            User.objects.select_related('profile')
-            .prefetch_related('roles')
-            .order_by('-date_joined')
+    # A deleted account is blocked and not suspended. The negated Q keeps users
+    # with no profile row at all, which are treated as deleted everywhere else.
+    SUSPENDED = Q(is_active=False, profile__account_status=UserProfile.AccountStatus.SUSPENDED)
+    DELETED = Q(is_active=False) & ~Q(profile__account_status=UserProfile.AccountStatus.SUSPENDED)
+    NOT_DELETED = Q(is_active=True) | SUSPENDED
+
+    @staticmethod
+    def _holds(role, role_status=UserRole.Status.ACTIVE):
+        return Q(roles__role=role, roles__status=role_status)
+
+    def get(self, request):
+        # So the list never shows a suspension as still running past its end date.
+        lift_expired_suspensions()
+        params = request.query_params
+
+        role = params.get('role', '').strip()
+        if role and role not in self.ROLES:
+            return Response({'detail': f'Unknown role: {role}'}, status=status.HTTP_400_BAD_REQUEST)
+        account = params.get('status', '').strip()
+        if account and account not in UserProfile.AccountStatus.values:
+            return Response({'detail': f'Unknown status: {account}'}, status=status.HTTP_400_BAD_REQUEST)
+        reviewer_status = params.get('reviewer_status', '').strip()
+        if reviewer_status and reviewer_status != UserRole.Status.PENDING:
+            return Response({'detail': "reviewer_status must be 'pending'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        base = User.objects.all()
+        search = params.get('search', '').strip()
+        if search:
+            base = base.annotate(
+                full_name=Concat('first_name', Value(' '), 'last_name', output_field=CharField()),
+            ).filter(
+                Q(email__icontains=search) | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search) | Q(full_name__icontains=search)
+            )
+
+        # One aggregate query for every chip. distinct=True because the role
+        # conditions join UserRole, which repeats a user once per role held.
+        count_filters = {
+            'all': self.NOT_DELETED,
+            'suspended': self.SUSPENDED,
+            'deleted': self.DELETED,
+            **{r.value: self.NOT_DELETED & self._holds(r) for r in self.ROLES},
+        }
+        counts = base.aggregate(**{
+            name: Count('id', filter=condition, distinct=True) for name, condition in count_filters.items()
+        })
+
+        qs = base
+        if account == UserProfile.AccountStatus.ACTIVE:
+            qs = qs.filter(is_active=True)
+        elif account == UserProfile.AccountStatus.SUSPENDED:
+            qs = qs.filter(self.SUSPENDED)
+        elif account == UserProfile.AccountStatus.DEACTIVATED:
+            qs = qs.filter(self.DELETED)
+        else:
+            qs = qs.filter(self.NOT_DELETED)
+        # (user, role) is unique, so each of these joins matches at most one row
+        # per user and needs no DISTINCT.
+        if role:
+            qs = qs.filter(self._holds(role))
+        if reviewer_status:
+            qs = qs.filter(self._holds(UserProfile.Role.REVIEWER, UserRole.Status.PENDING))
+
+        page_size = _page_param(params.get('page_size'), self.DEFAULT_PAGE_SIZE, 1, self.MAX_PAGE_SIZE)
+        page = _page_param(params.get('page'), 1, 1, 10**6)
+        total = qs.count()
+        start = (page - 1) * page_size
+        rows = (
+            qs.select_related('profile').prefetch_related('roles')
+            .order_by('-date_joined', '-id')[start:start + page_size]
         )
+        return Response({
+            'results': AdminUserListSerializer(rows, many=True).data,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'counts': counts,
+        })
 
 
 class AdminUserStatusView(APIView):
     """
     PATCH /api/users/<pk>/status/   (admin only)
-    Body: { status: 'active' | 'deactivated' | 'suspended', reason? }
+    Body: { status: 'active' | 'suspended' | 'deactivated', reason, suspended_until? }
 
-    'deactivated'/'suspended' → soft delete (no login, hidden from pools, history
-    kept). 'active' → restore. Admins cannot deactivate themselves or each other.
+    See patchUserStatus in api/admin.js for the contract and account_status.py
+    for what each state does. Admins cannot change their own status or another
+    admin's.
     """
     permission_classes = [IsAdmin]
     throttle_classes = [UserRateThrottle]
@@ -681,15 +833,129 @@ class AdminUserStatusView(APIView):
             )
 
         new_status = (request.data.get('status') or '').lower()
-        if new_status == 'active':
-            _set_account_active(target, True)
-        elif new_status in ('deactivated', 'suspended'):
-            _set_account_active(target, False)
-        else:
+        if new_status not in ('active', 'deactivated', 'suspended'):
             return Response(
                 {'detail': "status must be 'active', 'deactivated' or 'suspended'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        reason = str(request.data.get('reason') or '').strip()
+        if new_status != 'active' and not reason:
+            return Response(
+                {'detail': 'A reason is required to suspend or delete an account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        until = None
+        raw_until = str(request.data.get('suspended_until') or '').strip()
+        if raw_until:
+            if new_status != 'suspended':
+                return Response(
+                    {'detail': 'suspended_until only applies to a suspension.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                day = date.fromisoformat(raw_until)
+            except ValueError:
+                return Response(
+                    {'detail': 'suspended_until must be a date in YYYY-MM-DD form.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if day <= timezone.localdate():
+                return Response(
+                    {'detail': 'The suspension must end on a future date.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Access comes back at the start of that day, in the platform's timezone.
+            until = timezone.make_aware(datetime.combine(day, time.min))
+
+        _, released = set_account_status(
+            target, new_status, actor=request.user, reason=reason, until=until, request=request,
+        )
+        target.refresh_from_db()
+        return Response({
+            **AdminUserListSerializer(target).data,
+            'released_reviews': len(released),
+        })
+
+
+class AdminUserRoleView(APIView):
+    """
+    PATCH /api/users/<pk>/roles/   (admin only)
+    Body: { role: 'editor', action: 'grant' | 'revoke' }
+
+    How editors are made from existing accounts. See patchUserRole in
+    api/admin.js for the contract.
+    """
+    permission_classes = [IsAdmin]
+    throttle_classes = [UserRateThrottle]
+    PROMOTABLE_ROLES = (UserProfile.Role.EDITOR,)
+
+    def patch(self, request, pk):
+        role = request.data.get('role')
+        action = request.data.get('action')
+        if action not in ('grant', 'revoke'):
+            return Response({'detail': "action must be 'grant' or 'revoke'."}, status=status.HTTP_400_BAD_REQUEST)
+        if role not in self.PROMOTABLE_ROLES:
+            return Response(
+                {'detail': f"The '{role}' role cannot be granted or revoked here. Administrators are invite-only."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        target = User.objects.filter(pk=pk).first()
+        if target is None:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        # Covers the caller too, since only admins reach this view. Without it an
+        # admin could grant themselves editor and record decisions they are barred from.
+        if is_admin(target):
+            return Response(
+                {'detail': 'Administrator accounts cannot have their roles changed here.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        name = target.get_full_name() or target.email
+        with transaction.atomic():
+            if action == 'grant':
+                changed = _grant_editor_role(target)
+                if changed:
+                    audit.record(
+                        type=AuditLog.Type.ROLE_CHANGE, action='grant',
+                        summary=f'Promoted {name} to editor',
+                        actor=request.user, target=target, role=role, request=request,
+                    )
+                    Notification.objects.create(
+                        recipient=target, category=Notification.Category.ROLE,
+                        title='You are now an editor',
+                        body='An administrator granted your account the editor role.',
+                    )
+            else:
+                held = target.roles.filter(role=role).first()
+                changed = held is not None
+                if changed:
+                    others = target.roles.filter(status=UserRole.Status.ACTIVE).exclude(role=role).exists()
+                    if not others:
+                        return Response(
+                            {'detail': f'Editor is the only role {name} holds. Deactivate the account instead.'},
+                            status=status.HTTP_409_CONFLICT,
+                        )
+                    held.delete()
+                    audit.record(
+                        type=AuditLog.Type.ROLE_CHANGE, action='revoke',
+                        summary=f'Removed editor access from {name}',
+                        actor=request.user, target=target, role=role, request=request,
+                    )
+                    Notification.objects.create(
+                        recipient=target, category=Notification.Category.ROLE,
+                        title='Your editor role was removed',
+                        body='An administrator removed the editor role from your account.',
+                    )
+
+        if action == 'grant' and changed:
+            try:
+                send_editor_role_added_email(target)
+            except Exception:
+                logger.exception('editor role-added email failed for %s', target.email)
+
         return Response(AdminUserListSerializer(target).data)
 
 

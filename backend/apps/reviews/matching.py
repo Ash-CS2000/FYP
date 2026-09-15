@@ -86,7 +86,12 @@ def _score_and_reasons(manuscript, profile):
 def rank_candidates(manuscript):
     profiles = (
         UserProfile.objects
-        .filter(user__roles__role=UserProfile.Role.REVIEWER, user__roles__status=UserRole.Status.ACTIVE)
+        # user__is_active: a suspended or deleted reviewer cannot sign in to
+        # respond, so suggesting them would only stall the manuscript.
+        .filter(
+            user__is_active=True,
+            user__roles__role=UserProfile.Role.REVIEWER, user__roles__status=UserRole.Status.ACTIVE,
+        )
         .select_related('user')
         .distinct()
     )

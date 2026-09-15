@@ -16,6 +16,7 @@ from .views import (
     EditorInviteView,
     AdminUserListView,
     AdminUserStatusView,
+    AdminUserRoleView,
 )
 
 urlpatterns = [
@@ -34,6 +35,7 @@ urlpatterns = [
     path('apply-reviewer/', ApplyReviewerView.as_view(), name='apply-reviewer'),
     path('<int:pk>/reviewer-status/', ReviewerApprovalView.as_view(), name='reviewer-status'),
     path('<int:pk>/status/', AdminUserStatusView.as_view(), name='user-status'),
+    path('<int:pk>/roles/', AdminUserRoleView.as_view(), name='user-roles'),
 
     # Editor onboarding
     path('editors/', EditorOnboardView.as_view(), name='editor-onboard'),

@@ -3,8 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import EditableCard, { ReadRow, InstantToggle } from '../components/EditableCard.jsx';
 import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
-import { getScreeningSettings, patchScreeningSettings } from '../api/similarity.js';
-import { loadLocalSettings, saveLocalSettings } from '../data/screeningSettings.js';
+import { patchScreeningSettings } from '../api/similarity.js';
+import { useScreeningSettings, publishScreeningSettings } from '../hooks/useScreeningSettings.js';
 import { deleteAccount, clearSession } from '../api/auth';
 import { updatePreferences, changePassword, DEFAULT_PREFERENCES } from '../api/account';
 
@@ -412,29 +412,55 @@ function DangerZoneCard() {
 // role model: editors act on the bands, admins define them. Every other screen
 // re-bands its existing reports from these numbers; changing one never re-runs a
 // check.
+// Numbers are saved with an explicit button, not on every keystroke: each save
+// is a policy change written to the audit log, and typing "40" must not record
+// a change to 4 on the way.
+const NUMERIC_SCREENING_FIELDS = ['review_threshold', 'high_threshold', 'min_words'];
+
 function ScreeningSettingsCard() {
-  const [settings, setSettings] = useState(loadLocalSettings);
-  const [status, setStatus] = useState('');
+  const { settings, status } = useScreeningSettings();
+  const [draft, setDraft] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    getScreeningSettings()
-      .then((server) => { if (!cancelled) setSettings((prev) => ({ ...prev, ...server })); })
-      // Backend not up yet — the locally persisted values stand in, so the rest of
-      // the app still re-bands correctly.
-      .catch(() => { if (!cancelled) setStatus('offline'); });
-    return () => { cancelled = true; };
-  }, []);
+  const values = { ...settings, ...draft };
+  const changed = Object.keys(draft).filter(k => Number(draft[k]) !== Number(settings[k]));
+  const invalid = Number(values.review_threshold) >= Number(values.high_threshold);
+  const outOfRange =
+    [values.review_threshold, values.high_threshold].some(v => v === '' || v < 0 || v > 100)
+    || values.min_words === '' || values.min_words < 0 || values.min_words > 200;
+  const locked = status !== 'ready';
 
-  const update = (patch) => {
-    const next = { ...settings, ...patch };
-    setSettings(next);
-    saveLocalSettings(next);
-    setStatus('');
-    patchScreeningSettings(patch).catch(() => setStatus('offline'));
+  const edit = (patch) => {
+    setDraft(prev => ({ ...prev, ...patch }));
+    setSaveError('');
+    setSaved(false);
   };
 
-  const invalid = Number(settings.review_threshold) >= Number(settings.high_threshold);
+  async function saveNumbers() {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const patch = Object.fromEntries(changed.map(k => [k, Number(draft[k])]));
+      publishScreeningSettings(await patchScreeningSettings(patch));
+      setDraft({});
+      setSaved(true);
+    } catch (err) {
+      setSaveError(err?.message || 'Could not save the thresholds. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Thrown errors surface inside InstantToggle, next to the switch that failed.
+  async function saveToggle(key, next) {
+    publishScreeningSettings(await patchScreeningSettings({ [key]: next }));
+  }
+
+  const lastChanged = settings.updated_at
+    ? `Last changed by ${settings.updated_by_name || 'an administrator'} on ${new Date(settings.updated_at).toLocaleString()}.`
+    : 'Using the platform defaults — never changed.';
 
   const toggles = [
     ['exclude_quotes', 'Exclude quotations', 'Text inside quotation marks is not counted towards the score.'],
@@ -448,8 +474,10 @@ function ScreeningSettingsCard() {
         <div>
           <div className="card-title">Similarity screening</div>
           <div className="card-meta">
-            Thresholds and exclusions applied to every submission.
-            {status === 'offline' && ' Saved locally — the analysis service is unavailable.'}
+            Thresholds and exclusions applied to every submission, for every editor.{' '}
+            {status === 'loading' && 'Loading the current policy…'}
+            {status === 'error' && 'Could not load the current policy, so changes are disabled.'}
+            {status === 'ready' && lastChanged}
           </div>
         </div>
       </div>
@@ -457,16 +485,16 @@ function ScreeningSettingsCard() {
       <div className="field-grid">
         <div className="field">
           <label className="field-label">Review threshold (%)</label>
-          <input className="field-input" type="number" min="0" max="100"
-                 value={settings.review_threshold}
-                 onChange={(e) => update({ review_threshold: Number(e.target.value) })} />
+          <input className="field-input" type="number" min="0" max="100" disabled={locked}
+                 value={values.review_threshold}
+                 onChange={(e) => edit({ review_threshold: e.target.value === '' ? '' : Number(e.target.value) })} />
           <div className="field-hint">At or above this, the score is shown in amber for the editor’s attention.</div>
         </div>
         <div className="field">
           <label className="field-label">Flag threshold (%)</label>
-          <input className="field-input" type="number" min="0" max="100"
-                 value={settings.high_threshold}
-                 onChange={(e) => update({ high_threshold: Number(e.target.value) })} />
+          <input className="field-input" type="number" min="0" max="100" disabled={locked}
+                 value={values.high_threshold}
+                 onChange={(e) => edit({ high_threshold: e.target.value === '' ? '' : Number(e.target.value) })} />
           <div className="field-hint">At or above this, the manuscript is flagged for screening before review.</div>
         </div>
       </div>
@@ -479,10 +507,34 @@ function ScreeningSettingsCard() {
 
       <div className="field">
         <label className="field-label">Ignore matches shorter than</label>
-        <input className="field-input" type="number" min="1" max="60" style={{ maxWidth: 140 }}
-               value={settings.min_words}
-               onChange={(e) => update({ min_words: Number(e.target.value) })} />
+        <input className="field-input" type="number" min="0" max="200" style={{ maxWidth: 140 }} disabled={locked}
+               value={values.min_words}
+               onChange={(e) => edit({ min_words: e.target.value === '' ? '' : Number(e.target.value) })} />
         <div className="field-hint">Words. Short common phrases match everywhere and are rarely meaningful.</div>
+      </div>
+
+      {outOfRange && (
+        <div className="field-hint" style={{ color: 'var(--red-800)' }}>
+          Thresholds must be between 0 and 100, and the minimum match length between 0 and 200.
+        </div>
+      )}
+
+      <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 18 }}>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          disabled={locked || saving || changed.length === 0 || invalid || outOfRange}
+          onClick={saveNumbers}
+        >
+          {saving ? 'Saving…' : 'Save thresholds'}
+        </button>
+        {changed.length > 0 && !saving && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setDraft({}); setSaveError(''); }}>
+            Discard
+          </button>
+        )}
+        {saved && <span style={{ fontSize: 12.5, color: 'var(--teal-700)' }}>Saved — every editor now sees the new bands.</span>}
+        {saveError && <span style={{ fontSize: 12.5, color: 'var(--red-800)' }}>{saveError}</span>}
       </div>
 
       {toggles.map(([key, label, desc]) => (
@@ -491,7 +543,8 @@ function ScreeningSettingsCard() {
           label={label}
           desc={desc}
           checked={settings[key]}
-          onChange={(nextValue) => { update({ [key]: nextValue }); }}
+          disabled={locked}
+          onChange={(nextValue) => saveToggle(key, nextValue)}
         />
       ))}
 

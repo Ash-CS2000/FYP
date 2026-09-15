@@ -35,6 +35,8 @@ INSTALLED_APPS = [
     'apps.analysis',
     'apps.publications',
     'apps.discovery',
+    'apps.audit',
+    'apps.system',
 ]
 
 MIDDLEWARE = [
@@ -111,7 +113,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # JWTAuthentication, plus refusing tokens issued before an admin's
+        # "sign out everyone" — see apps/system/sessions.py.
+        'apps.system.authentication.RevocableJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -143,6 +147,7 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'TOKEN_REFRESH_SERIALIZER': 'apps.system.authentication.RevocableTokenRefreshSerializer',
 }
 
 CORS_ALLOWED_ORIGINS = [

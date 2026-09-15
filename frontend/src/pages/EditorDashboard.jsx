@@ -4,7 +4,8 @@ import AppShell from '../components/AppShell.jsx';
 import { listAllManuscripts } from '../api/manuscripts.js';
 import { STATUS_LABELS, statusPillClass } from '../data/manuscriptStatus.js';
 import { bandFor } from '../data/similarity.js';
-import { thresholdsFrom, loadLocalSettings } from '../data/screeningSettings.js';
+import { thresholdsFrom } from '../data/screeningSettings.js';
+import { useScreeningSettings } from '../hooks/useScreeningSettings.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CATEGORY_COLORS = ['var(--navy-700)', 'var(--amber-500)', 'var(--teal-500)', 'var(--purple-700)', 'var(--red-500)'];
@@ -25,6 +26,7 @@ export default function EditorDashboard() {
   const [manuscripts, setManuscripts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const { settings: screeningSettings } = useScreeningSettings();
 
   useEffect(() => {
     let cancelled = false;
@@ -35,9 +37,7 @@ export default function EditorDashboard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Thresholds are admin policy, re-read on every render — same reason as
-  // EditorSubmissions.jsx: a threshold change must re-flag immediately.
-  const thresholds = thresholdsFrom(loadLocalSettings());
+  const thresholds = thresholdsFrom(screeningSettings);
 
   const pendingPapers = manuscripts
     .filter(m => m.latest_decision === null && (m.status === 'submitted' || m.status === 'under_review'))

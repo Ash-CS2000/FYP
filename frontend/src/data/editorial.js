@@ -207,8 +207,7 @@ export const SCREENING_ACTIONS = [
 ];
 
 // ── Local store ──────────────────────────────────────────────────────────────
-// Same fallback pattern as loadLocalSettings in data/similarity.js. Once the
-// endpoints exist the server is the source of truth and this is offline only.
+// Once the endpoints exist the server is the source of truth and this is offline only.
 
 function loadMap(key) {
   try {

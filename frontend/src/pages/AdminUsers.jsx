@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import SearchField from '../components/SearchField.jsx';
-import { patchUserRole, patchUserStatus, listUsers, listAuditLog } from '../api/admin.js';
-import { getStoredUser } from '../auth/roles';
+import Pagination from '../components/Pagination.jsx';
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
+import { patchUserRole, patchUserStatus, listUsers, listAuditLog, USERS_PAGE_SIZE } from '../api/admin.js';
 
 function getPrimaryRole(u) {
   if (u.roles?.includes('admin'))    return 'Admin';
@@ -27,6 +29,7 @@ function toRow(u) {
     reviewer_status: u.reviewer_status || '',
     institution: u.institution || '—',
     status: u.status || (u.is_active === false ? 'deactivated' : 'active'),
+    suspended_until: u.suspended_until || null,
     date: u.joined
       ? new Date(u.joined).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
       : '—',
@@ -34,75 +37,116 @@ function toRow(u) {
   };
 }
 
-// Shape mirrors the audit_logs row the backend is expected to write (see
-// api/admin.js). `local: true` marks entries this session invented because the
-// server was unreachable — they are never the real trail.
-function localAudit(actor, action, role, target, reason = '') {
-  return {
-    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    actor_name: actor?.name || 'You',
-    action,
-    role,
-    reason,
-    target_name: target?.name || target?.email || '—',
-    target_email: target?.email || '',
-    created_at: new Date().toISOString(),
-    local: true,
-  };
+function shortDate(iso) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const ACTION_TEXT = {
-  grant:       { verb: 'promoted',    color: 'var(--teal-800)' },
-  revoke:      { verb: 'revoked',     color: 'var(--red-700)' },
-  approve:     { verb: 'approved',    color: 'var(--teal-800)' },
-  reject:      { verb: 'rejected',    color: 'var(--red-700)' },
-  invite:      { verb: 'invited',     color: 'var(--navy-700)' },
-  suspended:   { verb: 'suspended',   color: 'var(--red-700)' },
-  deactivated: { verb: 'deactivated', color: 'var(--red-700)' },
-  reactivate:  { verb: 'reactivated', color: 'var(--teal-800)' },
+// Account state outranks a pending reviewer application: a suspended applicant
+// is suspended first.
+function statusPill(u) {
+  if (u.status === 'suspended') {
+    return { cls: 'pill-suspended', label: u.suspended_until ? `Suspended until ${shortDate(u.suspended_until)}` : 'Suspended' };
+  }
+  if (u.status === 'deactivated') return { cls: 'pill-deleted', label: 'Deleted' };
+  if (u.reviewer_status === 'pending') return { cls: 'pill-pending', label: 'Reviewer Pending' };
+  return { cls: 'pill-active', label: 'Active' };
+}
+
+// Each filter chip is a server query. Deleted accounts only ever come back under
+// their own filter; suspended ones appear in the normal lists and in their own.
+const FILTER_PARAMS = {
+  all:       {},
+  author:    { role: 'author' },
+  reviewer:  { role: 'reviewer' },
+  editor:    { role: 'editor' },
+  suspended: { status: 'suspended' },
+  deleted:   { status: 'deactivated' },
 };
+const EMPTY_COUNTS = { all: 0, author: 0, reviewer: 0, editor: 0, admin: 0, suspended: 0, deleted: 0 };
 
 export default function AdminUsers() {
   const [filter, setFilter]   = useState('all');
   const [search, setSearch]   = useState('');
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const [users, setUsers]     = useState([]);
-  const [usersLoading, setUsersLoading] = useState(true);
+  const [total, setTotal]     = useState(0);
+  const [counts, setCounts]   = useState(EMPTY_COUNTS);
+  const [usersLoading, setUsersLoading] = useState(true); // first load only
+  const [refreshing, setRefreshing] = useState(false);    // later loads keep the rows visible
   const [usersError, setUsersError] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [audit, setAudit]     = useState([]);
-  const [auditLive, setAuditLive] = useState(false);
+  const [auditState, setAuditState] = useState('loading'); // loading | ready | error
+  const [notice, setNotice]   = useState(null); // { tone: 'ok' | 'error', text }
+  const requestSeq = useRef(0);
+  const tableTop = useRef(null);
 
-  const actor = getStoredUser();
+  // The page number belongs to one filter + search combination. Changing either
+  // lands on page 1 without a separate reset, so there is never a wasted request
+  // for "page 5 of the old search".
+  const queryKey = `${filter}|${debouncedSearch}`;
+  const [pageState, setPageState] = useState({ key: queryKey, page: 1 });
+  // Reset during render (not in an effect) so the stale page is never requested,
+  // and so returning to an earlier search starts at page 1 rather than where it was.
+  if (pageState.key !== queryKey) setPageState({ key: queryKey, page: 1 });
+  const page = pageState.key === queryKey ? pageState.page : 1;
+  const goToPage = (n) => {
+    setPageState({ key: queryKey, page: n });
+    tableTop.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
 
-  function loadUsers() {
-    setUsersLoading(true);
-    setUsersError('');
-    listUsers()
-      .then(rows => setUsers(Array.isArray(rows) ? rows.map(toRow) : []))
-      .catch(() => setUsersError('Could not load users from the server.'))
-      .finally(() => setUsersLoading(false));
+  function loadAudit() {
+    listAuditLog({ limit: 10 })
+      .then(rows => { setAudit(rows); setAuditState('ready'); })
+      .catch(() => setAuditState('error'));
   }
 
-  useEffect(() => {
-    // Best effort: if the audit endpoint is live we show the real trail,
-    // otherwise the panel falls back to this session's actions.
-    listAuditLog({ limit: 10 })
-      .then(rows => { if (Array.isArray(rows)) { setAudit(rows); setAuditLive(true); } })
-      .catch(() => { /* backend unavailable — stay on local entries */ });
-    loadUsers();
-  }, []);
+  function loadUsers() {
+    // Only the newest request may update the table — a slow reply for an old
+    // search must not overwrite the results for the current one.
+    const seq = ++requestSeq.current;
+    setRefreshing(true);
+    setUsersError('');
+    listUsers({ page, search: debouncedSearch, ...FILTER_PARAMS[filter] })
+      .then(res => {
+        if (seq !== requestSeq.current) return;
+        // The last row on the last page was just moved away (e.g. deleted).
+        if (res.results.length === 0 && res.total > 0 && page > 1) {
+          setPageState({ key: queryKey, page: Math.ceil(res.total / res.page_size) });
+          return;
+        }
+        setUsers(res.results.map(toRow));
+        setTotal(res.total);
+        setCounts({ ...EMPTY_COUNTS, ...res.counts });
+      })
+      .catch(() => { if (seq === requestSeq.current) setUsersError('Could not load users from the server.'); })
+      .finally(() => {
+        if (seq === requestSeq.current) {
+          setUsersLoading(false);
+          setRefreshing(false);
+        }
+      });
+  }
 
-  // One path for every user mutation: try the server, fall back to a local
-  // update so the page still demonstrates while the backend is paused.
-  async function applyUserChange({ key, request, fallback, auditRow }) {
+  useEffect(() => { loadAudit(); }, []);
+  useEffect(() => { loadUsers(); }, [queryKey, page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // One path for every user mutation. The table only changes once the server
+  // confirms: a change that failed must never look like it worked, because the
+  // admin will act on what this screen tells them.
+  async function applyUserChange({ key, request, successText, failureText }) {
     setActionLoading(key);
+    setNotice(null);
     try {
       const updated = await request();
-      setUsers(prev => prev.map(u => (u.id === updated.id ? { ...u, ...updated } : u)));
-    } catch {
-      setUsers(prev => prev.map(fallback));
+      setUsers(prev => prev.map(u => (u.id === updated.id ? toRow(updated) : u)));
+      setNotice({ tone: 'ok', text: typeof successText === 'function' ? successText(updated) : successText });
+      loadAudit();
+      // The change can move the user out of this filter and shifts the counts.
+      loadUsers();
+    } catch (err) {
+      setNotice({ tone: 'error', text: `${failureText} ${err?.message || ''}`.trim() });
     } finally {
-      if (auditRow) setAudit(prev => [auditRow, ...prev]);
       setActionLoading(null);
     }
   }
@@ -112,42 +156,41 @@ export default function AdminUsers() {
     const target = users.find(u => u.id === userId);
     // Admins are out of reach of promotion/demotion entirely.
     if ((target?.roles || []).includes('admin')) return undefined;
+    const name = target?.name || 'this user';
     return applyUserChange({
       key: `${userId}-${role}-${action}`,
       request: () => patchUserRole(userId, role, action),
-      fallback: (u) => {
-        if (u.id !== userId) return u;
-        const roles = action === 'grant'
-          ? [...new Set([...(u.roles || []), role])]
-          : (u.roles || []).filter(r => r !== role);
-        return { ...u, roles };
-      },
-      auditRow: localAudit(actor, action, role, target),
+      successText: action === 'grant' ? `${name} is now an editor.` : `Editor access removed from ${name}.`,
+      failureText: action === 'grant' ? `Could not promote ${name}.` : `Could not remove editor access from ${name}.`,
     });
   }
 
-  // Suspension and deactivation. Never a delete — see patchUserStatus in
-  // api/admin.js for what the server has to do about work already in flight.
-  function handleStatusAction(userId, status, reason) {
+  // Suspension and soft deletion. Never a hard delete — see patchUserStatus in
+  // api/admin.js for what each state does to the reviews a user is holding.
+  function handleStatusAction(userId, status, reason, until) {
     const target = users.find(u => u.id === userId);
     if ((target?.roles || []).includes('admin')) return undefined;
+    const name = target?.name || 'this user';
+    const wasDeleted = target?.status === 'deactivated';
     return applyUserChange({
       key: `${userId}-status-${status}`,
-      request: () => patchUserStatus(userId, status, reason),
-      fallback: (u) => (u.id === userId ? { ...u, status } : u),
-      auditRow: localAudit(actor, status === 'active' ? 'reactivate' : status, 'account', target, reason),
+      request: () => patchUserStatus(userId, status, reason, until),
+      successText: (updated) => {
+        const released = updated.released_reviews
+          ? ` ${updated.released_reviews} review${updated.released_reviews === 1 ? '' : 's'} they were holding went back to the editor${updated.released_reviews === 1 ? '' : 's'}.`
+          : '';
+        if (status === 'suspended') {
+          const ends = updated.suspended_until ? ` until ${shortDate(updated.suspended_until)}` : ' with no end date';
+          return `${name} is suspended${ends}.${released}`;
+        }
+        if (status === 'deactivated') return `${name}'s account was deleted. It is now under the Deleted filter.${released}`;
+        return wasDeleted ? `${name}'s account was restored.` : `${name}'s account was reactivated.`;
+      },
+      failureText: `Could not update ${name}'s account.`,
     });
   }
 
-  const query = search.trim().toLowerCase();
-  const filtered = users.filter(u => {
-    if (filter !== 'all' && !(u.roles || []).includes(filter)) return false;
-    if (!query) return true;
-    return (u.name || '').toLowerCase().includes(query)
-      || (u.email || '').toLowerCase().includes(query);
-  });
-
-  const roleCounts = role => users.filter(u => (u.roles || []).includes(role)).length;
+  const hiddenDeletedMatches = filter !== 'deleted' && debouncedSearch ? counts.deleted : 0;
 
   return (
     <AppShell role="admin">
@@ -160,13 +203,28 @@ export default function AdminUsers() {
         .adm-menu-item.danger { color:#fca5a5; }
         .adm-menu-sep { height:1px; margin:5px 8px; background:rgba(255,255,255,0.12); }
         .adm-menu-note { padding:9px 12px; font-size:12px; color:var(--navy-200); line-height:1.5; }
-        .adm-confirm { padding:10px 12px; }
+        .adm-confirm { padding:10px 12px; width:270px; }
         .adm-confirm p { font-size:12.5px; color:var(--navy-200); line-height:1.5; margin-bottom:10px; }
         .adm-confirm-row { display:flex; gap:6px; }
+        /* The menu is dark navy; the global form label and required star are
+           dark-on-light and disappear here. */
+        .adm-confirm .field-label { color:var(--navy-200); font-size:12.5px; }
+        .adm-confirm .field-label .req { color:#fca5a5; }
+        .adm-confirm .btn:disabled { opacity:.45; cursor:not-allowed; }
+        /* fade-up leaves every card as its own stacking layer, so the card below
+           painted over the row menu whenever the list was short. Lift this one. */
+        .adm-table-card { position:relative; z-index:2; scroll-margin-top:16px; }
+        .adm-refreshing tbody { opacity:.55; transition:opacity var(--t-fast); }
         .adm-audit-row { display:flex; gap:10px; align-items:baseline; padding:9px 0; border-bottom:1px solid var(--ink-100); font-size:13px; }
         .adm-audit-row:last-child { border-bottom:none; }
         .adm-audit-time { margin-left:auto; font-size:11.5px; color:var(--ink-600); white-space:nowrap; }
-        .adm-tag-local { font-size:10px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; padding:1px 6px; border-radius:99px; background:var(--ink-100); color:var(--ink-700); }
+        .pill-suspended { background:var(--amber-50); color:var(--amber-800); }
+        .pill-deleted   { background:var(--red-50); color:var(--red-800); }
+        .adm-confirm input[type=date] { color-scheme:light; }
+        .adm-confirm .field-hint { color:var(--navy-300); }
+        .adm-filter-sep { width:1px; align-self:stretch; background:var(--ink-200); margin:2px 2px; }
+        .adm-deleted-hint { font-size:12.5px; color:var(--ink-600); padding:0 0 12px; }
+        .adm-deleted-hint button { color:var(--navy-700); font-weight:600; }
         /* .card-header is global and has no gap/wrap; scope both to this one. */
         .adm-toolbar { gap:16px; flex-wrap:wrap; }
       `}</style>
@@ -179,15 +237,29 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      <div className="card fade-up delay-2">
+      {notice && (
+        <div
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          className="card fade-up"
+          style={{
+            borderLeft: `3px solid ${notice.tone === 'error' ? 'var(--red-700)' : 'var(--teal-600)'}`,
+            padding: '12px 18px', fontSize: 13.5, marginBottom: 16,
+            color: notice.tone === 'error' ? 'var(--red-800)' : 'var(--navy-900)',
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}
+        >
+          <span style={{ flex: 1 }}>{notice.text}</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setNotice(null)} aria-label="Dismiss">×</button>
+        </div>
+      )}
+
+      <div className="card fade-up delay-2 adm-table-card" ref={tableTop}>
         <div className="card-header adm-toolbar">
           <div>
             <div className="card-title">
               {usersLoading
                 ? 'Loading users…'
-                : query
-                  ? `${filtered.length} of ${users.length} users`
-                  : `${filtered.length} users`}
+                : `${total.toLocaleString()} ${filter === 'deleted' ? 'deleted ' : filter === 'suspended' ? 'suspended ' : ''}user${total === 1 ? '' : 's'}`}
             </div>
           </div>
           <SearchField
@@ -198,19 +270,29 @@ export default function AdminUsers() {
           />
           <div className="row">
             {[
-              { id: 'all',      label: 'All',       count: users.length },
-              { id: 'author',   label: 'Authors',   count: roleCounts('author') },
-              { id: 'reviewer', label: 'Reviewers', count: roleCounts('reviewer') },
-              { id: 'editor',   label: 'Editors',   count: roleCounts('editor') },
-            ].map(f => (
+              { id: 'all',      label: 'All',       count: counts.all },
+              { id: 'author',   label: 'Authors',   count: counts.author },
+              { id: 'reviewer', label: 'Reviewers', count: counts.reviewer },
+              { id: 'editor',   label: 'Editors',   count: counts.editor },
+              { id: 'sep' },
+              { id: 'suspended', label: 'Suspended', count: counts.suspended },
+              { id: 'deleted',  label: 'Deleted',   count: counts.deleted },
+            ].map(f => (f.id === 'sep' ? <span key="sep" className="adm-filter-sep" aria-hidden="true" /> : (
               <button key={f.id} className={`filter-chip ${filter === f.id ? 'active' : ''}`} onClick={() => setFilter(f.id)}>
                 {f.label} <span style={{ opacity: .6 }}>{f.count}</span>
               </button>
-            ))}
+            )))}
           </div>
         </div>
 
-        <table className="data-table">
+        {hiddenDeletedMatches > 0 && (
+          <p className="adm-deleted-hint">
+            {hiddenDeletedMatches} deleted account{hiddenDeletedMatches === 1 ? ' also matches' : 's also match'} this search.{' '}
+            <button type="button" onClick={() => setFilter('deleted')}>Show deleted</button>
+          </p>
+        )}
+
+        <table className={`data-table ${refreshing && !usersLoading ? 'adm-refreshing' : ''}`} aria-busy={refreshing}>
           <thead><tr><th>User</th><th>Role(s)</th><th>Institution</th><th>Joined</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {usersLoading ? (
@@ -222,11 +304,15 @@ export default function AdminUsers() {
                   <button className="btn btn-ghost btn-sm" onClick={loadUsers}>Retry</button>
                 </div>
               </td></tr>
-            ) : filtered.length === 0 ? (
+            ) : users.length === 0 ? (
               <tr><td colSpan={6}><p className="muted" style={{ fontSize: 13, padding: '16px 0' }}>
-                {query ? `No users match “${search.trim()}”.` : 'No users match this filter.'}
+                {debouncedSearch
+                  ? `No users match “${debouncedSearch}”.`
+                  : filter === 'deleted' ? 'No deleted accounts.'
+                  : filter === 'suspended' ? 'No suspended accounts.'
+                  : 'No users match this filter.'}
               </p></td></tr>
-            ) : filtered.map(u => (
+            ) : users.map(u => (
               <tr key={u.id}>
                 <td>
                   <div className="row">
@@ -249,8 +335,8 @@ export default function AdminUsers() {
                 <td><span className="muted">{u.institution}</span></td>
                 <td><span className="muted">{u.date}</span></td>
                 <td>
-                  <span className={`pill pill-${u.reviewer_status === 'pending' ? 'pending' : u.status}`}>
-                    {u.reviewer_status === 'pending' ? 'Reviewer Pending' : u.status === 'active' ? 'Active' : u.status}
+                  <span className={`pill ${statusPill(u).cls}`}>
+                    {statusPill(u).label}
                   </span>
                 </td>
                 <td>
@@ -258,13 +344,17 @@ export default function AdminUsers() {
                     user={u}
                     busy={actionLoading?.startsWith(`${u.id}-`)}
                     onRoleAction={(role, action) => handleRoleAction(u.id, role, action)}
-                    onStatusAction={(status, reason) => handleStatusAction(u.id, status, reason)}
+                    onStatusAction={(status, reason, until) => handleStatusAction(u.id, status, reason, until)}
                   />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        {!usersLoading && !usersError && (
+          <Pagination page={page} pageSize={USERS_PAGE_SIZE} total={total} onChange={goToPage} busy={refreshing} />
+        )}
       </div>
 
       <div className="card fade-up delay-3">
@@ -272,30 +362,29 @@ export default function AdminUsers() {
           <div>
             <div className="card-title">Recent role changes</div>
             <div className="table-meta" style={{ marginTop: 2 }}>
-              {auditLive
-                ? 'From the server audit log.'
-                : 'Audit service unavailable — showing this session only.'}
+              From the audit log. <Link to="/admin/audit" style={{ color: 'var(--navy-700)', fontWeight: 600 }}>See everything →</Link>
             </div>
           </div>
         </div>
         <div style={{ padding: '4px 20px 18px' }}>
-          {audit.length === 0 ? (
+          {auditState === 'loading' ? (
+            <p className="muted" style={{ fontSize: 13, padding: '10px 0' }}>Loading…</p>
+          ) : auditState === 'error' ? (
+            <p style={{ fontSize: 13, padding: '10px 0', color: 'var(--red-700)' }}>
+              Could not load the audit log.{' '}
+              <button className="btn btn-ghost btn-sm" onClick={loadAudit}>Retry</button>
+            </p>
+          ) : audit.length === 0 ? (
             <p className="muted" style={{ fontSize: 13, padding: '10px 0' }}>No role changes recorded yet.</p>
-          ) : audit.map(row => {
-            const meta = ACTION_TEXT[row.action] || { verb: row.action, color: 'var(--ink-700)' };
-            return (
-              <div key={row.id} className="adm-audit-row">
-                <span style={{ fontWeight: 600, color: 'var(--navy-900)' }}>{row.actor_name}</span>
-                <span style={{ color: meta.color, fontWeight: 600 }}>{meta.verb}</span>
-                <span style={{ color: 'var(--ink-700)' }}>{row.target_name}</span>
-                <span className="muted">({row.role})</span>
-                {row.local && <span className="adm-tag-local">local</span>}
-                <span className="adm-audit-time">
-                  {new Date(row.created_at).toLocaleString()}
-                </span>
-              </div>
-            );
-          })}
+          ) : audit.map(row => (
+            <div key={row.id} className="adm-audit-row">
+              <span style={{ color: 'var(--navy-900)' }}>{row.summary}</span>
+              <span className="muted">by {row.actor_name || row.actor_email || 'system'}</span>
+              <span className="adm-audit-time">
+                {new Date(row.created_at).toLocaleString()}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </AppShell>
@@ -310,6 +399,7 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
   const [open, setOpen]       = useState(false);
   const [confirm, setConfirm] = useState(null); // 'grant' | 'revoke' | 'suspended' | 'deactivated' | 'active'
   const [reason, setReason]   = useState('');
+  const [until, setUntil]     = useState(''); // YYYY-MM-DD, suspensions only
   const ref = useRef(null);
 
   useEffect(() => {
@@ -324,7 +414,7 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
     };
   }, [open]);
 
-  function close() { setOpen(false); setConfirm(null); setReason(''); }
+  function close() { setOpen(false); setConfirm(null); setReason(''); setUntil(''); }
 
   const roles    = user.roles || [];
   const isAdmin  = roles.includes('admin');
@@ -332,33 +422,40 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
   const status   = user.status || 'active';
   const isStatusConfirm = ['suspended', 'deactivated', 'active'].includes(confirm);
 
+  // The earliest end date the server accepts is tomorrow, in local time.
+  const tomorrow = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
   function apply(action) {
     onRoleAction('editor', action);
     close();
   }
 
   function applyStatus(next) {
-    onStatusAction(next, reason.trim());
+    onStatusAction(next, reason.trim(), next === 'suspended' ? until : '');
     close();
   }
 
+  const blocked = <>They cannot sign in, drop out of the reviewer pool, and any review invitation or unfinished review they hold goes back to its editor.</>;
   const STATUS_COPY = {
     suspended: {
-      title: 'Suspend',
-      body: <>Suspend <strong>{user.name}</strong>? They cannot sign in until reactivated. Nothing they own is deleted, and any review they are holding is released back to the editor.</>,
+      body: <>Suspend <strong>{user.name}</strong> for now? {blocked} Everything they submitted stays.</>,
       cta: 'Suspend',
       danger: true,
     },
     deactivated: {
-      title: 'Delete account',
-      body: <>Delete <strong>{user.name}</strong>&apos;s account? They can no longer sign in, will not be invited to review, and drop out of the reviewer pool. This is a soft delete — their submissions and submitted reviews stay on the record, and an admin can restore the account later.</>,
+      body: status === 'suspended'
+        ? <>Delete <strong>{user.name}</strong>&apos;s account instead of suspending it? The end date is removed and the account moves to the Deleted list. Their submissions and submitted reviews stay, and an admin can restore it.</>
+        : <>Delete <strong>{user.name}</strong>&apos;s account? {blocked} It moves to the Deleted list. This is a soft delete — their submissions and submitted reviews stay, and an admin can restore it.</>,
       cta: 'Delete account',
       danger: true,
     },
     active: {
-      title: 'Reactivate',
-      body: <>Reactivate <strong>{user.name}</strong>? They will be able to sign in again.</>,
-      cta: 'Reactivate',
+      body: <>{status === 'deactivated' ? 'Restore' : 'Reactivate'} <strong>{user.name}</strong>&apos;s account? They can sign in again. Reviews released when the account was blocked are not given back — the editors may already have replaced them.</>,
+      cta: status === 'deactivated' ? 'Restore account' : 'Reactivate now',
       danger: false,
     },
   };
@@ -397,10 +494,24 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
                   placeholder="Recorded in the audit log"
                 />
               </div>
+              {confirm === 'suspended' && (
+                <div className="field" style={{ marginBottom: 10 }}>
+                  <label className="field-label" htmlFor={`until-${user.id}`}>Reactivate automatically on</label>
+                  <input
+                    id={`until-${user.id}`}
+                    className="field-input"
+                    type="date"
+                    min={tomorrow}
+                    value={until}
+                    onChange={e => setUntil(e.target.value)}
+                  />
+                  <div className="field-hint" style={{ marginTop: 4 }}>Optional. Leave empty to suspend until you reactivate them.</div>
+                </div>
+              )}
               <div className="adm-confirm-row">
                 <button
                   className="btn btn-sm"
-                  disabled={confirm !== 'active' && !reason.trim()}
+                  disabled={(confirm !== 'active' && !reason.trim()) || (confirm === 'suspended' && until !== '' && until < tomorrow)}
                   style={STATUS_COPY[confirm].danger
                     ? { background: 'var(--red-700)', color: '#fff', border: 'none' }
                     : { background: 'var(--teal-600)', color: '#fff', border: 'none' }}
@@ -408,7 +519,7 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
                 >
                   {STATUS_COPY[confirm].cta}
                 </button>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setConfirm(null); setReason(''); }}>Cancel</button>
+                <button className="btn btn-outline-light btn-sm" onClick={() => { setConfirm(null); setReason(''); setUntil(''); }}>Cancel</button>
               </div>
             </div>
           ) : confirm ? (
@@ -428,24 +539,28 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
                 >
                   {confirm === 'grant' ? 'Promote' : 'Revoke'}
                 </button>
-                <button className="btn btn-ghost btn-sm" onClick={() => setConfirm(null)}>Cancel</button>
+                <button className="btn btn-outline-light btn-sm" onClick={() => setConfirm(null)}>Cancel</button>
               </div>
             </div>
           ) : (
             <>
-              {isEditor ? (
-                <button className="adm-menu-item danger" role="menuitem" onClick={() => setConfirm('revoke')}>
-                  Revoke editor access
-                </button>
-              ) : (
-                <button className="adm-menu-item" role="menuitem" onClick={() => setConfirm('grant')}>
-                  Promote to Editor
-                </button>
+              {/* A deleted account's roles are frozen until it is restored. */}
+              {status !== 'deactivated' && (
+                <>
+                  {isEditor ? (
+                    <button className="adm-menu-item danger" role="menuitem" onClick={() => setConfirm('revoke')}>
+                      Revoke editor access
+                    </button>
+                  ) : (
+                    <button className="adm-menu-item" role="menuitem" onClick={() => setConfirm('grant')}>
+                      Promote to Editor
+                    </button>
+                  )}
+                  <div className="adm-menu-sep" />
+                </>
               )}
 
-              <div className="adm-menu-sep" />
-
-              {status === 'active' ? (
+              {status === 'active' && (
                 <>
                   <button className="adm-menu-item" role="menuitem" onClick={() => setConfirm('suspended')}>
                     Suspend account
@@ -454,9 +569,20 @@ function RowActionsMenu({ user, busy, onRoleAction, onStatusAction }) {
                     Delete account
                   </button>
                 </>
-              ) : (
+              )}
+              {status === 'suspended' && (
+                <>
+                  <button className="adm-menu-item" role="menuitem" onClick={() => setConfirm('active')}>
+                    Reactivate now
+                  </button>
+                  <button className="adm-menu-item danger" role="menuitem" onClick={() => setConfirm('deactivated')}>
+                    Delete account
+                  </button>
+                </>
+              )}
+              {status === 'deactivated' && (
                 <button className="adm-menu-item" role="menuitem" onClick={() => setConfirm('active')}>
-                  Reactivate account
+                  Restore account
                 </button>
               )}
             </>

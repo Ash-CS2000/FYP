@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { bandFor, BAND_LABELS, SIMILARITY_TONE } from '../data/similarity.js';
-import { thresholdsFrom, loadLocalSettings } from '../data/screeningSettings.js';
+import { thresholdsFrom } from '../data/screeningSettings.js';
+import { useScreeningSettings } from '../hooks/useScreeningSettings.js';
 import { DECISION_LABELS, DECISION_TONE } from '../data/editorial.js';
 import { MANUSCRIPT_STATUSES, STATUS_LABELS, statusPillClass } from '../data/manuscriptStatus.js';
 import { listAllManuscripts } from '../api/manuscripts.js';
@@ -77,6 +78,7 @@ export default function EditorSubmissions({ role = 'editor', initialFilter = 'al
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const { settings: screeningSettings } = useScreeningSettings();
 
   useEffect(() => {
     let cancelled = false;
@@ -89,7 +91,7 @@ export default function EditorSubmissions({ role = 'editor', initialFilter = 'al
 
   // Thresholds are admin policy, so re-band on every render rather than baking a
   // band into the row data — changing the threshold must re-colour this table.
-  const thresholds = thresholdsFrom(loadLocalSettings());
+  const thresholds = thresholdsFrom(screeningSettings);
   const bandOf = id => {
     const row = submissions.find(s => s.id === id);
     const check = row?.plagiarism_check;

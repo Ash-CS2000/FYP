@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from rest_framework import serializers
+from django.utils import timezone
+from rest_framework import exceptions, serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import UserProfile, UserRole
@@ -173,6 +174,7 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     degree = serializers.CharField(source='profile.degree', default='', read_only=True)
     professional_type = serializers.CharField(source='profile.professional_type', default='', read_only=True)
     status = serializers.SerializerMethodField()
+    suspended_until = serializers.SerializerMethodField()
     joined = serializers.DateTimeField(source='date_joined', read_only=True)
 
     class Meta:
@@ -181,7 +183,7 @@ class AdminUserListSerializer(serializers.ModelSerializer):
             'id', 'name', 'email', 'roles', 'reviewer_status',
             'institution', 'avatar_key', 'specialty_tags', 'orcid_id', 'website',
             'expertise_areas', 'research_areas', 'degree', 'professional_type',
-            'status', 'is_active', 'joined',
+            'status', 'suspended_until', 'is_active', 'joined',
         )
 
     def get_name(self, obj):
@@ -200,7 +202,20 @@ class AdminUserListSerializer(serializers.ModelSerializer):
         return ''
 
     def get_status(self, obj):
-        return 'active' if obj.is_active else 'deactivated'
+        """'active' | 'suspended' | 'deactivated' — is_active is the enforcement,
+        the profile says which of the two blocked states applies."""
+        if obj.is_active:
+            return 'active'
+        profile = getattr(obj, 'profile', None)
+        if profile and profile.account_status == UserProfile.AccountStatus.SUSPENDED:
+            return 'suspended'
+        return 'deactivated'
+
+    def get_suspended_until(self, obj):
+        profile = getattr(obj, 'profile', None)
+        if obj.is_active or not profile or profile.account_status != UserProfile.AccountStatus.SUSPENDED:
+            return None
+        return profile.suspended_until.isoformat() if profile.suspended_until else None
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -363,8 +378,30 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         user = User.objects.filter(email__iexact=login.strip().lower()).first()
         attrs[self.username_field] = user.get_username() if user else login
-        attrs.pop('email', None)
 
+        if user is not None and not user.is_active:
+            # A suspension whose end date has passed is lifted here, at the moment
+            # it matters, rather than waiting for a scheduled job.
+            from .account_status import lift_expired_suspensions
+            if lift_expired_suspensions(users=[user]):
+                user.refresh_from_db()
+            # Only someone who knows the password learns why the account is
+            # blocked; everyone else gets the same reply as a wrong password.
+            elif user.check_password(attrs.get('password', '')):
+                profile = getattr(user, 'profile', None)
+                if profile and profile.account_status == UserProfile.AccountStatus.SUSPENDED:
+                    until = profile.suspended_until
+                    raise exceptions.AuthenticationFailed(
+                        f'Your account is suspended until {timezone.localtime(until):%d %b %Y}.' if until
+                        else 'Your account is suspended. Contact an administrator.',
+                        code='account_suspended',
+                    )
+                raise exceptions.AuthenticationFailed(
+                    'This account has been deleted. Contact an administrator if this is a mistake.',
+                    code='account_deleted',
+                )
+
+        attrs.pop('email', None)
         data = super().validate(attrs)
 
         profile = getattr(self.user, 'profile', None)

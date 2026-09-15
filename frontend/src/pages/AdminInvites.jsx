@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import TagPicker from '../components/TagPicker.jsx';
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { onboardEditor, listEditorInvites, cancelEditorInvite, listUsers } from '../api/admin.js';
 import { SPECIALTY_TAG_LABELS } from '../data/specialtyTags.js';
 
 const EMPTY_FORM = { userId: null, name: '', email: '', institution: '', specialtyTags: [], orcidId: '' };
 
 export default function AdminInvites() {
-  const [users, setUsers] = useState([]);
-  const [usersLoading, setUsersLoading] = useState(true);
+  const [matches, setMatches] = useState([]);
+  const [searching, setSearching] = useState(false);
   const [invites, setInvites] = useState([]);
   const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query.trim(), 300);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -23,22 +25,26 @@ export default function AdminInvites() {
       .catch(() => { /* backend unavailable */ });
   }
 
-  useEffect(() => {
-    refreshInvites();
-    listUsers()
-      .then(rows => { if (Array.isArray(rows)) setUsers(rows); })
-      .catch(() => { /* backend unavailable */ })
-      .finally(() => setUsersLoading(false));
-  }, []);
+  useEffect(() => { refreshInvites(); }, []);
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q || form.userId) return [];
-    return users
-      .filter(u => !(u.roles || []).includes('editor'))
-      .filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
-      .slice(0, 6);
-  }, [query, users, form.userId]);
+  // Ask the server for people matching what was typed, instead of downloading the
+  // whole directory up front. A few extra rows cover anyone filtered out below.
+  useEffect(() => {
+    if (!debouncedQuery || form.userId) { setMatches([]); return undefined; }
+    let cancelled = false;
+    setSearching(true);
+    listUsers({ search: debouncedQuery, pageSize: 12 })
+      .then(res => {
+        if (cancelled) return;
+        // Editors already are one; admins cannot be given the role.
+        setMatches(res.results
+          .filter(u => !(u.roles || []).some(r => r === 'editor' || r === 'admin'))
+          .slice(0, 6));
+      })
+      .catch(() => { if (!cancelled) setMatches([]); })
+      .finally(() => { if (!cancelled) setSearching(false); });
+    return () => { cancelled = true; };
+  }, [debouncedQuery, form.userId]);
 
   function pickUser(u) {
     setForm({
@@ -171,8 +177,8 @@ export default function AdminInvites() {
               </>
             )}
             <div className="field-hint">
-              {usersLoading && !form.userId
-                ? 'Loading user directory…'
+              {searching && !form.userId
+                ? 'Searching…'
                 : 'Pick an existing author or reviewer to promote them and pre-fill their profile, or leave this blank and enter a brand-new invitee below.'}
             </div>
           </div>

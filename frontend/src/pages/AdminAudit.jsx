@@ -12,29 +12,36 @@ import { useEffect, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
 import { listFullAuditLog } from '../api/admin.js';
 
-// Every action the platform is expected to record. Kept here rather than derived
-// from the rows so a type with no entries yet still appears as a filter — an
-// empty 'decision' filter tells the admin decisions are logged and none have
-// happened, which is different from the type not existing.
+// Exactly the types the server records (AuditLog.Type in backend/apps/audit).
+// Kept here rather than derived from the rows so a type with no entries yet
+// still appears as a filter — an empty 'decision' filter tells the admin
+// decisions are logged and none have happened. That is only honest because
+// every type listed really is written; never add one the server does not record.
 const TYPES = [
   { id: '',                label: 'Everything' },
   { id: 'role_change',     label: 'Roles' },
   { id: 'account_status',  label: 'Accounts' },
+  { id: 'invitation',      label: 'Invitations' },
+  { id: 'settings_change', label: 'Settings' },
   { id: 'decision',        label: 'Decisions' },
   { id: 'screening',       label: 'Screening' },
   { id: 'assignment',      label: 'Assignments' },
-  { id: 'withdrawal',      label: 'Withdrawals' },
-  { id: 'settings_change', label: 'Settings' },
+  { id: 'login_failure',   label: 'Sign-in failures' },
+  { id: 'security',        label: 'Security' },
 ];
+
+const TYPE_LABEL = Object.fromEntries(TYPES.filter(t => t.id).map(t => [t.id, t.label]));
 
 const TYPE_TONE = {
   role_change:     { bg: 'var(--navy-100)', fg: 'var(--navy-800)' },
   account_status:  { bg: 'var(--red-50)',   fg: 'var(--red-800)' },
+  invitation:      { bg: 'var(--purple-50)', fg: 'var(--purple-800)' },
+  settings_change: { bg: 'var(--ink-100)',  fg: 'var(--ink-700)' },
   decision:        { bg: 'var(--green-50)', fg: 'var(--green-800)' },
   screening:       { bg: 'var(--amber-50)', fg: 'var(--amber-800)' },
   assignment:      { bg: 'var(--teal-50)',  fg: 'var(--teal-800)' },
-  withdrawal:      { bg: 'var(--purple-50)', fg: 'var(--purple-800)' },
-  settings_change: { bg: 'var(--ink-100)',  fg: 'var(--ink-700)' },
+  login_failure:   { bg: 'var(--red-50)',   fg: 'var(--red-700)' },
+  security:        { bg: 'var(--red-700)',  fg: 'var(--white)' },
 };
 
 function timestamp(iso) {
@@ -150,13 +157,15 @@ export default function AdminAudit() {
             <div className="au-row" key={row.id}>
               <span className="au-time">{timestamp(row.created_at)}</span>
               <span className="au-type" style={{ background: tone.bg, color: tone.fg }}>
-                {row.type || 'event'}
+                {TYPE_LABEL[row.type] || row.type}
               </span>
               <span className="au-what">
-                {row.summary || `${row.action} ${row.role || ''} ${row.target_name || ''}`.trim()}
-                {row.reason && <span className="au-reason">{row.reason}</span>}
+                {row.summary}
+                {row.reason && <span className="au-reason">Reason: {row.reason}</span>}
               </span>
-              <span className="au-actor">{row.actor_name || row.actor_email || '—'}</span>
+              <span className="au-actor">
+                {row.actor_name || row.actor_email || (row.type === 'login_failure' ? 'Not signed in' : '—')}
+              </span>
             </div>
           );
         })}
