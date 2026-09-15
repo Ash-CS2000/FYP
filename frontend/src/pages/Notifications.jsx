@@ -1,5 +1,5 @@
 import AppShell from '../components/AppShell.jsx';
-import { useNotifications } from '../hooks/useNotifications.js';
+import { useNotifications } from '../hooks/useNotifications.jsx';
 
 const CATEGORY_ICONS = {
   decision: '⚖️',

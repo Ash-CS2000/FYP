@@ -43,6 +43,7 @@ import AssignmentGate from './auth/AssignmentGate.jsx';
 import { CurrentUserProvider } from './auth/CurrentUserContext.jsx';
 import AdminAudit from './pages/AdminAudit.jsx';
 import EditorInvite from './pages/EditorInvite.jsx';
+import { NotificationsProvider } from './hooks/useNotifications.jsx';
 
 export default function App() {
   return (
@@ -67,6 +68,7 @@ export default function App() {
 
       {/* Author */}
       <Route element={<ProtectedRoute allow={['author']} />}>
+      <Route element={<NotificationsProvider />}>
         <Route path="/author" element={<Navigate to="/author/dashboard" replace />} />
         <Route path="/author/dashboard" element={<AuthorDashboard />} />
         {/* My Papers is the author's own submissions; topic discovery is a separate,
@@ -91,6 +93,7 @@ export default function App() {
         <Route path="/author/profile" element={<Profile role="author" />} />
         <Route path="/author/settings" element={<Settings role="author" />} />
       </Route>
+      </Route>
 
       {/* Legacy student URLs → redirect to author equivalents */}
       <Route path="/student/training" element={<Navigate to="/author/training" replace />} />
@@ -104,6 +107,7 @@ export default function App() {
 
       {/* Reviewer */}
       <Route element={<ProtectedRoute allow={['reviewer']} />}>
+      <Route element={<NotificationsProvider />}>
         {/* Reviewing is approval-gated — an admin must accept the application. */}
         <Route element={<ReviewerActiveGate />}>
           <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />
@@ -129,9 +133,11 @@ export default function App() {
           <Route path="/reviewer/settings" element={<Settings role="reviewer" />} />
         </Route>
       </Route>
+      </Route>
 
       {/* Editor */}
       <Route element={<ProtectedRoute allow={['editor']} />}>
+      <Route element={<NotificationsProvider />}>
         <Route path="/editor" element={<Navigate to="/editor/dashboard" replace />} />
         <Route path="/editor/dashboard" element={<EditorDashboard />} />
         <Route path="/editor/submissions" element={<EditorSubmissions />} />
@@ -145,9 +151,11 @@ export default function App() {
         <Route path="/editor/profile" element={<Profile role="editor" />} />
         <Route path="/editor/settings" element={<Settings role="editor" />} />
       </Route>
+      </Route>
 
       {/* Admin */}
       <Route element={<ProtectedRoute allow={['admin']} />}>
+      <Route element={<NotificationsProvider />}>
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/users" element={<AdminUsers />} />
@@ -161,6 +169,7 @@ export default function App() {
         <Route path="/admin/submissions/:id/similarity" element={<SimilarityReport role="admin" />} />
         <Route path="/admin/profile" element={<Profile role="admin" />} />
         <Route path="/admin/settings" element={<Settings role="admin" />} />
+      </Route>
       </Route>
 
       <Route path="/orcid/callback" element={<OrcidCallback />} />

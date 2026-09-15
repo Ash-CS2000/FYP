@@ -6,7 +6,7 @@ import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 import { isTrained } from '../data/trainingProgress.js';
 import { listManuscripts } from '../api/manuscripts.js';
 import { statusLabel, statusPillClass } from '../data/manuscriptStatus.js';
-import { useNotifications } from '../hooks/useNotifications.js';
+import { useNotifications } from '../hooks/useNotifications.jsx';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ACCEPTED_LIKE = ['accepted', 'published'];

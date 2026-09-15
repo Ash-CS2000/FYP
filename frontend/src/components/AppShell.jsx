@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
-import { useNotifications } from '../hooks/useNotifications.js';
+import { useNotifications } from '../hooks/useNotifications.jsx';
 
 export default function AppShell({ role, children, searchPlaceholder, topbarActions }) {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
