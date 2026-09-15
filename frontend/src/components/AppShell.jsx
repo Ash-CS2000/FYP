@@ -22,12 +22,17 @@ export default function AppShell({ role, children, searchPlaceholder, topbarActi
         notificationCount={unreadCount}
       />
       <main className="main">
-        <Topbar
-          searchPlaceholder={searchPlaceholder}
-          actions={topbarActions}
-          role={role}
-          unreadCount={unreadCount}
-        />
+        {/* Admin has no topbar: its search and help controls are inert and
+            /admin/notifications has no route, so every control on it was dead.
+            Admin reaches everything through the sidebar instead. */}
+        {role !== 'admin' && (
+          <Topbar
+            searchPlaceholder={searchPlaceholder}
+            actions={topbarActions}
+            role={role}
+            unreadCount={unreadCount}
+          />
+        )}
         <div className="page-content">{children}</div>
       </main>
     </div>

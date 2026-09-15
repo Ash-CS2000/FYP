@@ -358,12 +358,10 @@ function ReviewerProfileCard({ user, setUser }) {
 
           <div className="field">
             <label className="field-label">Specialty tags</label>
-            <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
-              What drives manuscript matching. Keep this current as your interests change.
-            </div>
             <TagPicker
               value={draft.specialty_tags}
               onChange={(tags) => set({ specialty_tags: tags })}
+              collapsible
             />
           </div>
 
@@ -485,10 +483,7 @@ function BecomeReviewerCard({ user, setUser }) {
           </div>
           <div className="field">
             <label className="field-label">Specialty tags</label>
-            <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
-              This is what actually drives manuscript matching.
-            </div>
-            <TagPicker value={applyTags} onChange={setApplyTags} />
+            <TagPicker value={applyTags} onChange={setApplyTags} collapsible />
           </div>
           {error && <div className="alert alert-error">{error}</div>}
           <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>

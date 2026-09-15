@@ -104,7 +104,7 @@ export default function AdminInvites() {
   }
 
   return (
-    <AppShell role="admin" searchPlaceholder="Search users...">
+    <AppShell role="admin">
       <style>{`
         .inv-lookup { position:relative; }
         .inv-lookup-menu { position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:30; background:var(--white); border:1px solid var(--ink-200); border-radius:var(--r-md); box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,0.12)); max-height:220px; overflow-y:auto; }
@@ -224,7 +224,7 @@ export default function AdminInvites() {
 
           <div className="field" style={{ marginTop: 4 }}>
             <label className="field-label">Areas of expertise</label>
-            <TagPicker value={form.specialtyTags} onChange={tags => setForm(f => ({ ...f, specialtyTags: tags }))} />
+            <TagPicker value={form.specialtyTags} onChange={tags => setForm(f => ({ ...f, specialtyTags: tags }))} collapsible />
           </div>
 
           {error && <div className="field-hint" style={{ color: 'var(--red-700)' }}>{error}</div>}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AppShell from '../components/AppShell.jsx';
+import SearchField from '../components/SearchField.jsx';
 import { patchReviewerStatus, listUsers } from '../api/admin.js';
 import { SPECIALTY_TAG_LABELS } from '../data/specialtyTags.js';
 
@@ -13,6 +14,7 @@ export default function AdminReviewerApprovals() {
   const [usersError, setUsersError] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [notice, setNotice] = useState('');
+  const [search, setSearch] = useState('');
 
   function loadUsers() {
     setUsersLoading(true);
@@ -25,7 +27,12 @@ export default function AdminReviewerApprovals() {
 
   useEffect(() => { loadUsers(); }, []);
 
-  const pending = users.filter(u => u.reviewer_status === 'pending');
+  const allPending = users.filter(u => u.reviewer_status === 'pending');
+  const query = search.trim().toLowerCase();
+  const pending = query
+    ? allPending.filter(u => (u.name || '').toLowerCase().includes(query)
+        || (u.email || '').toLowerCase().includes(query))
+    : allPending;
 
   async function handleAction(userId, action) {
     setNotice('');
@@ -46,7 +53,7 @@ export default function AdminReviewerApprovals() {
   }
 
   return (
-    <AppShell role="admin" searchPlaceholder="Search users...">
+    <AppShell role="admin">
       <style>{`
         .rva-card { padding: 20px 22px; border-bottom: 1px solid var(--ink-100); }
         .rva-card:last-child { border-bottom: none; }
@@ -59,6 +66,8 @@ export default function AdminReviewerApprovals() {
         .rva-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
         .rva-chip { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 99px; background: var(--teal-50); color: var(--teal-800); }
         .rva-actions { display: flex; gap: 8px; }
+        /* .card-header is global and has no gap/wrap; scope both to this one. */
+        .rva-toolbar { gap: 16px; flex-wrap: wrap; }
       `}</style>
 
       <div className="page-header fade-up">
@@ -76,10 +85,22 @@ export default function AdminReviewerApprovals() {
       )}
 
       <div className="card fade-up delay-2">
-        <div className="card-header">
+        <div className="card-header rva-toolbar">
           <div className="card-title">
-            {usersLoading ? 'Loading applications…' : `${pending.length} pending`}
+            {usersLoading
+              ? 'Loading applications…'
+              : query
+                ? `${pending.length} of ${allPending.length} pending`
+                : `${pending.length} pending`}
           </div>
+          {!usersLoading && !usersError && allPending.length > 0 && (
+            <SearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Search by name or email…"
+              label="Search reviewer applications by name or email"
+            />
+          )}
         </div>
 
         {usersLoading ? (
@@ -90,7 +111,9 @@ export default function AdminReviewerApprovals() {
             <button className="btn btn-ghost btn-sm" onClick={loadUsers}>Retry</button>
           </div>
         ) : pending.length === 0 ? (
-          <p className="muted" style={{ fontSize: 13, padding: '16px 22px' }}>No pending reviewer applications.</p>
+          <p className="muted" style={{ fontSize: 13, padding: '16px 22px' }}>
+            {query ? `No pending applications match “${search.trim()}”.` : 'No pending reviewer applications.'}
+          </p>
         ) : pending.map(u => (
           <div key={u.id} className="rva-card">
             <div className="rva-head">
