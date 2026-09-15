@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class UserProfile(models.Model):
@@ -103,6 +104,36 @@ class UserRole(models.Model):
 
     def __str__(self):
         return f'{self.user.email} — {self.role} ({self.status})'
+
+
+class AdminInvite(models.Model):
+    """
+    A pending invitation to become an administrator — the only route to admin
+    after the first one is seeded. Unlike an editor invite it is never granted
+    silently: the invitee accepts, proving it is them (their existing password,
+    or a new one). Single-use and short-lived. See AdminInviteView.
+    """
+    TTL_HOURS = 48
+
+    email = models.EmailField()
+    name = models.CharField(max_length=150, blank=True)
+    token = models.CharField(max_length=64, unique=True)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='admin_invites_sent',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def is_valid(self):
+        return self.accepted_at is None and self.expires_at > timezone.now()
+
+    def __str__(self):
+        return f'Admin invite for {self.email}'
 
 
 class EditorInvite(models.Model):

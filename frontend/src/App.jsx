@@ -43,6 +43,7 @@ import AssignmentGate from './auth/AssignmentGate.jsx';
 import { CurrentUserProvider } from './auth/CurrentUserContext.jsx';
 import AdminAudit from './pages/AdminAudit.jsx';
 import EditorInvite from './pages/EditorInvite.jsx';
+import AdminInviteAccept from './pages/AdminInviteAccept.jsx';
 import { NotificationsProvider } from './hooks/useNotifications.jsx';
 
 export default function App() {
@@ -57,6 +58,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/editor-invite/:token" element={<EditorInvite />} />
+      <Route path="/admin-invite/:token" element={<AdminInviteAccept />} />
 
       {/* Any authenticated user. /reviewer/pending must sit OUTSIDE the
           reviewer block below, or ReviewerActiveGate would redirect into it

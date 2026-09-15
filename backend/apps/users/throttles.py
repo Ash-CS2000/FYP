@@ -27,3 +27,14 @@ class PasswordChangeThrottle(UserRateThrottle):
     3/hour would lock out a legitimate user who mistyped twice.
     """
     scope = 'password_change'
+
+class AdminInviteSendThrottle(UserRateThrottle):
+    """Sending an admin invite checks the caller's own password, so it is an
+    online guessing oracle for a signed-in session. Keyed by user."""
+    scope = 'admin_invite'
+
+
+class AdminInviteAcceptThrottle(AnonRateThrottle):
+    """Accepting an admin invite for an existing account checks that account's
+    password. Keyed by IP; the accept view runs unauthenticated."""
+    scope = 'admin_invite_accept'

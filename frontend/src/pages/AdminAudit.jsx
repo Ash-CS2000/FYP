@@ -9,6 +9,7 @@
 // accountable. See listFullAuditLog in api/admin.js.
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { listFullAuditLog } from '../api/admin.js';
 
@@ -53,7 +54,9 @@ function timestamp(iso) {
 }
 
 export default function AdminAudit() {
-  const [type, setType] = useState('');
+  // ?type=login_failure etc. lets the dashboard link straight to a filtered view.
+  const [params] = useSearchParams();
+  const [type, setType] = useState(() => (TYPES.some(t => t.id && t.id === params.get('type')) ? params.get('type') : ''));
   const [actor, setActor] = useState('');
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);

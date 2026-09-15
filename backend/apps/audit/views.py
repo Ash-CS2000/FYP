@@ -36,11 +36,20 @@ class AuditLogListView(APIView):
     def get(self, request):
         qs = AuditLog.objects.all()
 
-        type_ = request.query_params.get('type', '').strip()
-        if type_:
-            if type_ not in AuditLog.Type.values:
-                return Response({'detail': f'Unknown audit type: {type_}'}, status=400)
-            qs = qs.filter(type=type_)
+        types = [t.strip() for t in request.query_params.get('type', '').split(',') if t.strip()]
+        unknown = [t for t in types if t not in AuditLog.Type.values]
+        if unknown:
+            return Response({'detail': f'Unknown audit type: {", ".join(unknown)}'}, status=400)
+        if types:
+            qs = qs.filter(type__in=types)
+
+        actions = [a.strip() for a in request.query_params.get('action', '').split(',') if a.strip()]
+        if actions:
+            qs = qs.filter(action__in=actions)
+
+        role = request.query_params.get('role', '').strip()
+        if role:
+            qs = qs.filter(role=role)
 
         actor = request.query_params.get('actor', '').strip()
         if actor:

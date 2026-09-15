@@ -24,6 +24,20 @@ export function timeAgo(iso, now = new Date()) {
   return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
+/** A future moment: "in 40 min" · "in 5 h" · "tomorrow" · "in 3 days" · "22 Sep" */
+export function timeUntil(iso, now = new Date()) {
+  const then = new Date(iso);
+  const diff = then - now;
+  if (Number.isNaN(diff)) return '—';
+  if (diff <= 0) return 'now';
+  if (diff < HOUR) return `in ${Math.max(1, Math.round(diff / MINUTE))} min`;
+  const days = Math.round((startOfDay(then) - startOfDay(now)) / DAY);
+  if (days === 0) return `in ${Math.round(diff / HOUR)} h`;
+  if (days === 1) return 'tomorrow';
+  if (days < 7) return `in ${days} days`;
+  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
 /** Exact local date and time, for a tooltip or a secondary line. */
 export function fullDateTime(iso) {
   return new Date(iso).toLocaleString(undefined, {

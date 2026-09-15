@@ -146,7 +146,7 @@ export const SIDEBAR_CONFIG = {
           { id: 'dashboard', label: 'Dashboard', to: '/admin/dashboard', icon: ICONS.dashboard },
           { id: 'users', label: 'Manage Users', to: '/admin/users', icon: ICONS.users },
           { id: 'reviewer-approvals', label: 'Reviewer Approvals', to: '/admin/reviewer-approvals', icon: ICONS.check },
-          { id: 'invites', label: 'Invite Editor', to: '/admin/invites', icon: ICONS.mail },
+          { id: 'invites', label: 'Invitations', to: '/admin/invites', icon: ICONS.mail },
           { id: 'submissions', label: 'Submissions', to: '/admin/submissions', icon: ICONS.papers },
         ],
       },

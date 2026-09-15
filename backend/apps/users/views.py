@@ -584,11 +584,27 @@ class EditorOnboardView(APIView):
             return Response({'detail': 'A valid email is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         existing = User.objects.filter(email__iexact=email).first()
+        # ORCID iDs are unique across profiles; checking here gives the admin a
+        # clear message now instead of a failed activation later.
+        if orcid_id:
+            taken = UserProfile.objects.filter(orcid_id=orcid_id)
+            if existing is not None:
+                taken = taken.exclude(user=existing)
+            if taken.exists():
+                return Response(
+                    {'detail': 'That ORCID iD already belongs to another account.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         if existing is not None:
             if is_admin(existing):
                 return Response(
                     {'detail': 'Administrator accounts cannot be given the editor role.'},
                     status=status.HTTP_403_FORBIDDEN,
+                )
+            if not existing.is_active:
+                return Response(
+                    {'detail': 'This address belongs to a suspended or deleted account. Restore the account first.'},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
             with transaction.atomic():
                 added = _grant_editor_role(existing)
@@ -997,14 +1013,33 @@ class EditorInviteView(APIView):
         # Someone may have registered with this email between invite and accept.
         existing = User.objects.filter(email__iexact=invite.email).first()
         if existing is not None:
-            _grant_editor_role(existing)
-            invite.accepted_at = timezone.now()
-            invite.save(update_fields=['accepted_at'])
+            # Same rules as inviting an existing account directly.
+            if is_admin(existing) or not existing.is_active:
+                return Response(
+                    {'detail': 'This invitation can no longer be used. Please contact an administrator.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            with transaction.atomic():
+                if _grant_editor_role(existing):
+                    audit.record(
+                        type=AuditLog.Type.INVITATION, action='accept',
+                        summary=f'{existing.get_full_name() or existing.email} became an editor (the invited address already had an account)',
+                        actor=None, target=existing, role=UserProfile.Role.EDITOR,
+                        details={'invite_id': invite.pk}, request=request,
+                    )
+                invite.accepted_at = timezone.now()
+                invite.save(update_fields=['accepted_at'])
             return Response(
                 {'status': 'existing_account',
                  'detail': 'An account with this email already exists. Please log in instead.'},
                 status=status.HTTP_200_OK,
             )
+
+        # The ORCID may have been claimed by someone else since the invite was
+        # sent. Drop it rather than fail: the editor can add theirs later.
+        orcid_id = invite.orcid_id
+        if orcid_id and UserProfile.objects.filter(orcid_id=orcid_id).exists():
+            orcid_id = ''
 
         name = (invite.name or '').split(maxsplit=1)
         with transaction.atomic():
@@ -1022,7 +1057,7 @@ class EditorInviteView(APIView):
                     'status': UserProfile.Status.ACTIVE,
                     'institution': invite.institution,
                     'specialty_tags': invite.specialty_tags,
-                    'orcid_id': invite.orcid_id,
+                    'orcid_id': orcid_id,
                 },
             )
             UserRole.objects.update_or_create(
@@ -1032,6 +1067,13 @@ class EditorInviteView(APIView):
             )
             invite.accepted_at = timezone.now()
             invite.save(update_fields=['accepted_at'])
+            audit.record(
+                type=AuditLog.Type.INVITATION, action='accept',
+                summary=f'{user.get_full_name() or user.email} accepted the invitation and became an editor',
+                actor=user, target=user, role=UserProfile.Role.EDITOR,
+                details={'invite_id': invite.pk, 'orcid_dropped': bool(invite.orcid_id and not orcid_id)},
+                request=request,
+            )
 
         return Response(_tokens_for(user), status=status.HTTP_201_CREATED)
 

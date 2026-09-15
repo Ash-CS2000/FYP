@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -5,7 +6,6 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from apps.users.views import EmailTokenObtainPairView, RegisterView
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
     path('api/auth/login/', EmailTokenObtainPairView.as_view(), name='login'),
     path('api/auth/register/', RegisterView.as_view(), name='auth-register'),
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='refresh'),
@@ -23,3 +23,7 @@ urlpatterns = [
     path('api/audit-logs/', include('apps.audit.urls')),
     path('api/system/', include('apps.system.urls')),
 ]
+
+# See DJANGO_ADMIN_ENABLED in settings.py for why this is off by default.
+if settings.DJANGO_ADMIN_ENABLED:
+    urlpatterns.insert(0, path('admin/', admin.site.urls))

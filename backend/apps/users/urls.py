@@ -18,6 +18,12 @@ from .views import (
     AdminUserStatusView,
     AdminUserRoleView,
 )
+from .admin_invites import (
+    AdminInviteDetailView,
+    AdminInviteListCreateView,
+    AdminInviteView,
+    EmailStatusView,
+)
 
 urlpatterns = [
     path('', AdminUserListView.as_view(), name='user-list'),
@@ -41,6 +47,12 @@ urlpatterns = [
     path('editors/', EditorOnboardView.as_view(), name='editor-onboard'),
     path('editors/<int:invite_id>/', EditorInviteDetailView.as_view(), name='editor-invite-detail'),
     path('editor-invite/<str:token>/', EditorInviteView.as_view(), name='editor-invite'),
+
+    # Administrator invitations — see admin_invites.py
+    path('email-status/', EmailStatusView.as_view(), name='email-status'),
+    path('admin-invites/', AdminInviteListCreateView.as_view(), name='admin-invites'),
+    path('admin-invites/<int:invite_id>/', AdminInviteDetailView.as_view(), name='admin-invite-detail'),
+    path('admin-invite/<str:token>/', AdminInviteView.as_view(), name='admin-invite'),
 
     # ORCID
     path('orcid/url/', OrcidAuthUrlView.as_view(), name='orcid-url'),

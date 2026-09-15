@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import SearchField from '../components/SearchField.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -65,7 +65,9 @@ const FILTER_PARAMS = {
 const EMPTY_COUNTS = { all: 0, author: 0, reviewer: 0, editor: 0, admin: 0, suspended: 0, deleted: 0 };
 
 export default function AdminUsers() {
-  const [filter, setFilter]   = useState('all');
+  // ?filter=suspended etc. lets other pages (the dashboard) link straight to a view.
+  const [params] = useSearchParams();
+  const [filter, setFilter]   = useState(() => (FILTER_PARAMS[params.get('filter')] ? params.get('filter') : 'all'));
   const [search, setSearch]   = useState('');
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const [users, setUsers]     = useState([]);

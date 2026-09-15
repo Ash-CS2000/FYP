@@ -56,3 +56,35 @@ def send_editor_role_added_email(user):
         recipient_list=[user.email],
         fail_silently=False,
     )
+
+
+def send_admin_invite_email(invite):
+    """Invite link for a new administrator. Accepting always needs a password."""
+    link = f'{settings.FRONTEND_BASE_URL}/admin-invite/{invite.token}'
+    inviter = (invite.invited_by.get_full_name() or invite.invited_by.email) if invite.invited_by else 'An administrator'
+    send_mail(
+        subject='You have been invited to administer PaperBridge',
+        message=(
+            f'{_greeting(invite.name)}\n\n'
+            f'{inviter} has invited you to become an administrator of PaperBridge.\n\n'
+            'Administrators manage accounts, roles and platform settings. Accept the '
+            'invitation here:\n'
+            f'{link}\n\n'
+            f'This link works once and expires in {invite.TTL_HOURS} hours. If you '
+            'were not expecting it, do not open it, and tell the platform team.\n'
+        ),
+        from_email=None,
+        recipient_list=[invite.email],
+        fail_silently=False,
+    )
+
+
+def send_admin_security_notice(recipient, subject, body):
+    """Plain security notice to an existing administrator."""
+    send_mail(
+        subject=subject,
+        message=f'{_greeting(recipient.get_full_name())}\n\n{body}\n\nThis is recorded in the audit log.\n',
+        from_email=None,
+        recipient_list=[recipient.email],
+        fail_silently=False,
+    )

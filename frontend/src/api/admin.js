@@ -94,24 +94,117 @@ export function patchUserRole(userId, role, action) {
 }
 
 /**
- * Invite a new administrator. The only route to admin after the seeded first
- * one — there is no public form and no promotion path.
+ * What an email address already is on the platform, so the invite forms can
+ * say what will happen before the admin presses Send. Admin only.
  *
- *   POST /api/admin/invites/
- *   body     { email, name, role: 'admin' }
- *   201      { id, email, name, role, status: 'pending', expires_at, invited_by }
- *   403      caller is not an admin
- *   409      an active invite already exists for that email
- *
- * Token generation, expiry and email delivery are entirely server-side; the
- * frontend never sees or handles the invite token. Must write an audit_logs
- * entry.
+ *   GET /api/users/email-status/?email=
+ *   200  {
+ *          exists: bool,
+ *          name, roles: string[],                 '' and [] when no account
+ *          account_status: 'active' | 'suspended' | 'deactivated' | null,
+ *          pending_editor_invite: bool,
+ *          pending_admin_invite: bool,
+ *        }
+ *   400  missing or malformed email
+ *   403  caller is not an admin
  */
-export function inviteAdmin({ email, name }) {
-  return request('/api/admin/invites/', {
+export function getEmailStatus(email) {
+  return request(`/api/users/email-status/?email=${encodeURIComponent(String(email).trim())}`, { method: 'GET' });
+}
+
+/**
+ * Invite a new administrator. The only route to admin after the seeded first
+ * one — there is no public form and no promotion path. Safeguards, all enforced
+ * by the server:
+ *   - the inviting admin re-enters their own password;
+ *   - the invitee must accept, even if they already have an account;
+ *   - the link works once and expires after 48 hours;
+ *   - every other administrator is notified when an admin is invited and when
+ *     one joins;
+ *   - sending, cancelling and accepting are all audited.
+ *
+ *   POST /api/users/admin-invites/
+ *   body     { email, name, password }   password = the caller's own password
+ *   201      AdminInvite
+ *   400      invalid email, missing name, or the address belongs to a
+ *            suspended or deleted account (restore it first)
+ *   403      caller is not an admin, or `password` is wrong
+ *   409      that address already belongs to an administrator
+ *   429      too many attempts — the password check is rate limited
+ *   502      the invitation email could not be sent; nothing was saved
+ *
+ *   AdminInvite { id, email, name, invited_by_name, existing_account,
+ *                 created_at, expires_at, expired }
+ *
+ * Inviting an address that already has a pending admin invite replaces it; the
+ * old link stops working. The token is never returned to the frontend.
+ */
+export function inviteAdmin({ email, name, password }) {
+  return request('/api/users/admin-invites/', {
     method: 'POST',
-    body: JSON.stringify({ email: String(email).trim().toLowerCase(), name: String(name).trim(), role: 'admin' }),
+    body: JSON.stringify({ email: String(email).trim().toLowerCase(), name: String(name).trim(), password }),
   });
+}
+
+/**
+ * Pending (unaccepted) admin invites, newest first. Admin only.
+ *
+ *   GET /api/users/admin-invites/
+ *   200  AdminInvite[]
+ */
+export function listAdminInvites() {
+  return request('/api/users/admin-invites/', { method: 'GET' });
+}
+
+/**
+ * Cancel a pending admin invite. Admin only. Audited.
+ *
+ *   DELETE /api/users/admin-invites/:id/
+ *   204  cancelled
+ *   404  no such invite
+ *   409  already accepted
+ */
+export function cancelAdminInvite(inviteId) {
+  return request(`/api/users/admin-invites/${inviteId}/`, { method: 'DELETE' });
+}
+
+// The two calls below are made by the invitee, who is usually not signed in, so
+// they use plain fetch — a stale token left in the browser must not bounce a
+// valid invite link to the login page.
+
+/**
+ *   GET /api/users/admin-invite/:token/     (no login)
+ *   200  { email, name, invited_by_name, existing_account, expires_at }
+ *   404  invalid, expired, cancelled or already used
+ */
+export async function getAdminInvite(token) {
+  const res = await fetch(`${API_URL}/api/users/admin-invite/${encodeURIComponent(token)}/`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.detail || 'This invitation link is invalid or has expired.'), { status: res.status });
+  return data;
+}
+
+/**
+ *   POST /api/users/admin-invite/:token/    (no login)
+ *   body  { password }
+ *         existing_account → the invitee's CURRENT password, proving it is them
+ *         otherwise        → the password for their new account
+ *   201   { access, refresh, user }
+ *   400   new password too weak
+ *   403   existing account: wrong password
+ *   404   invalid, expired, cancelled or already used
+ *   409   the account is suspended or deleted
+ *   429   too many attempts
+ */
+export async function acceptAdminInvite(token, password) {
+  const res = await fetch(`${API_URL}/api/users/admin-invite/${encodeURIComponent(token)}/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.detail || 'Could not accept the invitation.'), { status: res.status });
+  return data;
 }
 
 /**
@@ -126,8 +219,10 @@ export function inviteAdmin({ email, name }) {
  *   body     { email, name, institution?, specialty_tags?, orcid_id? }
  *   201      { status: 'invited', email, expires_at, institution, specialty_tags, orcid_id }
  *   200      { status: 'role_added' | 'already_editor', email, detail }
- *   400      invalid email or unknown specialty tag
- *   403      caller is not an admin
+ *   400      invalid email, unknown specialty tag, an ORCID iD already used by
+ *            another account, or the address belongs to a suspended or deleted
+ *            account (restore it first)
+ *   403      caller is not an admin, or the address belongs to an admin
  *
  * Token generation, expiry and email delivery are entirely server-side.
  */
@@ -274,8 +369,10 @@ export function listUsers({ page = 1, pageSize = USERS_PAGE_SIZE, search = '', r
 /**
  * The audit trail. Admin only, newest first.
  *
- *   GET /api/audit-logs/?type=&actor=&from=&to=&limit=&offset=
- *       type    one of the types below; omit for every type
+ *   GET /api/audit-logs/?type=&action=&role=&actor=&from=&to=&limit=&offset=
+ *       type    one or more of the types below, comma-separated; omit for every type
+ *       action  one or more actions, comma-separated
+ *       role    the role an entry concerns, e.g. 'editor'
  *       actor   case-insensitive match on the actor's name or email
  *       from/to ISO dates (YYYY-MM-DD), inclusive
  *       limit   default 50, max 200
@@ -293,7 +390,7 @@ export function listUsers({ page = 1, pageSize = USERS_PAGE_SIZE, search = '', r
  *   type             action
  *   role_change      grant · revoke · approve · reject
  *   account_status   suspended · deactivated · reactivated
- *   invitation       invite · cancel
+ *   invitation       invite · cancel · accept   (role says editor or admin)
  *   settings_change  update
  *   decision         the decision type (accept, reject, minor, major, desk_reject)
  *   screening        the screening action
@@ -307,9 +404,12 @@ export function listUsers({ page = 1, pageSize = USERS_PAGE_SIZE, search = '', r
  * an audit trail, and admins are exactly the people it exists to hold
  * accountable.
  */
-export function listFullAuditLog({ type = '', actor = '', limit = 50, offset = 0 } = {}) {
+export function listFullAuditLog({ type = '', action = '', role = '', actor = '', limit = 50, offset = 0 } = {}) {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  if (type) params.set('type', type);
+  const csv = v => (Array.isArray(v) ? v.join(',') : v);
+  if (type) params.set('type', csv(type));
+  if (action) params.set('action', csv(action));
+  if (role) params.set('role', role);
   if (actor) params.set('actor', actor);
   return request(`/api/audit-logs/?${params.toString()}`, { method: 'GET' });
 }
@@ -346,6 +446,62 @@ export function listAuditLog({ limit = 10 } = {}) {
  */
 export function getSystemHealth({ refresh = false } = {}) {
   return request(`/api/system/health/${refresh ? '?refresh=1' : ''}`, { method: 'GET' });
+}
+
+/**
+ * Everything an administrator needs to act on, for the dashboard's
+ * "Needs attention" card. Admin only. Raw facts, not sentences — the card
+ * decides wording, and `thresholds` says where each alert starts.
+ *
+ *   GET /api/system/attention/
+ *   200  {
+ *     generated_at,
+ *     reviewer_applications: { count, overdue, oldest: { name, applied_at, waiting_days } | null },
+ *         pending applications from accounts that are not suspended or deleted;
+ *         overdue = the oldest has waited more than thresholds.application_days
+ *     editor_invites: { expired, expiring_soon, soonest_expiry: ISO | null },
+ *         unaccepted invites; expiring_soon = expires within thresholds.invite_hours
+ *     suspensions_ending: { count, next: { id, name, suspended_until } | null },
+ *         suspensions that lift within thresholds.suspension_days
+ *     failed_sign_ins: { last_24h, top_account: { email, count } | null, alert },
+ *         alert = last_24h >= thresholds.failed_total, or one address >= thresholds.failed_one_account
+ *     new_accounts: { this_week, last_week, spike },
+ *         spike = this_week >= thresholds.spike_min and >= thresholds.spike_ratio × last week
+ *     thresholds: { application_days, invite_hours, suspension_days,
+ *                   failed_total, failed_one_account, spike_ratio, spike_min }
+ *   }
+ *   403  caller is not an admin
+ *
+ * System health is not repeated here; the dashboard already loads it.
+ */
+/**
+ * How the journal is doing, for the dashboard. Admin only, read-only — nothing
+ * here lets an administrator act on a paper.
+ *
+ *   GET /api/system/editorial-overview/
+ *   200  {
+ *     stages:  { submitted, under_review, revisions_requested, accepted, published, rejected },
+ *     total_manuscripts,
+ *     reviews: { in_progress, overdue, invites_waiting, invites_overdue },
+ *         in_progress = accepted, not yet submitted; overdue = past its due date;
+ *         invites_waiting / invites_overdue = not yet answered / past respond-by
+ *     reviewers: { active, reviewing },
+ *         active = usable accounts holding the reviewer role; reviewing = of those,
+ *         how many hold at least one review in progress
+ *     avg_days_to_first_decision: number | null,   over every paper that has had one
+ *     decided_papers:             how many papers that average is based on
+ *     acceptance_rate:            0–100 | null, accepted + published ÷ all finally decided
+ *     submissions: { last_30_days, previous_30_days },
+ *     published:   { total, last_30_days },
+ *   }
+ *   403  caller is not an admin
+ */
+export function getEditorialOverview() {
+  return request('/api/system/editorial-overview/', { method: 'GET' });
+}
+
+export function getAttention() {
+  return request('/api/system/attention/', { method: 'GET' });
 }
 
 /**

@@ -15,6 +15,11 @@ SECRET_KEY = os.getenv(
 
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
+# Django's built-in /admin/ site edits the database directly: it skips every
+# rule the API enforces and writes nothing to the audit log. Off unless a
+# developer turns it on for local debugging.
+DJANGO_ADMIN_ENABLED = os.getenv('DJANGO_ADMIN_ENABLED', 'False') == 'True'
+
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 INSTALLED_APPS = [
@@ -128,6 +133,8 @@ REST_FRAMEWORK = {
         'anon': '30/minute',        # unknown users
         'user': '100/minute',       # logged in users
         'orcid': '10/minute',       # orcid login
+        'admin_invite': '10/hour',  # sending an admin invite re-checks the sender's password
+        'admin_invite_accept': '10/hour',  # accepting one may check the invitee's password
         'password_reset': '3/hour', # password reset
         'password_change': '10/hour',  # changing your own password. Looser than
                                     # password_reset: the caller is already

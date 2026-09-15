@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import Avatar from '../components/Avatar.jsx';
+import NeedsAttentionCard from '../components/NeedsAttentionCard.jsx';
+import EditorialPipelineCard from '../components/EditorialPipelineCard.jsx';
+import RecentActivityCard, { ADMIN_ACTIVITY_TYPES } from '../components/RecentActivityCard.jsx';
 import SignedInUsersDrawer from '../components/SignedInUsersDrawer.jsx';
-import { listUsers, getSystemHealth, signOutEveryone, listSignedInUsers } from '../api/admin.js';
+import {
+  listUsers, getSystemHealth, signOutEveryone, listSignedInUsers, getAttention, getEditorialOverview, listFullAuditLog,
+} from '../api/admin.js';
 import { saveTokens } from '../api/auth';
 
 const OVERALL = {
@@ -26,7 +31,7 @@ const ROLE_WORDS = [['author', 'author', 'authors'], ['reviewer', 'reviewer', 'r
 function SignedInTile({ check, preview, onOpen }) {
   const total = preview?.total ?? (check.value != null ? Number(String(check.value).replace(/,/g, '')) : null);
   const people = preview?.results || [];
-  const breakdown = preview
+  const breakdown = preview?.counts
     ? ROLE_WORDS.filter(([k]) => preview.counts[k]).map(([k, one, many]) => `${preview.counts[k]} ${preview.counts[k] === 1 ? one : many}`)
     : [];
   const more = total != null ? Math.max(0, total - people.length) : 0;
@@ -113,7 +118,7 @@ function SystemHealthCard({ health, healthState, onRefresh, onSignedOutEveryone,
                 <span className="health-name">{c.label}</span>
               </div>
               <div className="health-value">{c.value ?? '—'}</div>
-              <div className="health-meta">{c.detail || (healthState === 'error' ? 'Unavailable' : 'Checking…')}</div>
+              <div className="health-meta">{c.status ? c.detail : (healthState === 'error' ? 'Unavailable' : 'Checking…')}</div>
             </div>
           )
         ))}
@@ -169,64 +174,102 @@ function SystemHealthCard({ health, healthState, onRefresh, onSignedOutEveryone,
   );
 }
 
-// Mirrors AdminUsers.jsx's getPrimaryRole/getInitials exactly — both pages
-// render the same GET /api/users/ row shape and must agree on how it reads.
-function getPrimaryRole(u) {
-  if (u.roles?.includes('admin'))    return 'Admin';
-  if (u.roles?.includes('editor'))   return 'Editor';
-  if (u.roles?.includes('reviewer')) return 'Reviewer';
-  if (u.roles?.includes('author'))   return 'Author';
-  return u.role || '—';
-}
-
-function getInitials(name = '') {
-  return name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
-}
-
-function toRow(u) {
-  return {
-    id: u.id,
-    name: u.name || u.email,
-    email: u.email,
-    role: getPrimaryRole(u),
-    reviewer_status: u.reviewer_status || '',
-    status: u.status || (u.is_active === false ? 'deactivated' : 'active'),
-    date: u.joined
-      ? new Date(u.joined).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-      : '—',
-    initials: getInitials(u.name || u.email),
-  };
-}
-
-const ROLE_STAT_META = [
-  { key: 'author',   label: 'Authors',        bg: 'var(--navy-100)', color: 'var(--navy-800)' },
-  { key: 'reviewer', label: 'Reviewers',       bg: '#FAEEDA',         color: 'var(--amber-800)' },
-  { key: 'editor',   label: 'Editors',         bg: 'var(--purple-50)', color: 'var(--purple-800)' },
-  { key: 'admin',    label: 'Administrators',  bg: 'var(--teal-50)',  color: 'var(--teal-800)' },
-];
+const KPI_ICONS = {
+  users: <><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" /></>,
+  reviewer: <><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M16 11l2 2 4-4" /></>,
+  paper: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6M12 18v-6M9 15h6" /></>,
+  published: <><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></>,
+};
 
 export default function AdminDashboard() {
-  const [recent, setRecent] = useState([]);
   const [counts, setCounts] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
-  // Three newest accounts plus the server's counts — one small request however
-  // many users the platform has.
+  // Only the server's counts are needed here; page_size=1 keeps it tiny.
   useEffect(() => {
-    listUsers({ pageSize: 3 })
-      .then(res => { setRecent(res.results); setCounts(res.counts); })
-      .catch(() => setError('Could not load users from the server.'))
+    listUsers({ pageSize: 1 })
+      .then(res => setCounts(res.counts))
+      .catch(() => { /* the tiles show a dash */ })
       .finally(() => setLoading(false));
   }, []);
 
-  const roleCounts = ROLE_STAT_META.map(meta => ({
-    ...meta,
-    num: counts?.[meta.key] ?? 0,
-  }));
-
-  const recentUsers = recent.map(toRow);
   const activeUsers = counts ? counts.all - counts.suspended : 0;
+
+  // One request feeds both the top row and the pipeline card.
+  const [overview, setOverview] = useState(null);
+  const [overviewState, setOverviewState] = useState('loading'); // loading | ready | error
+  function loadOverview() {
+    getEditorialOverview()
+      .then(res => {
+        if (!res?.stages || !res.reviews) throw new Error('Unexpected response');
+        setOverview(res);
+        setOverviewState('ready');
+      })
+      .catch(() => setOverviewState(prev => (prev === 'ready' ? 'ready' : 'error')));
+  }
+  useEffect(() => { loadOverview(); }, []);
+
+  const [activity, setActivity] = useState([]);
+  const [activityState, setActivityState] = useState('loading');
+  function loadActivity() {
+    listFullAuditLog({ type: ADMIN_ACTIVITY_TYPES, limit: 6 })
+      .then(res => {
+        if (!Array.isArray(res?.results)) throw new Error('Unexpected response');
+        setActivity(res.results);
+        setActivityState('ready');
+      })
+      .catch(() => setActivityState(prev => (prev === 'ready' ? 'ready' : 'error')));
+  }
+  useEffect(() => { loadActivity(); }, []);
+
+  const subs = overview?.submissions;
+  const change = subs ? subs.last_30_days - subs.previous_30_days : 0;
+  const kpis = [
+    {
+      key: 'users', label: 'Active users', to: '/admin/users', icon: 'users',
+      value: counts ? activeUsers : null,
+      sub: counts ? `${counts.suspended} suspended · ${counts.deleted} deleted` : '',
+    },
+    {
+      key: 'reviewers', label: 'Reviewer pool', to: '/admin/users?filter=reviewer', icon: 'reviewer',
+      value: overview ? overview.reviewers.active : null,
+      sub: overview ? `${overview.reviewers.reviewing} reviewing right now` : '',
+    },
+    {
+      key: 'submissions', label: 'New submissions', to: '/admin/submissions', icon: 'paper',
+      value: overview ? subs.last_30_days : null,
+      sub: overview ? `${change === 0 ? 'Same as' : `${change > 0 ? '↑' : '↓'} ${Math.abs(change)} vs`} the 30 days before` : '',
+      trend: change > 0 ? 'up' : change < 0 ? 'down' : '',
+      caption: 'Last 30 days',
+    },
+    {
+      key: 'published', label: 'Published papers', to: '/admin/submissions', icon: 'published',
+      value: overview ? overview.published.total : null,
+      sub: overview ? `${overview.published.last_30_days} in the last 30 days` : '',
+    },
+  ];
+
+  const [attention, setAttention] = useState(null);
+  const [attentionState, setAttentionState] = useState('loading'); // loading | ready | error
+  function loadAttention() {
+    getAttention()
+      .then(res => {
+        // An unexpected reply shows the card's error state rather than taking
+        // the whole dashboard down with it.
+        if (!res?.thresholds || !res.new_accounts) throw new Error('Unexpected response');
+        setAttention(res);
+        setAttentionState('ready');
+      })
+      .catch(() => setAttentionState(prev => (prev === 'ready' ? 'ready' : 'error')));
+  }
+  useEffect(() => { loadAttention(); }, []);
+
+  const healthCardRef = useRef(null);
+  function viewHealth() {
+    healthCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    healthCardRef.current?.classList.add('flash');
+    setTimeout(() => healthCardRef.current?.classList.remove('flash'), 1400);
+  }
 
   // Loaded on its own so the user stats never wait on a slow external service.
   const [health, setHealth] = useState(null);
@@ -234,7 +277,11 @@ export default function AdminDashboard() {
   function loadHealth(refresh = false) {
     setHealthState(prev => (prev === 'ready' && refresh ? 'refreshing' : prev === 'ready' ? 'ready' : 'loading'));
     getSystemHealth({ refresh })
-      .then(res => { setHealth(res); setHealthState('ready'); })
+      .then(res => {
+        if (!Array.isArray(res?.checks) || !OVERALL[res.overall]) throw new Error('Unexpected response');
+        setHealth(res);
+        setHealthState('ready');
+      })
       .catch(() => setHealthState('error'));
   }
   useEffect(() => { loadHealth(); }, []);
@@ -244,7 +291,7 @@ export default function AdminDashboard() {
   const [signedInOpen, setSignedInOpen] = useState(false);
   function loadSignedIn() {
     listSignedInUsers({ pageSize: 4 })
-      .then(setSignedIn)
+      .then(res => { if (res?.counts && Array.isArray(res.results)) setSignedIn(res); })
       .catch(() => { /* the tile falls back to the health check's count */ });
   }
   useEffect(() => { loadSignedIn(); }, []);
@@ -297,10 +344,33 @@ export default function AdminDashboard() {
         .health-result { margin-top: 12px; font-size: 12.5px; line-height: 1.5; }
         .health-result.ok { color: var(--teal-700); }
         .health-result.error { color: var(--red-800); }
-        .role-stat { padding: 16px; border: 1px solid var(--ink-200); border-radius: var(--r-md); background: var(--white); text-align: center; }
-        .role-stat-icon { width: 36px; height: 36px; margin: 0 auto 10px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
-        .role-stat-num { font-family: var(--font-display); font-size: 28px; font-weight: 500; color: var(--navy-900); letter-spacing: -0.02em; line-height: 1; }
-        .role-stat-lbl { font-size: 12px; color: var(--ink-600); margin-top: 4px; }
+        .kpi-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+        @media (max-width: 1100px) { .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        .kpi { display: block; padding: 16px 18px; border: 1px solid var(--ink-200); border-radius: var(--r-lg); background: var(--white);
+          text-decoration: none; transition: border-color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast); }
+        .kpi:hover { border-color: var(--navy-300); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+        .kpi:focus-visible { outline: 2px solid var(--navy-500); outline-offset: 2px; }
+        .kpi-top { display: flex; align-items: center; gap: 10px; }
+        .kpi-icon { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .kpi-icon.users { background: var(--navy-100); color: var(--navy-800); }
+        .kpi-icon.reviewer { background: var(--teal-50); color: var(--teal-800); }
+        .kpi-icon.paper { background: var(--amber-50); color: var(--amber-800); }
+        .kpi-icon.published { background: var(--purple-50); color: var(--purple-800); }
+        .kpi-label { font-size: 13px; font-weight: 600; color: var(--ink-700); }
+        .kpi-caption { margin-left: auto; font-size: 10.5px; color: var(--ink-400); white-space: nowrap; }
+        .kpi-value { font-family: var(--font-display); font-size: 30px; font-weight: 500; letter-spacing: -0.02em; color: var(--navy-900);
+          line-height: 1; margin-top: 14px; min-height: 30px; font-variant-numeric: tabular-nums; }
+        .kpi-sub { font-size: 12px; color: var(--ink-500); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kpi-sub.up { color: var(--teal-700); }
+        .kpi-sub.down { color: var(--amber-800); }
+        .kpi-skel { display: inline-block; width: 64px; height: 26px; border-radius: 6px;
+          background: linear-gradient(90deg, var(--ink-100) 25%, var(--ink-50) 50%, var(--ink-100) 75%); background-size: 200% 100%;
+          animation: kpiShimmer 1.2s linear infinite; }
+        @keyframes kpiShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+        .dash-col { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+        .dash-col > .card { margin: 0; }
+        /* "View health" from Needs attention: a brief ring so the eye lands on the card. */
+        .gap-grid.flash > .card { box-shadow: 0 0 0 3px var(--amber-500); transition: box-shadow 300ms; }
       `}</style>
 
       <div className="page-header fade-up">
@@ -313,72 +383,44 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }} className="fade-up delay-1">
-        {roleCounts.map(s => (
-          <div key={s.label} className="role-stat">
-            <div className="role-stat-icon" style={{ background: s.bg, color: s.color }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <div className="kpi-row fade-up delay-1">
+        {kpis.map(k => (
+          <Link key={k.key} to={k.to} className="kpi">
+            <div className="kpi-top">
+              <span className={`kpi-icon ${k.icon}`} aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{KPI_ICONS[k.icon]}</svg>
+              </span>
+              <span className="kpi-label">{k.label}</span>
+              {k.caption && <span className="kpi-caption">{k.caption}</span>}
             </div>
-            <div className="role-stat-num">{loading ? '—' : s.num}</div>
-            <div className="role-stat-lbl">{s.label}</div>
-          </div>
+            <div className="kpi-value">{k.value == null ? <span className="kpi-skel" /> : k.value.toLocaleString()}</div>
+            <div className={`kpi-sub ${k.trend || ''}`}>{k.value == null ? ' ' : k.sub}</div>
+          </Link>
         ))}
       </div>
 
-      <div className="split-grid fade-up delay-2" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
-        <div className="card">
-          <div className="card-header">
-            <div><div className="card-title">Recent Users</div><div className="card-meta">Latest registrations across roles.</div></div>
-            <Link to="/admin/users" style={{ color: 'var(--navy-700)', fontSize: 13, fontWeight: 600 }}>Manage all →</Link>
-          </div>
-          <table className="data-table">
-            <thead><tr><th>User</th><th>Role</th><th>Joined</th><th>Status</th></tr></thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={4}><p className="muted" style={{ fontSize: 13, padding: '16px 0' }}>Loading…</p></td></tr>
-              ) : error ? (
-                <tr><td colSpan={4}><span style={{ color: 'var(--red-700)', fontSize: 13 }}>{error}</span></td></tr>
-              ) : recentUsers.length === 0 ? (
-                <tr><td colSpan={4}><p className="muted" style={{ fontSize: 13, padding: '16px 0' }}>No users yet.</p></td></tr>
-              ) : recentUsers.map(u => (
-                <tr key={u.id}>
-                  <td>
-                    <div className="row">
-                      <div className="avatar">{u.initials}</div>
-                      <div style={{ marginLeft: 4 }}>
-                        <div className="table-title">{u.name}</div>
-                        <div className="table-meta">{u.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span style={{ fontSize: 12.5, fontWeight: 500 }}>{u.role}</span></td>
-                  <td><span className="muted">{u.date}</span></td>
-                  <td>
-                    {u.status === 'suspended' ? (
-                      <span className="pill pill-review">Suspended</span>
-                    ) : u.status === 'deactivated' ? (
-                      <span className="pill pill-rejected">Deleted</span>
-                    ) : (
-                      <span className={`pill pill-${u.reviewer_status === 'pending' ? 'pending' : 'active'}`}>
-                        {u.reviewer_status === 'pending' ? 'Reviewer Pending' : 'Active'}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="split-grid fade-up delay-2" style={{ gridTemplateColumns: '1.5fr 1fr', alignItems: 'start' }}>
+        <div className="dash-col">
+          <NeedsAttentionCard
+            data={attention}
+            state={attentionState}
+            health={healthState === 'ready' ? health : null}
+            onRetry={() => { setAttentionState('loading'); loadAttention(); }}
+            onViewHealth={viewHealth}
+          />
+          <EditorialPipelineCard data={overview} state={overviewState} onRetry={() => { setOverviewState('loading'); loadOverview(); }} />
         </div>
 
-        <div className="gap-grid">
+        <div className="gap-grid" ref={healthCardRef}>
           <SystemHealthCard
             health={health}
             healthState={healthState}
             onRefresh={() => { loadHealth(true); loadSignedIn(); }}
-            onSignedOutEveryone={() => { loadHealth(); loadSignedIn(); }}
+            onSignedOutEveryone={() => { loadHealth(); loadSignedIn(); loadActivity(); }}
             signedIn={signedIn}
             onOpenSignedIn={() => setSignedInOpen(true)}
           />
+          <RecentActivityCard rows={activity} state={activityState} onRetry={() => { setActivityState('loading'); loadActivity(); }} />
           <SignedInUsersDrawer open={signedInOpen} onClose={() => { setSignedInOpen(false); loadSignedIn(); }} />
         </div>
       </div>

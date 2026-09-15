@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from apps.users.models import UserProfile, UserRole
 from apps.users.permissions import IsAdmin
 
+from . import attention, editorial
 from .health import run_checks
 from .models import PlatformState
 from .sessions import revoke_all, signed_in_users
@@ -24,6 +25,32 @@ def _int_param(raw, default, lo, hi):
         return max(lo, min(hi, int(raw)))
     except (TypeError, ValueError):
         return default
+
+
+class EditorialOverviewView(APIView):
+    """
+    GET /api/system/editorial-overview/   (admin only, read-only)
+    See getEditorialOverview in api/admin.js.
+    """
+    permission_classes = [IsAdmin]
+    throttle_classes = [UserRateThrottle]
+
+    def get(self, request):
+        return Response(editorial.overview())
+
+
+class AttentionView(APIView):
+    """
+    GET /api/system/attention/   (admin only)
+
+    See getAttention in api/admin.js. A handful of small counting queries; not
+    cached, so an item disappears as soon as someone deals with it.
+    """
+    permission_classes = [IsAdmin]
+    throttle_classes = [UserRateThrottle]
+
+    def get(self, request):
+        return Response(attention.collect())
 
 
 class SignedInUsersView(APIView):
