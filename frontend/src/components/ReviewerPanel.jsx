@@ -7,11 +7,16 @@
 // not do editorial work. See api/editorial.js for why that split is enforced
 // server-side rather than trusted to this component.
 //
-// The recommended list is ranked by an opaque `match_score` the backend produces.
-// This component only sorts and displays it, so however the ranking is
-// eventually built — embeddings, keyword overlap, citation graph, or a hand-tuned
-// heuristic to start with — nothing here changes. What the editor actually reads
-// is `match_reasons`: a bare 94% is not something anyone can sanity-check.
+// The recommended list is ranked by an opaque `match_score` the backend produces
+// (currently TF-IDF text features + a trained ranker — see matching_system.md). This
+// component only sorts and displays it, so nothing here changes if the ranking
+// method changes again. What the editor actually reads is `match_reasons` and
+// `match_breakdown`: a bare 94% is not something anyone can sanity-check.
+//
+// Reviewers who are authors of the manuscript are never in `candidates` at
+// all (a hard, non-overridable exclusion — see apps/matching/ranking.py) —
+// only counted in `excluded.authorship`, shown as a plain note so the editor
+// isn't left wondering where someone went.
 
 import { useEffect, useState } from 'react';
 import {
@@ -54,6 +59,50 @@ function DeadlineText({ iso }) {
 // One candidate in the recommended list. Conflicts are shown, never filtered
 // out: an editor needs to see that a strong match was ruled out and why —
 // silently dropping them looks exactly like the person not existing.
+function MatchBreakdown({ breakdown, matchedKeywords }) {
+  const [open, setOpen] = useState(false);
+  if (!breakdown || breakdown.length === 0) return null;
+  const maxAbs = Math.max(...breakdown.map(b => Math.abs(b.contribution)), 0.01);
+
+  return (
+    <span className="rp-breakdown">
+      <button type="button" className="rp-breakdown-toggle" onClick={(e) => { e.preventDefault(); setOpen(o => !o); }}>
+        {open ? 'Hide why' : 'Why this match'}
+      </button>
+      {open && (
+        <span className="rp-breakdown-body">
+          {breakdown.map(b => (
+            <span className="rp-breakdown-row" key={b.key}>
+              <span className="rp-breakdown-label">{b.label}</span>
+              <span className="rp-breakdown-bar-track">
+                <span
+                  className={`rp-breakdown-bar ${b.contribution >= 0 ? 'pos' : 'neg'}`}
+                  style={{ width: `${(Math.abs(b.contribution) / maxAbs) * 100}%` }}
+                />
+              </span>
+              <span className="rp-breakdown-value">{b.contribution >= 0 ? '+' : ''}{b.contribution.toFixed(2)}</span>
+            </span>
+          ))}
+          {matchedKeywords && matchedKeywords.length > 0 && (
+            <span className="rp-keyword-chips">
+              {matchedKeywords.map((k, i) => (
+                <span className="rp-keyword-chip" key={i}>
+                  {k.manuscript} ↔ {k.reviewer}
+                </span>
+              ))}
+            </span>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// One candidate in the recommended list. SOFT conflicts (same institution,
+// name mismatch) are shown, never filtered out — an editor needs to see
+// that a strong match was flagged and why. A HARD authorship conflict never
+// reaches this component at all: those candidates are excluded server-side
+// (see the `excluded.authorship` count rendered above the list).
 function CandidateRow({ candidate, checked, onToggle, alreadyOn, priorRound }) {
   const tone = AVAILABILITY_TONE[candidate.availability];
   const blocked = alreadyOn || candidate.availability === 'unavailable';
@@ -70,13 +119,23 @@ function CandidateRow({ candidate, checked, onToggle, alreadyOn, priorRound }) {
       <span className="rp-cand-body">
         <span className="rp-cand-head">
           <span className="rp-cand-name">{candidate.name}</span>
-          <span className="rp-cand-score">{candidate.match_score}</span>
+          <span
+            className="rp-cand-score-wrap"
+            title="Relative match score (0–100) for ranking candidates — not a probability that they will accept."
+          >
+            <span className="rp-cand-score">{candidate.match_score}</span>
+            <span className="rp-cand-score-track">
+              <span className="rp-cand-score-fill" style={{ width: `${candidate.match_score}%` }} />
+            </span>
+          </span>
         </span>
         <span className="rp-cand-meta">
           {candidate.institution}{expertiseLabels.length > 0 && ` · ${expertiseLabels.join(', ')}`}
         </span>
         <span className="rp-cand-reasons">
           {candidate.match_reasons.join(' · ')}
+          {' '}
+          <MatchBreakdown breakdown={candidate.match_breakdown} matchedKeywords={candidate.matched_keywords} />
         </span>
         <span className="rp-cand-facts">
           <span className="rp-tag" style={{ background: tone.bg, color: tone.fg }}>
@@ -102,6 +161,7 @@ function CandidateRow({ candidate, checked, onToggle, alreadyOn, priorRound }) {
 export default function ReviewerPanel({ manuscriptId, reviews, isAdmin, currentRound = 1 }) {
   const [rows, setRows] = useState([]);
   const [candidates, setCandidates] = useState([]);
+  const [excluded, setExcluded] = useState({});
   const [candidatesLoaded, setCandidatesLoaded] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [picked, setPicked] = useState([]);
@@ -124,7 +184,12 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin, currentR
     if (!inviting || candidatesLoaded) return;
     let cancelled = false;
     listCandidates(manuscriptId)
-      .then((data) => { if (!cancelled) { setCandidates(data); setCandidatesLoaded(true); } })
+      .then((data) => {
+        if (cancelled) return;
+        setCandidates(data.candidates || []);
+        setExcluded(data.excluded || {});
+        setCandidatesLoaded(true);
+      })
       .catch(() => { if (!cancelled) setFlash('Could not load candidates — the matching service is unavailable.'); });
     return () => { cancelled = true; };
   }, [inviting, candidatesLoaded, manuscriptId]);
@@ -249,7 +314,10 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin, currentR
         .rp-cand-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
         .rp-cand-head { display: flex; align-items: baseline; gap: 10px; }
         .rp-cand-name { font-weight: 600; font-size: 13.5px; color: var(--navy-900); }
-        .rp-cand-score { margin-left: auto; font-family: var(--font-display); font-size: 17px; font-weight: 500; color: var(--teal-700); }
+        .rp-cand-score-wrap { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .rp-cand-score { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--teal-700); }
+        .rp-cand-score-track { width: 52px; height: 5px; border-radius: 99px; background: var(--ink-100); overflow: hidden; }
+        .rp-cand-score-fill { display: block; height: 100%; background: var(--teal-600); }
         .rp-cand-meta { font-size: 12px; color: var(--ink-600); }
         .rp-cand-reasons { font-size: 12px; color: var(--ink-700); }
         .rp-cand-facts { display: flex; gap: 12px; align-items: center; font-size: 11.5px; margin-top: 2px; }
@@ -257,6 +325,17 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin, currentR
         .rp-conflict { font-size: 12px; color: var(--red-800); font-weight: 600; }
         .rp-cand-note { font-size: 12px; color: var(--ink-600); font-style: italic; }
         .rp-flash { margin-top: 12px; padding: 10px 13px; background: var(--ink-50); border-radius: var(--r-md); font-size: 12.5px; color: var(--navy-900); }
+        .rp-breakdown-toggle { border: none; background: none; padding: 0; color: var(--navy-700); font-size: 11.5px; font-weight: 600; cursor: pointer; text-decoration: underline; }
+        .rp-breakdown-body { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding: 8px 10px; background: var(--ink-50); border-radius: var(--r-md); }
+        .rp-breakdown-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+        .rp-breakdown-label { flex: 0 0 150px; color: var(--ink-700); }
+        .rp-breakdown-bar-track { flex: 1; height: 6px; background: var(--ink-100); border-radius: 99px; overflow: hidden; }
+        .rp-breakdown-bar { display: block; height: 100%; }
+        .rp-breakdown-bar.pos { background: var(--teal-600); }
+        .rp-breakdown-bar.neg { background: var(--red-500); }
+        .rp-breakdown-value { flex: 0 0 44px; text-align: right; color: var(--ink-600); font-variant-numeric: tabular-nums; }
+        .rp-keyword-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .rp-keyword-chip { font-size: 10.5px; padding: 2px 8px; border-radius: 99px; background: var(--navy-100); color: var(--navy-800); }
       `}</style>
 
       <div className="card-header">
@@ -323,6 +402,12 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin, currentR
           {row.extension?.status === 'granted' && (
             <div className="rp-ext">Extension granted — {row.extension.requested_days} days added.</div>
           )}
+          {row.authorship_conflict_at && (
+            <div className="rp-conflict">
+              Authorship conflict — this reviewer is now an author of the manuscript. Their review is
+              kept for the record but withheld from the author.
+            </div>
+          )}
         </div>
       ))}
 
@@ -335,6 +420,11 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin, currentR
           </div>
 
           {!candidatesLoaded && <div className="card-meta">Loading candidates…</div>}
+          {candidatesLoaded && excluded.authorship > 0 && (
+            <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+              {excluded.authorship} reviewer{excluded.authorship === 1 ? '' : 's'} excluded — author{excluded.authorship === 1 ? '' : 's'} of this manuscript.
+            </div>
+          )}
           {rankedCandidates.map(c => (
             <CandidateRow
               key={c.id}

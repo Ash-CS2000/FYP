@@ -276,17 +276,23 @@ const AVAILABILITY_OPTIONS = [
 function ReviewerProfileCard({ user, setUser }) {
   const prefs = { ...DEFAULT_PREFERENCES, ...(user?.preferences || {}) };
   const values = {
-    availability: prefs.availability,
+    // A real column (availability_status), like specialty_tags below — not
+    // folded into preferences. The assignment panel's matching (see
+    // apps/reviews/matching.py) reads this column directly, so this is the
+    // only place in the UI that can actually change whether an editor may
+    // invite this reviewer.
+    availability: user?.availability_status || 'available',
     unavailable_until: prefs.unavailable_until || '',
     max_concurrent: prefs.max_concurrent ?? 3,
     credentials: prefs.credentials || '',
-    // A real column (users/0007_userprofile_specialty_tags), unlike the four
-    // above — so it is split back out of the preferences blob on save.
+    // Also a real column (users/0007_userprofile_specialty_tags) — split back
+    // out of the preferences blob on save, same as availability.
     specialty_tags: user?.specialty_tags || [],
   };
 
-  const save = async ({ specialty_tags, ...draft }) => setUser(await updateMe({
+  const save = async ({ specialty_tags, availability, ...draft }) => setUser(await updateMe({
     specialty_tags,
+    availability_status: availability,
     preferences: { ...draft, max_concurrent: Number(draft.max_concurrent) || 0 },
   }));
 

@@ -5,6 +5,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.manuscripts.conflicts import authorship_block
 from apps.notifications.models import Notification
 from apps.users.permissions import IsReviewer
 
@@ -51,6 +52,11 @@ class ReviewAssignmentAcceptView(APIView):
             return Response({'detail': 'You have already responded to this invitation.'}, status=status.HTTP_409_CONFLICT)
         if timezone.now() > assignment.respond_by:
             return Response({'detail': 'This invitation has expired.'}, status=status.HTTP_410_GONE)
+        reason = authorship_block(assignment)
+        if reason:
+            return Response(
+                {'detail': f'{reason} This invitation has been withdrawn.'}, status=status.HTTP_403_FORBIDDEN,
+            )
 
         serializer = AcceptAssignmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

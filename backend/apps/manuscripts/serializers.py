@@ -90,6 +90,7 @@ class ManuscriptSerializer(serializers.ModelSerializer):
     supplementary_files = ManuscriptSupplementaryFileSerializer(many=True, read_only=True)
     file_url = serializers.SerializerMethodField()
     current_review_round = serializers.SerializerMethodField()
+    is_own_submission = serializers.SerializerMethodField()
 
     class Meta:
         model = Manuscript
@@ -99,7 +100,25 @@ class ManuscriptSerializer(serializers.ModelSerializer):
             'no_funding', 'funder', 'grant_no', 'no_competing', 'competing',
             'ethics_na', 'ethics', 'data_statement', 'status', 'submitted_at', 'updated_at',
             'published_at', 'authors', 'supplementary_files', 'current_review_round',
+            'is_own_submission',
         )
+
+    def get_is_own_submission(self, obj):
+        # Lets the editor's detail page hide editorial panels on a manuscript
+        # the editor authored (the server-side deny_if_author is what enforces
+        # it). Only computed for editors/admins -- for anyone else the page is
+        # their own manuscript list and the check is meaningless.
+        request = self.context.get('request')
+        if request is None or not request.user.is_authenticated:
+            return False
+        if obj.owner_id == request.user.id:
+            return True  # the owner's own list/submit response: no extra queries
+        if '_viewer_is_editor' not in self.context:
+            from .permissions import is_editor_or_admin
+            self.context['_viewer_is_editor'] = is_editor_or_admin(request.user)
+        if not self.context['_viewer_is_editor']:
+            return False
+        return _is_own_submission(self.context, obj)
 
     def get_file_url(self, obj):
         return storage.get_file_url(obj.file_key)
@@ -118,6 +137,14 @@ class ManuscriptSerializer(serializers.ModelSerializer):
         return count + 1
 
 
+def _is_own_submission(context, obj):
+    request = context.get('request')
+    if request is None or not request.user.is_authenticated:
+        return False
+    from .conflicts import is_author_of
+    return is_author_of(obj, request.user)
+
+
 class ManuscriptEditorSerializer(serializers.ModelSerializer):
     """
     List-only serializer for the editor/admin "all submissions" view — flat,
@@ -127,16 +154,29 @@ class ManuscriptEditorSerializer(serializers.ModelSerializer):
     owner_name = serializers.SerializerMethodField()
     plagiarism_check = serializers.SerializerMethodField()
     latest_decision = serializers.SerializerMethodField()
+    is_own_submission = serializers.SerializerMethodField()
 
     class Meta:
         model = Manuscript
         fields = (
             'id', 'title', 'article_type', 'category', 'status', 'submitted_at', 'owner_name',
-            'plagiarism_check', 'latest_decision',
+            'plagiarism_check', 'latest_decision', 'is_own_submission',
         )
 
     def get_owner_name(self, obj):
         return obj.owner.get_full_name() or obj.owner.email
+
+    def get_is_own_submission(self, obj):
+        # An editor authored this manuscript (submitter or a listed byline —
+        # see apps/manuscripts/conflicts.py). The frontend uses this to hide
+        # screening/decision/reviewer actions on the editor's own paper —
+        # see matching_system.md 'Authorship protection'. The list view
+        # passes the caller's authored ids in context (one query for the
+        # whole page instead of an AuthorIndex per row).
+        own_ids = self.context.get('own_manuscript_ids')
+        if own_ids is not None:
+            return obj.id in own_ids
+        return _is_own_submission(self.context, obj)
 
     def get_plagiarism_check(self, obj):
         check = getattr(obj, 'plagiarism_check', None)

@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'apps.users',
     'apps.manuscripts',
     'apps.reviews',
+    'apps.matching',
     'apps.notifications',
     'apps.analysis',
     'apps.publications',
@@ -155,6 +156,9 @@ REST_FRAMEWORK = {
                                     # tier has a modest daily cap shared across
                                     # every author, so keep any one user well
                                     # under the per-minute limit
+        'matching': '60/minute',   # tag auto-suggest — debounced from a text
+                                    # field as someone types, so bursts happen
+                                    # but each request is cheap (one TF-IDF pass).
     },
 }
 

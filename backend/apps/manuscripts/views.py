@@ -1,6 +1,7 @@
 import logging
 
 from botocore.exceptions import BotoCoreError, ClientError
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Count
 from rest_framework import generics, permissions, status
@@ -16,8 +17,11 @@ from django.utils import timezone
 
 from apps.audit import services as audit
 from apps.audit.models import AuditLog
+from apps.manuscripts.conflicts import (
+    AuthorIndex, authored_manuscript_ids, authorship_block, authorship_reason, soft_conflicts,
+)
 from apps.notifications.models import Notification
-from apps.reviews.matching import compute_conflict, rank_candidates
+from apps.matching.ranking import rank_candidates
 from apps.reviews.models import Review, ReviewAssignment
 from apps.reviews.notifications import (
     REVIEW_INVITE_BODY, REVIEW_INVITE_TITLE, REVIEW_REMINDER_BODY, REVIEW_REMINDER_TITLE,
@@ -36,7 +40,7 @@ from .notifications import (
     DECISION_NOTIFICATION_BODIES, DECISION_NOTIFICATION_TITLES, REVISION_SUBMITTED_NOTIFICATION_BODY,
     REVISION_SUBMITTED_NOTIFICATION_TITLE, SCREENING_NOTIFICATION_BODIES, SCREENING_NOTIFICATION_TITLES,
 )
-from .permissions import IsEditorOrAdmin, is_editor, is_editor_or_admin
+from .permissions import IsEditorOrAdmin, deny_if_author, is_editor, is_editor_or_admin
 from .serializers import (
     DecisionCreateSerializer, DecisionSerializer, ManuscriptEditorSerializer,
     ManuscriptRevisionCreateSerializer, ManuscriptRevisionSerializer, ManuscriptSerializer,
@@ -71,6 +75,7 @@ class ManuscriptUploadView(APIView):
                 {'detail': 'Could not upload your files. Please try again.'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -128,6 +133,11 @@ class ManuscriptEditorListView(generics.ListAPIView):
             .order_by('-submitted_at')
         )
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['own_manuscript_ids'] = authored_manuscript_ids(self.request.user)
+        return context
+
 
 class ManuscriptDecisionView(APIView):
     """
@@ -156,6 +166,9 @@ class ManuscriptDecisionView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         manuscript = get_object_or_404(Manuscript, pk=pk)
+        denial = deny_if_author(request.user, manuscript)
+        if denial:
+            return denial
 
         if manuscript.status == Manuscript.Status.REVISIONS_REQUESTED:
             return Response(
@@ -357,6 +370,9 @@ class ManuscriptScreeningView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         manuscript = get_object_or_404(Manuscript, pk=pk)
+        denial = deny_if_author(request.user, manuscript)
+        if denial:
+            return denial
 
         check = getattr(manuscript, 'plagiarism_check', None)
         if check is None:
@@ -405,12 +421,22 @@ class ManuscriptScreeningView(APIView):
 class ManuscriptReviewerCandidatesView(APIView):
     """
     GET /api/manuscripts/<int:pk>/reviewer-candidates/ → every active
-    reviewer, ranked by specialty-tag overlap. Editor/admin only.
+    reviewer ranked by the TF-IDF + learned-ranker pipeline (see
+    apps/matching/ranking.py). Editor/admin only, and not for an editor who
+    authored this manuscript themselves.
+
+    Response shape: {'candidates': [...], 'excluded': {'authorship': n}} —
+    reviewers who are authors of this manuscript are removed before
+    ranking, never merely scored low, and `excluded.authorship` is how many
+    were hidden so the editor isn't left wondering where someone went.
     """
     permission_classes = [permissions.IsAuthenticated, IsEditorOrAdmin]
 
     def get(self, request, pk):
         manuscript = get_object_or_404(Manuscript, pk=pk)
+        denial = deny_if_author(request.user, manuscript)
+        if denial:
+            return denial
         return Response(rank_candidates(manuscript))
 
 
@@ -427,6 +453,9 @@ class ManuscriptAssignmentListCreateView(APIView):
         if not is_editor_or_admin(request.user):
             return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
         manuscript = get_object_or_404(Manuscript, pk=pk)
+        denial = deny_if_author(request.user, manuscript)
+        if denial:
+            return denial
         rows = manuscript.review_assignments.select_related('reviewer').all()
         return Response(ManuscriptAssignmentSerializer(rows, many=True).data)
 
@@ -437,6 +466,9 @@ class ManuscriptAssignmentListCreateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         manuscript = get_object_or_404(Manuscript, pk=pk)
+        denial = deny_if_author(request.user, manuscript)
+        if denial:
+            return denial
 
         serializer = InviteReviewersSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -468,18 +500,48 @@ class ManuscriptAssignmentListCreateView(APIView):
                 {'detail': 'One or more of these reviewers has a suspended or deleted account.'},
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
+
+        # HARD, non-overridable: authorship is never something `force` can
+        # waive, unlike the soft conflicts below (same institution, name
+        # mismatch). See apps/manuscripts/conflicts.py.
+        author_index = AuthorIndex.for_manuscript(manuscript)
+        author_reviewers = [u for u in reviewers if authorship_reason(author_index, u)]
+        if author_reviewers:
+            names = ', '.join(u.get_full_name() or u.email for u in author_reviewers)
+            return Response(
+                {'detail': f'{names} — author(s) of this manuscript — cannot be invited to review it.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+
         if not data['force']:
-            conflicted = [u for u in reviewers if compute_conflict(manuscript, u)]
+            conflicted = [u for u in reviewers if soft_conflicts(author_index, u)]
             if conflicted:
                 return Response(
                     {'detail': 'One or more reviewers have a recorded conflict and were not force-overridden.'},
                     status=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
 
+        # Recompute scores server-side rather than trust anything the client
+        # sent — this is also what gets persisted on the assignment as an
+        # audit trail (see ReviewAssignment.match_score/match_breakdown).
+        ranked = {c['id']: c for c in rank_candidates(manuscript)['candidates']}
+
         respond_by = timezone.now() + timezone.timedelta(days=data['respond_by_days'])
+        created = []
+        try:
+            created = self._create_assignments(request, manuscript, reviewers, ranked, respond_by, data, current_round)
+        except DjangoValidationError as exc:
+            # The model-level guard caught an author added between the check
+            # above and the insert -- still a hard refusal, not a 500.
+            return Response({'detail': ' '.join(exc.messages)}, status=status.HTTP_403_FORBIDDEN)
+        return Response(ManuscriptAssignmentSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
+
+    def _create_assignments(self, request, manuscript, reviewers, ranked, respond_by, data, current_round):
         created = []
         with transaction.atomic():
             for reviewer in reviewers:
+                candidate = ranked.get(reviewer.id)
                 assignment = ReviewAssignment.objects.create(
                     manuscript=manuscript,
                     reviewer=reviewer,
@@ -487,6 +549,9 @@ class ManuscriptAssignmentListCreateView(APIView):
                     respond_by=respond_by,
                     due_days=data['due_days'],
                     round=current_round,
+                    match_score=candidate['match_score'] if candidate else None,
+                    match_breakdown=candidate['match_breakdown'] if candidate else [],
+                    model_version=candidate['model_version'] if candidate else '',
                 )
                 created.append(assignment)
                 Notification.objects.create(
@@ -512,7 +577,7 @@ class ManuscriptAssignmentListCreateView(APIView):
                 request=request,
             )
 
-        return Response(ManuscriptAssignmentSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
+        return created
 
 
 class ManuscriptAssignmentRemindView(APIView):
@@ -526,6 +591,9 @@ class ManuscriptAssignmentRemindView(APIView):
         if not is_editor(request.user):
             return Response({'detail': 'You do not have permission to send reminders.'}, status=status.HTTP_403_FORBIDDEN)
         assignment = get_object_or_404(ReviewAssignment, pk=assignment_id, manuscript_id=pk)
+        denial = deny_if_author(request.user, assignment.manuscript)
+        if denial:
+            return denial
 
         if assignment.reminded_at and timezone.now() - assignment.reminded_at < timezone.timedelta(hours=24):
             return Response(
@@ -556,6 +624,9 @@ class ManuscriptAssignmentExtensionDecideView(APIView):
         if not is_editor(request.user):
             return Response({'detail': 'You do not have permission to decide on an extension.'}, status=status.HTTP_403_FORBIDDEN)
         assignment = get_object_or_404(ReviewAssignment, pk=assignment_id, manuscript_id=pk)
+        denial = deny_if_author(request.user, assignment.manuscript)
+        if denial:
+            return denial
 
         if assignment.extension_status != ReviewAssignment.ExtensionStatus.PENDING:
             return Response({'detail': 'No pending extension request.'}, status=status.HTTP_404_NOT_FOUND)
@@ -596,6 +667,9 @@ class ManuscriptReviewListCreateView(APIView):
         if not is_editor_or_admin(request.user):
             return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
         manuscript = get_object_or_404(Manuscript, pk=pk)
+        denial = deny_if_author(request.user, manuscript)
+        if denial:
+            return denial
         rows = (
             manuscript.review_assignments
             .filter(status__in=[ReviewAssignment.Status.ACCEPTED, ReviewAssignment.Status.SUBMITTED])
@@ -621,6 +695,11 @@ class ManuscriptReviewListCreateView(APIView):
             return Response(
                 {'detail': 'You do not have an accepted assignment on this manuscript.'},
                 status=status.HTTP_403_FORBIDDEN,
+            )
+        reason = authorship_block(assignment)
+        if reason:
+            return Response(
+                {'detail': f'{reason} This assignment has been withdrawn.'}, status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = ReviewCreateSerializer(data=request.data)
@@ -667,6 +746,11 @@ class ManuscriptAuthorReviewsView(APIView):
 
         reviews = Review.objects.filter(
             assignment__manuscript=manuscript, assignment__status=ReviewAssignment.Status.SUBMITTED,
+            # A review whose reviewer turned out to be a co-author (added to
+            # the byline after they'd already submitted -- see
+            # apps/manuscripts/signals.py) is kept for the editorial record
+            # but never released to the authors.
+            assignment__authorship_conflict_at__isnull=True,
         ).select_related('assignment')
         labels = reviewer_labels_for(manuscript)
         return Response(AuthorReviewSerializer(reviews, many=True, context={'labels': labels}).data)
@@ -684,12 +768,20 @@ class ManuscriptReviewerViewView(APIView):
 
     def get(self, request, pk):
         manuscript = get_object_or_404(Manuscript, pk=pk)
-        has_access = ReviewAssignment.objects.filter(
-            manuscript=manuscript, reviewer=request.user,
-            status__in=[ReviewAssignment.Status.ACCEPTED, ReviewAssignment.Status.SUBMITTED],
-        ).exists()
-        if not has_access:
+        assignment = (
+            ReviewAssignment.objects
+            .filter(
+                manuscript=manuscript, reviewer=request.user,
+                status__in=[ReviewAssignment.Status.ACCEPTED, ReviewAssignment.Status.SUBMITTED],
+            )
+            .select_related('manuscript', 'reviewer__profile')
+            .first()
+        )
+        if assignment is None:
             return Response({'detail': 'You may not view this manuscript.'}, status=status.HTTP_403_FORBIDDEN)
+        reason = authorship_block(assignment)
+        if reason:
+            return Response({'detail': reason}, status=status.HTTP_403_FORBIDDEN)
         return Response(ManuscriptForReviewerSerializer(manuscript).data)
 
 
@@ -715,6 +807,9 @@ class ManuscriptPublishView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         manuscript = get_object_or_404(Manuscript, pk=pk)
+        denial = deny_if_author(request.user, manuscript)
+        if denial:
+            return denial
 
         # Covers both directions of wrong state: not yet accepted, and already
         # published. Matches how ManuscriptDecisionView refuses a transition.

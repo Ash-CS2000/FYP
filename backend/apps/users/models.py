@@ -22,6 +22,11 @@ class UserProfile(models.Model):
         SUSPENDED = 'suspended', 'Suspended'
         DEACTIVATED = 'deactivated', 'Deleted'
 
+    class AvailabilityStatus(models.TextChoices):
+        AVAILABLE = 'available', 'Available'
+        BUSY = 'busy', 'Heavy load'
+        UNAVAILABLE = 'unavailable', 'Unavailable'
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.AUTHOR)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
@@ -41,7 +46,9 @@ class UserProfile(models.Model):
     website = models.URLField(blank=True)
     research_areas = models.TextField(blank=True)
     expertise_areas = models.TextField(blank=True)
-    availability_status = models.CharField(max_length=50, blank=True)
+    availability_status = models.CharField(
+        max_length=50, choices=AvailabilityStatus.choices, default=AvailabilityStatus.AVAILABLE, blank=True,
+    )
     specialty_tags = models.JSONField(default=list, blank=True)
 
     # Registration-form fields (added by teammate, restored here)

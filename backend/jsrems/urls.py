@@ -11,6 +11,7 @@ urlpatterns = [
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='refresh'),
     path('api/users/', include('apps.users.urls')),
     path('api/manuscripts/', include('apps.manuscripts.urls')),
+    path('api/matching/', include('apps.matching.urls')),
     # External research discovery (OpenAlex). Public, read-only, and
     # deliberately separate from api/manuscripts — nothing we published is
     # served from here, and nothing served from here has been peer-reviewed

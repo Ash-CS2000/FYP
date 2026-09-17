@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -57,6 +58,21 @@ class ReviewAssignment(models.Model):
     # 24h remind throttle.
     reminded_at = models.DateTimeField(null=True, blank=True)
 
+    # Populated from apps.matching.ranking.rank_candidates() at invite time —
+    # the score/explanation that justified this invite, kept even after the
+    # candidate pool or model changes, so there's an audit trail (and future
+    # training data) for why this reviewer was chosen. Null for rows created
+    # before this field existed.
+    match_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    match_breakdown = models.JSONField(default=list, blank=True)
+    model_version = models.CharField(max_length=50, blank=True)
+
+    # Set when a co-author is added to the manuscript after this reviewer
+    # already submitted a review (see apps/manuscripts/signals.py). The
+    # review itself is kept for the record but excluded from author release
+    # and flagged for the editor — see ManuscriptAuthorReviewsView.
+    authorship_conflict_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         unique_together = ('manuscript', 'reviewer', 'round')
         ordering = ['-invited_at']
@@ -66,6 +82,46 @@ class ReviewAssignment(models.Model):
             f'ReviewAssignment(manuscript={self.manuscript_id}, reviewer={self.reviewer_id}, '
             f'round={self.round}, status={self.status})'
         )
+
+    def _authorship_reason(self):
+        from apps.manuscripts.conflicts import AuthorIndex, authorship_reason
+
+        return authorship_reason(AuthorIndex.for_manuscript(self.manuscript), self.reviewer)
+
+    def _pairing_changed(self):
+        """True for a new row, or when an existing row is re-pointed at a
+        different reviewer or manuscript."""
+        if self._state.adding or self.pk is None:
+            return True
+        original = type(self).objects.filter(pk=self.pk).values('reviewer_id', 'manuscript_id').first()
+        return original is None or (
+            original['reviewer_id'] != self.reviewer_id or original['manuscript_id'] != self.manuscript_id
+        )
+
+    def clean(self):
+        super().clean()
+        if self.reviewer_id and self.manuscript_id and self._pairing_changed():
+            reason = self._authorship_reason()
+            if reason:
+                raise ValidationError(reason)
+
+    def save(self, *args, **kwargs):
+        # Hard, non-overridable guard against a reviewer judging their own
+        # paper — enforced here too (not just at the view layer) so Django
+        # admin, the shell, and seed/migration scripts can't create one by
+        # accident. Checked whenever the (reviewer, manuscript) pairing is set
+        # or changed, not on every status-update save(): an author added to
+        # the manuscript *after* an assignment already exists is handled by
+        # the auto-cancel signal in apps/manuscripts/signals.py, and a reviewer
+        # who becomes an author from their own side by
+        # conflicts.authorship_block() on accept/submit/view.
+        update_fields = kwargs.get('update_fields')
+        pairing_in_update = update_fields is None or {'reviewer', 'reviewer_id', 'manuscript', 'manuscript_id'} & set(update_fields)
+        if pairing_in_update and self._pairing_changed():
+            reason = self._authorship_reason()
+            if reason:
+                raise ValidationError(reason)
+        super().save(*args, **kwargs)
 
 
 class Review(models.Model):

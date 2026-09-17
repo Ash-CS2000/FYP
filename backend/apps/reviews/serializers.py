@@ -53,6 +53,11 @@ class ManuscriptAssignmentSerializer(serializers.Serializer):
     invited_at = serializers.DateTimeField()
     due_at = serializers.DateTimeField(allow_null=True)
     extension = serializers.SerializerMethodField()
+    # Audit trail from invite time (apps/matching/ranking.py) and the
+    # authorship flag set by apps/manuscripts/signals.py.
+    match_score = serializers.IntegerField(allow_null=True)
+    model_version = serializers.CharField()
+    authorship_conflict_at = serializers.DateTimeField(allow_null=True)
 
     def get_name(self, obj):
         return obj.reviewer.get_full_name() or obj.reviewer.email
@@ -148,6 +153,9 @@ class ManuscriptReviewSerializer(serializers.Serializer):
     strengths = serializers.SerializerMethodField()
     weaknesses = serializers.SerializerMethodField()
     confidential_to_editor = serializers.SerializerMethodField()
+    # Set when the reviewer became an author after submitting -- the review is
+    # kept for the record but withheld from the author (see signals.py).
+    authorship_conflict_at = serializers.DateTimeField(allow_null=True)
 
     def get_reviewer_label(self, obj):
         return self.context.get('labels', {}).get(obj.id, 'Reviewer')

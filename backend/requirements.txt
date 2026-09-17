@@ -27,3 +27,10 @@ s3transfer==0.17.0
 six==1.17.0
 sqlparse==0.5.5
 urllib3==2.6.3
+
+# Reviewer matching (TF-IDF text features + learned ranker) -- see
+# apps/matching/ and matching_system.md. Similarities are computed in memory
+# per request; nothing is stored.
+scikit-learn==1.9.1
+numpy==2.5.3
+openpyxl==3.1.5

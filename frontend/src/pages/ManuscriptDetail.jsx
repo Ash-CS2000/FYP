@@ -577,18 +577,30 @@ export default function ManuscriptDetail({ role = 'editor' }) {
             })}
           </div>
 
-          <ReviewerPanel
-            manuscriptId={manuscript.id}
-            reviews={reviews}
-            isAdmin={isAdmin}
-            currentRound={manuscript.current_review_round}
-          />
+          {manuscript.is_own_submission ? (
+            <div className="card">
+              <div className="card-header"><div className="card-title">Reviewers</div></div>
+              <div className="card-meta">
+                You are an author of this manuscript, so reviewer invitations and decisions are
+                handled by another editor.
+              </div>
+            </div>
+          ) : (
+            <ReviewerPanel
+              manuscriptId={manuscript.id}
+              reviews={reviews}
+              isAdmin={isAdmin}
+              currentRound={manuscript.current_review_round}
+            />
+          )}
         </div>
 
         <div className="gap-grid">
-          <PublicationCard manuscript={manuscript} isAdmin={isAdmin} onPublished={handlePublished} />
+          {!manuscript.is_own_submission && (
+            <PublicationCard manuscript={manuscript} isAdmin={isAdmin} onPublished={handlePublished} />
+          )}
 
-          {!isAdmin && !TERMINAL_STATUSES.includes(manuscript.status) && manuscript.status !== 'revisions_requested' && (
+          {!isAdmin && !manuscript.is_own_submission && !TERMINAL_STATUSES.includes(manuscript.status) && manuscript.status !== 'revisions_requested' && (
             <DecisionPanel
               manuscript={manuscript}
               reviews={reviews}

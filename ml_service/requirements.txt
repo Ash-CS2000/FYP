@@ -1,0 +1,7 @@
+# Offline dataset generation + training pipeline for reviewer matching.
+# The backend serves the trained model from its JSON output
+# (apps/matching/model/ranker_v1.json) and uses scikit-learn only for the
+# TF-IDF text features (see backend/requirements.txt).
+scikit-learn==1.9.1
+numpy==2.5.3
+openpyxl==3.1.5

@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import TagPicker from '../components/TagPicker.jsx';
 import { API_URL } from '../config';
+import { suggestTags } from '../api/matching.js';
 import {
   getProgress,
   countCompletedUnits,
@@ -123,6 +124,20 @@ export default function UserSubmit() {
   const [subCategory, setSubCategory] = useState(d.subCategory || 'Medical Imaging');
   const [keywords, setKeywords] = useState(d.keywords || '');
   const [specialtyTags, setSpecialtyTags] = useState(d.specialtyTags || []);
+  const [tagSuggestions, setTagSuggestions] = useState([]);
+
+  // Debounced: compares the title+abstract (TF-IDF) and suggests the closest specialty
+  // tags (see api/matching.js). Suggestions only — clicking one just adds it
+  // to the picker above, same as picking it by hand.
+  useEffect(() => {
+    const text = `${title} ${abstract}`.trim();
+    if (text.length < 20) { setTagSuggestions([]); return; }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      suggestTags(text).then((s) => { if (!cancelled) setTagSuggestions(s); }).catch(() => {});
+    }, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [title, abstract]);
 
   // Step 2 — Authors
   const [authors, setAuthors] = useState(() =>
@@ -531,7 +546,11 @@ export default function UserSubmit() {
                   value={abstract}
                   onChange={(e) => setAbstract(e.target.value)}
                 ></textarea>
-                <div className="field-hint ai">AI suggestion will appear here based on your abstract.</div>
+                <div className="field-hint ai">
+                  {abstract.trim().length < 20
+                    ? 'Paste your abstract and specialty-tag suggestions will appear below.'
+                    : 'Suggestions based on your abstract appear next to Specialty tags below.'}
+                </div>
               </div>
               <div className="field-grid">
                 <div className="field">
@@ -566,8 +585,25 @@ export default function UserSubmit() {
               <div className="field">
                 <label className="field-label">Specialty tags <span className="req">*</span></label>
                 <div className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
-                  Pick 1–3.
+                  Pick 1–3 — this is one signal among several that drives reviewer matching.
                 </div>
+                {tagSuggestions.filter(s => !specialtyTags.includes(s.slug)).length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                    <span className="field-hint" style={{ margin: 0 }}>Suggested:</span>
+                    {tagSuggestions.filter(s => !specialtyTags.includes(s.slug)).map(s => (
+                      <button
+                        key={s.slug}
+                        type="button"
+                        className="tag-chip"
+                        style={{ borderStyle: 'dashed' }}
+                        disabled={specialtyTags.length >= 3}
+                        onClick={() => setSpecialtyTags([...specialtyTags, s.slug])}
+                      >
+                        + {s.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <TagPicker value={specialtyTags} onChange={setSpecialtyTags} max={3} collapsible />
               </div>
             </>

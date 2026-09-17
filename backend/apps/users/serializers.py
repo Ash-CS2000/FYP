@@ -22,10 +22,31 @@ PREFERENCE_KEYS = {
     'notify_reviewer_reminders',
     # Privacy
     'privacy_visibility', 'privacy_signed_reviews',
-    # Reviewing — no columns of their own; the editor's assignment panel reads
-    # these when it is built.
-    'availability', 'unavailable_until', 'max_concurrent', 'credentials',
+    # Reviewing — no columns of their own. `availability` itself is NOT here:
+    # it used to be, back when this was a placeholder for an assignment panel
+    # that didn't exist yet, but the panel now reads the real
+    # UserProfile.availability_status column (see apps/matching/ranking.py),
+    # so a client sending it into `preferences` would silently update nothing
+    # that matching actually reads. Write availability_status directly
+    # instead (see UserSerializer.availability_status).
+    'unavailable_until', 'max_concurrent', 'credentials',
 }
+
+
+# Legacy availability values still sent by older forms, mapped onto the three
+# real choices (UserProfile.AvailabilityStatus). 'on_leave' means the reviewer
+# cannot take work right now, so it maps to unavailable -- never available.
+LEGACY_AVAILABILITY = {'': 'available', 'on_leave': 'unavailable'}
+
+
+def clean_availability_status(value):
+    value = (value or '').strip()
+    value = LEGACY_AVAILABILITY.get(value, value)
+    if value not in UserProfile.AvailabilityStatus.values:
+        raise serializers.ValidationError(
+            f'Must be one of: {", ".join(UserProfile.AvailabilityStatus.values)}.'
+        )
+    return value
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -105,6 +126,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_name(self, obj):
         return obj.get_full_name() or obj.email
+
+    def validate_availability_status(self, value):
+        return clean_availability_status(value)
 
     def validate_preferences(self, value):
         if not isinstance(value, dict):
@@ -264,6 +288,9 @@ class RegisterSerializer(serializers.Serializer):
             raise serializers.ValidationError(f'Unknown specialty tag(s): {", ".join(unknown)}')
         return value
 
+    def validate_availability_status(self, value):
+        return clean_availability_status(value)
+
     def validate_email(self, value):
         email = value.strip().lower()
         if User.objects.filter(email__iexact=email).exists():
@@ -306,7 +333,7 @@ class RegisterSerializer(serializers.Serializer):
         state               = validated_data.pop('state', '')
         date_of_birth       = validated_data.pop('date_of_birth', None)
         expertise_areas     = validated_data.pop('expertise_areas', '')
-        availability_status = validated_data.pop('availability_status', '')
+        availability_status = validated_data.pop('availability_status', 'available')
         degree              = validated_data.pop('degree', '')
         specialty_tags      = validated_data.pop('specialty_tags', [])
 

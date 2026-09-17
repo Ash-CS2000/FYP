@@ -150,19 +150,29 @@ export function requestExtension(assignmentId, { days, reason }) {
  * Candidate reviewers for a manuscript, ranked by fit.
  *
  *   GET /api/manuscripts/:id/reviewer-candidates/
- *   200  Candidate[] — [{ id, name, institution, specialty_tags, match_score,
- *        match_reasons, active_reviews, avg_turnaround_days, availability,
- *        conflict }], see backend/apps/reviews/matching.py
- *   403  caller is not an editor
+ *   200  { candidates: Candidate[], excluded: { authorship: number } }
+ *        Candidate = { id, name, institution, specialty_tags, match_score,
+ *        match_reasons, match_breakdown, matched_keywords, active_reviews,
+ *        avg_turnaround_days, availability, conflict, model_version },
+ *        matched_keywords = [{ manuscript, reviewer }] (exact keyword matches),
+ *        candidates already sorted best first,
+ *        see backend/apps/matching/ranking.py
+ *   403  caller is not an editor, or is an author of this manuscript
  *
- * `match_score` is an opaque 0–100 the frontend only sorts and displays, so the
+ * `match_score` is a relative 0–100 match score (not a probability) the
+ * frontend only sorts and displays, so the
  * ranking method is entirely the backend's choice and can change without
- * touching any screen. `match_reasons` is what the editor actually reads — a
- * bare score is not something anyone can sanity-check.
+ * touching any screen (it's currently TF-IDF text features + a trained ranker, not
+ * tag overlap — see matching_system.md). `match_reasons` and
+ * `match_breakdown` are what the editor actually reads — a bare score is
+ * not something anyone can sanity-check.
  *
  * Return conflicted candidates WITH a populated `conflict` string rather than
- * filtering them out. An editor needs to see that a strong match was excluded
- * and why; silently dropping them looks identical to the person not existing.
+ * filtering them out — that's the SOFT conflict (same institution, name
+ * mismatch), still an editor's call. An author of the manuscript is a HARD,
+ * non-overridable case instead: they are removed from `candidates` entirely
+ * and counted in `excluded.authorship`, which the UI shows as a plain count
+ * rather than silently having someone missing with no explanation.
  */
 export function listCandidates(manuscriptId) {
   return request(`/api/manuscripts/${encodeURIComponent(manuscriptId)}/reviewer-candidates/`);
@@ -172,7 +182,11 @@ export function listCandidates(manuscriptId) {
  * Who is currently invited to or reviewing this manuscript.
  *
  *   GET /api/manuscripts/:id/assignments/
- *   200  [{ id, reviewer_id, name, status, invited_at, due_at, extension }]
+ *   200  [{ id, reviewer_id, name, status, round, invited_at, due_at, extension,
+ *          match_score, model_version, authorship_conflict_at }]
+ *        match_score/model_version: the ranking recorded at invite time.
+ *        authorship_conflict_at: set when the reviewer became an author after
+ *        submitting — the review is withheld from the author.
  *   403  caller is not an editor or admin
  *
  * Not in the original candidate/invite contract above — added so the editor's

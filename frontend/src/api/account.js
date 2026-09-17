@@ -31,8 +31,11 @@ export const PREFERENCE_KEYS = [
   'notify_email_digest', 'notify_in_app', 'notify_weekly_summary', 'notify_reviewer_reminders',
   // Privacy
   'privacy_visibility', 'privacy_signed_reviews',
-  // Reviewing (no columns of their own — see ReviewerProfileCard in Profile.jsx)
-  'availability', 'unavailable_until', 'max_concurrent', 'credentials',
+  // Reviewing (no columns of their own — see ReviewerProfileCard in Profile.jsx).
+  // `availability` itself is NOT here: it's a real column (availability_status,
+  // sent as a top-level field on updateMe, not folded into preferences) — see
+  // the note on PREFERENCE_KEYS in backend/apps/users/serializers.py.
+  'unavailable_until', 'max_concurrent', 'credentials',
 ];
 
 export const DEFAULT_PREFERENCES = {
@@ -46,7 +49,6 @@ export const DEFAULT_PREFERENCES = {
   notify_reviewer_reminders: true,
   privacy_visibility: 'community',
   privacy_signed_reviews: false,
-  availability: 'available',
   unavailable_until: '',
   max_concurrent: 3,
   credentials: '',
