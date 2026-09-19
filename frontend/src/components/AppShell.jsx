@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
+import AuthorAssistantWidget from './AuthorAssistantWidget.jsx';
 import { useNotifications } from '../hooks/useNotifications.jsx';
 
 export default function AppShell({ role, children, searchPlaceholder, topbarActions }) {
@@ -35,6 +36,7 @@ export default function AppShell({ role, children, searchPlaceholder, topbarActi
         )}
         <div className="page-content">{children}</div>
       </main>
+      {role === 'author' && <AuthorAssistantWidget />}
     </div>
   );
 }

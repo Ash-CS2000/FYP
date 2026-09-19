@@ -42,7 +42,12 @@ INSTALLED_APPS = [
     'apps.discovery',
     'apps.audit',
     'apps.system',
+    'apps.assistant',
 ]
+
+# Gemini API key for the Author Assistant chatbot (apps/assistant). Free tier
+# at Google AI Studio — https://aistudio.google.com/apikey
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -146,6 +151,10 @@ REST_FRAMEWORK = {
         'discovery': '120/minute',  # public research library — browsing is cheap
                                     # and read-only, and the anon 30/min ceiling
                                     # is easy to hit just paging around /search
+        'assistant': '6/minute',   # Author Assistant chatbot — Gemini's free
+                                    # tier has a modest daily cap shared across
+                                    # every author, so keep any one user well
+                                    # under the per-minute limit
     },
 }
 

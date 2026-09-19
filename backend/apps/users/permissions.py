@@ -39,3 +39,19 @@ class IsReviewer(BasePermission):
 
     def has_permission(self, request, view):
         return is_reviewer(request.user)
+
+
+def is_author(user):
+    """True when the user holds an active author role."""
+    if not (user and user.is_authenticated):
+        return False
+    return user.roles.filter(
+        role=UserProfile.Role.AUTHOR, status=UserRole.Status.ACTIVE
+    ).exists()
+
+
+class IsAuthor(BasePermission):
+    message = 'Author access required.'
+
+    def has_permission(self, request, view):
+        return is_author(request.user)

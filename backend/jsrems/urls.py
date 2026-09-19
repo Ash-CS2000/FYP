@@ -22,6 +22,7 @@ urlpatterns = [
     path('api/publications/', include('apps.publications.urls')),
     path('api/audit-logs/', include('apps.audit.urls')),
     path('api/system/', include('apps.system.urls')),
+    path('api/assistant/', include('apps.assistant.urls')),
 ]
 
 # See DJANGO_ADMIN_ENABLED in settings.py for why this is off by default.
