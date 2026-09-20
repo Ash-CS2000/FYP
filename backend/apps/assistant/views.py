@@ -1,5 +1,7 @@
 """
-Author Assistant — a Gemini-backed chatbot scoped to the Author workspace.
+Gemini-backed chatbots, one per workspace: Author, Reviewer, Editor and Admin
+Assistant. They share the request handling below and differ only in who may
+call them and what goes into the system prompt (see contexts.py).
 
 Stateless and session-only by design: nothing here is stored. The frontend
 keeps the conversation in memory and resends recent history each turn; a page
@@ -12,9 +14,10 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from apps.manuscripts.models import Manuscript
-from apps.users.permissions import IsAuthor
+from apps.manuscripts.permissions import IsEditor
+from apps.users.permissions import IsAdmin, IsAuthor, IsReviewer
 
+from . import contexts
 from .gemini_client import GeminiError, chat
 
 logger = logging.getLogger(__name__)
@@ -23,40 +26,6 @@ logger = logging.getLogger(__name__)
 # turns are sent — keeps token spend (and the shared free-tier quota) bounded.
 MAX_HISTORY_TURNS = 12
 MAX_MESSAGE_CHARS = 4000
-
-SYSTEM_PROMPT_HEADER = """You are the PaperBridge Author Assistant, embedded in the \
-Author workspace of PaperBridge, a research portal for discovering papers, \
-submitting manuscripts, and tracking peer review.
-
-You help the signed-in author with:
-- Understanding the submission and peer-review workflow (submitted → under \
-review → revisions requested / accepted / rejected → published)
-- What a status on their own dashboard means and what to do next
-- How to resubmit after "revisions requested"
-- General citation and plagiarism-avoidance guidance
-- Finding their way around the Author workspace (My Papers, Submit, Training, \
-Notifications, Settings)
-
-Rules:
-- Only discuss the manuscripts listed below under "This author's manuscripts" \
-— never invent a status, date, or title that isn't there.
-- You cannot see other authors' submissions, reviewer identities, review \
-comments, or make editorial decisions. If asked, say that's outside what you \
-can see and point them to their editor/notifications instead.
-- Keep answers short and practical. This is a chat widget, not an essay.
-"""
-
-
-def _manuscript_context(user):
-    manuscripts = Manuscript.objects.filter(owner=user).order_by('-submitted_at')[:20]
-    if not manuscripts:
-        return "This author's manuscripts: none submitted yet."
-
-    lines = [
-        f'- "{m.title}" — {m.get_status_display()} (submitted {m.submitted_at.date().isoformat()})'
-        for m in manuscripts
-    ]
-    return "This author's manuscripts:\n" + '\n'.join(lines)
 
 
 def _to_gemini_turns(messages):
@@ -74,17 +43,26 @@ def _to_gemini_turns(messages):
     return turns
 
 
-class AuthorAssistantChatView(APIView):
+class AssistantChatView(APIView):
     """
-    POST /api/assistant/chat/
+    POST /api/assistant/chat/            (authors)
+    POST /api/assistant/reviewer-chat/   (reviewers)
+    POST /api/assistant/editor-chat/     (editors)
+    POST /api/assistant/admin-chat/      (admins)
     Body: {"messages": [{"role": "user" | "assistant", "content": "..."}, ...]}
     200  {"reply": "..."}
     400  empty/invalid message history
+    403  caller does not hold the role this assistant is for
     502  Gemini unreachable, unconfigured, or blocked the prompt
+
+    Subclasses set `permission_classes` and `instruction`.
     """
-    permission_classes = [permissions.IsAuthenticated, IsAuthor]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'assistant'
+
+    @staticmethod
+    def instruction(user):
+        raise NotImplementedError
 
     def post(self, request):
         messages = request.data.get('messages')
@@ -97,10 +75,8 @@ class AuthorAssistantChatView(APIView):
                 {'detail': 'messages must end with a user message.'}, status=status.HTTP_400_BAD_REQUEST,
             )
 
-        system_instruction = SYSTEM_PROMPT_HEADER + '\n' + _manuscript_context(request.user)
-
         try:
-            reply = chat(system_instruction, turns)
+            reply = chat(self.instruction(request.user), turns)
         except GeminiError as exc:
             logger.warning('Gemini request failed for user %s: %s', request.user.id, exc)
             return Response(
@@ -109,3 +85,23 @@ class AuthorAssistantChatView(APIView):
             )
 
         return Response({'reply': reply})
+
+
+class AuthorAssistantChatView(AssistantChatView):
+    permission_classes = [permissions.IsAuthenticated, IsAuthor]
+    instruction = staticmethod(contexts.author_instruction)
+
+
+class ReviewerAssistantChatView(AssistantChatView):
+    permission_classes = [permissions.IsAuthenticated, IsReviewer]
+    instruction = staticmethod(contexts.reviewer_instruction)
+
+
+class EditorAssistantChatView(AssistantChatView):
+    permission_classes = [permissions.IsAuthenticated, IsEditor]
+    instruction = staticmethod(contexts.editor_instruction)
+
+
+class AdminAssistantChatView(AssistantChatView):
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    instruction = staticmethod(contexts.admin_instruction)

@@ -23,3 +23,10 @@ class IsEditorOrAdmin(BasePermission):
 
     def has_permission(self, request, view):
         return is_editor_or_admin(request.user)
+
+
+class IsEditor(BasePermission):
+    message = 'Editor access required.'
+
+    def has_permission(self, request, view):
+        return is_editor(request.user)

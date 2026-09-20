@@ -1,34 +1,57 @@
-// src/components/AuthorAssistantWidget.jsx
-// Floating chat bubble for the Author workspace, backed by /api/assistant/chat/.
+// src/components/AssistantWidget.jsx
+// Floating chat bubble for every workspace (author, reviewer, editor, admin),
+// backed by the per-role endpoints in api/assistant.js.
 //
 // Session-only by design: conversation lives in a module-level variable (same
 // trick Sidebar.jsx uses for its scroll position) so it survives navigating
-// between /author/* pages — AppShell remounts on every route change — but a
-// full page reload clears it. Nothing is sent to, or read from, the backend
-// except each chat turn itself.
+// between pages of a workspace — AppShell remounts on every route change — but
+// a full page reload clears it. Kept per role so someone who holds both roles
+// never sees one assistant's chat in the other. Nothing is sent to, or read
+// from, the backend except each chat turn itself.
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { sendAssistantMessage } from '../api/assistant.js';
 
-let savedMessages = [];
-let savedOpen = false;
-
-const WELCOME = {
-  role: 'assistant',
-  content: "Hi! I'm the PaperBridge Author Assistant. How can I help you today?",
+const CONFIG = {
+  author: {
+    title: 'Author Assistant',
+    subtitle: 'Ask about your submissions',
+    welcome: "Hi! I'm the PaperBridge Author Assistant. How can I help you today?",
+  },
+  reviewer: {
+    title: 'Reviewer Assistant',
+    subtitle: 'Ask about your reviews',
+    welcome: "Hi! I'm the PaperBridge Reviewer Assistant. What would you like to know?",
+  },
+  editor: {
+    title: 'Editor Assistant',
+    subtitle: 'Ask about the editorial queue',
+    welcome: "Hi! I'm the PaperBridge Editor Assistant. What would you like to know?",
+  },
+  admin: {
+    title: 'Admin Assistant',
+    subtitle: 'Ask about the platform',
+    welcome: "Hi! I'm the PaperBridge Admin Assistant. What would you like to know?",
+  },
 };
 
-export default function AuthorAssistantWidget() {
-  const [open, setOpen] = useState(savedOpen);
-  const [messages, setMessages] = useState(savedMessages.length ? savedMessages : [WELCOME]);
+const saved = Object.fromEntries(Object.keys(CONFIG).map((r) => [r, { messages: [], open: false }]));
+
+export default function AssistantWidget({ role }) {
+  const { title, subtitle, welcome } = CONFIG[role];
+  const store = saved[role];
+  const [open, setOpen] = useState(store.open);
+  const [messages, setMessages] = useState(
+    store.messages.length ? store.messages : [{ role: 'assistant', content: welcome }],
+  );
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const bodyRef = useRef(null);
 
-  useEffect(() => { savedOpen = open; }, [open]);
-  useEffect(() => { savedMessages = messages; }, [messages]);
+  useEffect(() => { store.open = open; }, [store, open]);
+  useEffect(() => { store.messages = messages; }, [store, messages]);
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +70,7 @@ export default function AuthorAssistantWidget() {
     setSending(true);
 
     try {
-      const reply = await sendAssistantMessage(next);
+      const reply = await sendAssistantMessage(next, role);
       setMessages((cur) => [...cur, { role: 'assistant', content: reply }]);
     } catch (err) {
       setError(err.message || 'Could not reach the assistant.');
@@ -107,11 +130,11 @@ export default function AuthorAssistantWidget() {
       `}</style>
 
       {open && (
-        <div className="assistant-panel" role="dialog" aria-label="Author Assistant">
+        <div className="assistant-panel" role="dialog" aria-label={title}>
           <div className="assistant-head">
             <div>
-              <div className="assistant-head-title">Author Assistant</div>
-              <div className="assistant-head-sub">Ask about your submissions</div>
+              <div className="assistant-head-title">{title}</div>
+              <div className="assistant-head-sub">{subtitle}</div>
             </div>
             <button type="button" className="assistant-close" aria-label="Close" onClick={() => setOpen(false)}>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
