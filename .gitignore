@@ -234,6 +234,7 @@ development_log.md
 manuscript_submission_development.md
 matching_system.md
 Weekly Worklogs/
+COS40006 EAT40006 Sprint 4.docx
 
 # Claude Code local tooling artifacts (auto-downloaded skill docs, not app code)
 .agents/
@@ -244,8 +245,7 @@ skills-lock.json
 PaperBridge-Test-Manuscript.pdf
 .vercel
 
-# Personal notes vault (not app code)
-FYP vault/
+
 
 # Generated demo/seed data reference sheet (contains demo account password)
 PaperBridge Demo Data.xlsx
