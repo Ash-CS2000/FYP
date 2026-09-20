@@ -31,6 +31,8 @@ urllib3==2.6.3
 # Reviewer matching (TF-IDF text features + learned ranker) -- see
 # apps/matching/ and matching_system.md. Similarities are computed in memory
 # per request; nothing is stored.
-scikit-learn==1.9.1
+# Pinned to 1.9.0: Windows Smart App Control blocks 1.9.1's unsigned
+# sklearn/svm/_liblinear .pyd, which every sklearn.linear_model import loads.
+scikit-learn==1.9.0
 numpy==2.5.3
 openpyxl==3.1.5

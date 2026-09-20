@@ -2,6 +2,8 @@
 # The backend serves the trained model from its JSON output
 # (apps/matching/model/ranker_v1.json) and uses scikit-learn only for the
 # TF-IDF text features (see backend/requirements.txt).
-scikit-learn==1.9.1
+# Pinned to 1.9.0: Windows Smart App Control blocks 1.9.1's unsigned
+# sklearn/svm/_liblinear .pyd, which every sklearn.linear_model import loads.
+scikit-learn==1.9.0
 numpy==2.5.3
 openpyxl==3.1.5
