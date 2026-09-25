@@ -264,9 +264,9 @@ function PersonalInfoCard({ user, setUser }) {
 // "heavy load" one is shown with a warning. That makes this the single most
 // effective thing a reviewer can do to stop being invited at a bad time.
 //
-// These four live inside UserProfile.preferences rather than getting columns of
-// their own: they are read and written together, never queried across users, and
-// the assignment panel that consumes them has not been built yet.
+// Availability is a real UserProfile column because the editor's reviewer
+// picker queries it across users. The other reviewer preferences stay in the
+// preferences blob because they are read and written with the profile only.
 const AVAILABILITY_OPTIONS = [
   { id: 'available',   label: 'Available',   blurb: 'Send me invitations as they come up.' },
   { id: 'busy',        label: 'Heavy load',  blurb: 'Invite me only if the fit is strong.' },
@@ -414,6 +414,7 @@ function BecomeReviewerCard({ user, setUser }) {
   const [submitted, setSubmitted] = useState(false);
 
   const status = user?.reviewer_status || '';
+  const hasOrcid = Boolean(user?.orcid_id);
 
   async function apply(e) {
     e.preventDefault();
@@ -432,6 +433,19 @@ function BecomeReviewerCard({ user, setUser }) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function startOrcidReviewerApplication() {
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/users/orcid/url/?role=reviewer`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || 'Failed to start ORCID verification.');
+      sessionStorage.setItem('orcid_state', data.state);
+      window.location.href = data.auth_url;
+    } catch (err) {
+      setError(err.message);
     }
   }
 
@@ -472,9 +486,25 @@ function BecomeReviewerCard({ user, setUser }) {
       {!submitted && status !== 'pending' && (
         <form onSubmit={apply} style={{ marginTop: 16 }}>
           <p style={{ fontSize: 13.5, color: 'var(--ink-600)', marginBottom: 14, lineHeight: 1.6 }}>
-            As an author on PaperBridge, you can also contribute as a peer reviewer. Your
-            application will be reviewed by an admin before the reviewer role is activated.
+            As an author on PaperBridge, you can also contribute as a peer reviewer.
+            Reviewer access is added to this same account after ORCID verification
+            and admin approval.
           </p>
+          {!hasOrcid && (
+            <div className="alert alert-warning">
+              Link your ORCID iD before applying to become a reviewer.
+            </div>
+          )}
+          {!hasOrcid && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={startOrcidReviewerApplication}
+              style={{ marginBottom: 16 }}
+            >
+              Link ORCID and apply
+            </button>
+          )}
           <div className="field">
             <label className="field-label" htmlFor="pf-expertise">Expertise areas</label>
             <input
@@ -492,7 +522,7 @@ function BecomeReviewerCard({ user, setUser }) {
             <TagPicker value={applyTags} onChange={setApplyTags} collapsible />
           </div>
           {error && <div className="alert alert-error">{error}</div>}
-          <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !hasOrcid}>
             {loading ? 'Submitting…' : 'Apply as reviewer →'}
           </button>
         </form>

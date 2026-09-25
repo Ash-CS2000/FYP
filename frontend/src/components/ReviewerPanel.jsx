@@ -142,6 +142,7 @@ function CandidateRow({ candidate, checked, onToggle, alreadyOn, priorRound }) {
             {AVAILABILITY_LABELS[candidate.availability]}
           </span>
           <span className="muted">{candidate.active_reviews} active</span>
+          <span className="muted">{candidate.reliability_score ?? 0}% KPI</span>
           <span className="muted">
             {candidate.avg_turnaround_days == null ? 'no history yet' : `~${candidate.avg_turnaround_days}d turnaround`}
           </span>

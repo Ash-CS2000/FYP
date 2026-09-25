@@ -151,3 +151,27 @@ class Review(models.Model):
 
     def __str__(self):
         return f'Review(assignment={self.assignment_id}, recommendation={self.recommendation})'
+
+
+class ReviewAssessment(models.Model):
+    """
+    Chief-editor assessment of a submitted review. The automated KPI can measure
+    response time and deadlines; this stores the human judgement that the system
+    cannot infer reliably: usefulness, accuracy and whether the report needed
+    editorial correction before it could support a decision.
+    """
+    review = models.OneToOneField(Review, on_delete=models.CASCADE, related_name='assessment')
+    quality = models.PositiveSmallIntegerField()
+    accuracy = models.PositiveSmallIntegerField()
+    errors = models.PositiveSmallIntegerField(default=0)
+    note = models.TextField(blank=True)
+    assessed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='review_assessments_made',
+    )
+    assessed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-assessed_at']
+
+    def __str__(self):
+        return f'ReviewAssessment(review={self.review_id}, quality={self.quality}, accuracy={self.accuracy})'

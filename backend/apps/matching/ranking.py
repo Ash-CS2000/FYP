@@ -18,6 +18,7 @@ from django.db.models import Count
 
 from apps.manuscripts.conflicts import AuthorIndex, authorship_reason, soft_conflicts
 from apps.reviews.models import ReviewAssignment
+from apps.reviews.performance import reviewer_kpi_for
 from apps.users.models import UserProfile, UserRole
 
 from . import baseline, features, text
@@ -251,6 +252,7 @@ def rank_candidates(manuscript):
         if row['active_reviews'] == 0:
             reasons.append('No current review load')
 
+        kpi = reviewer_kpi_for(user)
         ranked.append((probability, {
             'id': user.id,
             'name': user.get_full_name() or user.email,
@@ -258,12 +260,14 @@ def rank_candidates(manuscript):
             'specialty_tags': profile.specialty_tags or [],
             'match_score': score,
             'match_reasons': reasons,
+            'reliability_score': kpi['score'],
+            'reliability_band': kpi['band'],
             'match_breakdown': breakdown,
             'matched_keywords': [
                 {'manuscript': m, 'reviewer': r} for m, r in row['matched_keywords'][:3]
             ],
             'active_reviews': row['active_reviews'],
-            'avg_turnaround_days': row['avg_turnaround_days'],
+            'avg_turnaround_days': kpi['metrics']['avg_turnaround_days'],
             'availability': row['availability'],
             'conflict': row['soft_conflicts'][0] if row['soft_conflicts'] else None,
             'model_version': model_version,

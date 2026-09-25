@@ -216,6 +216,12 @@ class ApplyReviewerView(APIView):
         except UserProfile.DoesNotExist:
             profile = UserProfile.objects.create(user=request.user)
 
+        if not profile.orcid_id:
+            return Response(
+                {'detail': 'Link your ORCID iD before applying to become a reviewer.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         existing_role = UserRole.objects.filter(user=request.user, role=UserProfile.Role.REVIEWER).first()
         if existing_role and existing_role.status == UserRole.Status.ACTIVE:
             return Response(
@@ -278,6 +284,13 @@ class ReviewerApprovalView(APIView):
             user = User.objects.get(pk=pk)
         except User.DoesNotExist:
             return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if action == 'approve' and not profile.orcid_id:
+            return Response(
+                {'detail': 'Reviewer approval requires a linked ORCID iD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         new_status = (
             UserRole.Status.ACTIVE if action == 'approve' else UserRole.Status.REJECTED
@@ -414,6 +427,11 @@ class OrcidCallbackView(APIView):
 
             profile, _ = UserProfile.objects.get_or_create(user=request.user)
             already_linked = bool(profile.orcid_id)
+            if profile.orcid_id and profile.orcid_id.lower() != orcid_id.lower():
+                return Response(
+                    {'detail': 'This account is already linked to a different ORCID iD.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             if not profile.orcid_id:
                 profile.orcid_id = orcid_id
@@ -442,7 +460,10 @@ class OrcidCallbackView(APIView):
             })
 
         # ── Case 2: Not logged in — find existing-by-orcid/email, or create ─
-        user, created = self._get_or_create_user(profile_data, requested_role)
+        try:
+            user, created = self._get_or_create_user(profile_data, requested_role)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
 
         refresh = RefreshToken.for_user(user)
         return Response(
@@ -477,6 +498,8 @@ class OrcidCallbackView(APIView):
             existing = User.objects.filter(email__iexact=email).first()
             if existing:
                 profile, _ = UserProfile.objects.get_or_create(user=existing)
+                if profile.orcid_id and profile.orcid_id.lower() != orcid_id.lower():
+                    raise ValueError('An account with this email is already linked to a different ORCID iD.')
                 if not profile.orcid_id:
                     profile.orcid_id = orcid_id
                     profile.save(update_fields=['orcid_id'])

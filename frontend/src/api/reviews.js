@@ -101,3 +101,13 @@ export function submitReview(manuscriptId, {
     }),
   });
 }
+
+export function assessReview(manuscriptId, assignmentId, { quality, accuracy, errors = 0, note = '' }) {
+  return request(
+    `/api/manuscripts/${encodeURIComponent(manuscriptId)}/reviews/${encodeURIComponent(assignmentId)}/assessment/`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ quality, accuracy, errors, note }),
+    },
+  );
+}

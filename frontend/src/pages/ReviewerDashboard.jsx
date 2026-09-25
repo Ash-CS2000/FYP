@@ -7,16 +7,13 @@ import {
   ASSIGNMENT_STATUS_LABELS,
   ASSIGNMENT_TONE,
   deadlineState,
+  formatDate,
 } from '../data/invitations.js';
-import { listAssignments } from '../api/invitations.js';
+import { getReviewerKpi, listAssignments } from '../api/invitations.js';
 import { getMe } from '../api/users.js';
 import { SPECIALTY_TAG_LABELS } from '../data/specialtyTags.js';
+import { RECOMMENDATION_LABELS } from '../data/reviews.js';
 
-// Double-blind: a reviewer must never see who wrote the manuscript they are
-// assessing. The column stays so the masking is visible rather than silently
-// absent — matching the "Reviewer 2 / Anonymous" treatment in ReviewForm.
-// The backend must omit author identity from reviewer-facing responses; this
-// component only reflects that, it does not enforce it.
 function AnonymousAuthor() {
   return (
     <div className="row">
@@ -26,19 +23,27 @@ function AnonymousAuthor() {
   );
 }
 
+function metricText(value, suffix = '%') {
+  return value == null ? 'No data' : `${value}${suffix}`;
+}
+
 export default function ReviewerDashboard() {
   const firstName = getFirstName(useCurrentUser().user) || 'Reviewer';
 
   const [assignments, setAssignments] = useState([]);
   const [specialtyTags, setSpecialtyTags] = useState([]);
+  const [kpi, setKpi] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     listAssignments()
       .then((data) => { if (!cancelled) setAssignments(data); })
-      .catch(() => { /* left empty — the dashboard still renders with zero counts */ });
+      .catch(() => { /* dashboard still renders with zero counts */ });
     getMe()
       .then((me) => { if (!cancelled) setSpecialtyTags(me.specialty_tags || []); })
+      .catch(() => { /* left empty */ });
+    getReviewerKpi()
+      .then((data) => { if (!cancelled) setKpi(data); })
       .catch(() => { /* left empty */ });
     return () => { cancelled = true; };
   }, []);
@@ -47,6 +52,9 @@ export default function ReviewerDashboard() {
   const accepted = assignments.filter(a => a.status === 'accepted');
   const overdue = accepted.filter(a => deadlineState(a.due_at).tone === 'overdue');
   const open = [...invited, ...accepted];
+  const onTimeRate = kpi?.metrics?.on_time_rate;
+  const quality = kpi?.metrics?.avg_quality;
+  const accuracy = kpi?.metrics?.avg_accuracy;
 
   return (
     <AppShell role="reviewer" searchPlaceholder="Search assigned papers...">
@@ -69,7 +77,7 @@ export default function ReviewerDashboard() {
             value: invited.length,
             accent: 'var(--amber-700)',
             trend: invited.length
-              ? <Link to="/reviewer/invitations" style={{ color: 'var(--navy-700)', fontWeight: 600 }}>Respond now →</Link>
+              ? <Link to="/reviewer/invitations" style={{ color: 'var(--navy-700)', fontWeight: 600 }}>Respond now</Link>
               : 'Nothing to decide',
           },
           { label: 'Reviews in progress', value: accepted.length, accent: 'var(--navy-700)', trend: 'Accepted and open' },
@@ -79,7 +87,12 @@ export default function ReviewerDashboard() {
             accent: 'var(--red-700)',
             trend: overdue.length ? 'Address as soon as possible' : 'All on time',
           },
-          { label: 'Reliability Score', value: '98%', accent: 'var(--navy-700)', trend: 'On-time submissions' },
+          {
+            label: 'Reviewer KPI',
+            value: kpi ? `${kpi.score}%` : '...',
+            accent: 'var(--navy-700)',
+            trend: kpi ? `${kpi.summary.submitted} submitted - ${kpi.band.replace('_', ' ')}` : 'Calculating',
+          },
         ].map((s, i) => (
           <div key={s.label} className={`stat fade-up delay-${i + 1}`} style={{ '--accent': s.accent }}>
             <div className="stat-label">{s.label}</div>
@@ -99,7 +112,7 @@ export default function ReviewerDashboard() {
             </div>
           </div>
           <Link to="/reviewer/assignments" style={{ color: 'var(--navy-700)', fontSize: 13, fontWeight: 600 }}>
-            View all →
+            View all
           </Link>
         </div>
 
@@ -150,23 +163,31 @@ export default function ReviewerDashboard() {
         <div className="card">
           <div className="card-header">
             <div><div className="card-title">Recent Completed Reviews</div><div className="card-meta">Your recent contributions to the journal.</div></div>
-            <Link to="/reviewer/completed" style={{ color: 'var(--navy-700)', fontSize: 13, fontWeight: 600 }}>View all →</Link>
+            <Link to="/reviewer/completed" style={{ color: 'var(--navy-700)', fontSize: 13, fontWeight: 600 }}>View all</Link>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {[
-              { title: 'A Survey of Natural Language Processing in 2025', sub: 'Reviewed 3 days ago · Recommendation: Accept', status: 'Accepted', cls: 'pill-approved', color: 'var(--green-50)', textColor: 'var(--green-800)' },
-              { title: 'Quantum Computing in Cryptography', sub: 'Reviewed 1 week ago · Recommendation: Major Revision', status: 'Revision', cls: 'pill-revision', color: 'var(--purple-50)', textColor: 'var(--purple-800)' },
-              { title: 'Microservices Architecture Patterns', sub: 'Reviewed 2 weeks ago · Recommendation: Accept with Minor Revisions', status: 'Accepted', cls: 'pill-approved', color: 'var(--green-50)', textColor: 'var(--green-800)' },
-            ].map((r, i) => (
-              <div key={i} style={{ padding: 14, border: '1px solid var(--ink-200)', borderRadius: 'var(--r-md)', display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 8, background: r.color, color: r.textColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {(kpi?.recent_reviews || []).length === 0 && (
+              <span className="muted" style={{ fontSize: 13 }}>No completed reviews yet.</span>
+            )}
+            {(kpi?.recent_reviews || []).map((r) => (
+              <div key={r.assignment_id} style={{ padding: 14, border: '1px solid var(--ink-200)', borderRadius: 'var(--r-md)', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 8, background: r.on_time ? 'var(--green-50)' : 'var(--amber-50)', color: r.on_time ? 'var(--green-800)' : 'var(--amber-800)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, color: 'var(--navy-900)', fontSize: 14 }}>{r.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 2 }}>{r.sub}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 2 }}>
+                    Reviewed {formatDate(r.submitted_at)} - {RECOMMENDATION_LABELS[r.recommendation] || r.recommendation}
+                  </div>
+                  {r.assessment?.note && (
+                    <div style={{ fontSize: 12.5, color: 'var(--ink-700)', marginTop: 6, lineHeight: 1.45 }}>
+                      Editor note: {r.assessment.note}
+                    </div>
+                  )}
                 </div>
-                <span className={`pill ${r.cls}`}>{r.status}</span>
+                <span className={`pill ${r.assessment ? 'pill-approved' : 'pill-pending'}`}>
+                  {r.assessment ? `Q${r.assessment.quality} A${r.assessment.accuracy}` : 'Awaiting score'}
+                </span>
               </div>
             ))}
           </div>
@@ -175,12 +196,12 @@ export default function ReviewerDashboard() {
         <div className="card">
           <div className="card-header">
             <div className="card-title">Your Expertise Areas</div>
-            <Link to="/reviewer/profile" style={{ color: 'var(--navy-700)', fontSize: 13, fontWeight: 600 }}>Edit →</Link>
+            <Link to="/reviewer/profile" style={{ color: 'var(--navy-700)', fontSize: 13, fontWeight: 600 }}>Edit</Link>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
             {specialtyTags.length === 0 && (
               <span className="muted" style={{ fontSize: 13 }}>
-                No specialty tags set yet — add some so manuscripts can be matched to you.
+                No specialty tags set yet - add some so manuscripts can be matched to you.
               </span>
             )}
             {specialtyTags.map(slug => (
@@ -192,8 +213,21 @@ export default function ReviewerDashboard() {
           <div style={{ paddingTop: 16, borderTop: '1px solid var(--ink-200)' }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--navy-900)', marginBottom: 12 }}>Reviewer Performance</div>
             {[
-              { label: 'On-time submissions', value: '98%', width: 98, color: 'var(--teal-500)', valColor: 'var(--teal-700)' },
-              { label: 'Quality rating', value: '4.8 / 5', width: 96, color: 'var(--navy-700)', valColor: 'var(--navy-700)' },
+              { label: 'On-time submissions', value: metricText(onTimeRate), width: onTimeRate ?? 0, color: 'var(--teal-500)', valColor: 'var(--teal-700)' },
+              {
+                label: 'Editor quality rating',
+                value: quality == null ? 'Awaiting assessment' : `${quality} / 5`,
+                width: quality == null ? 0 : quality * 20,
+                color: 'var(--navy-700)',
+                valColor: 'var(--navy-700)',
+              },
+              {
+                label: 'Accuracy rating',
+                value: accuracy == null ? 'Awaiting assessment' : `${accuracy} / 5`,
+                width: accuracy == null ? 0 : accuracy * 20,
+                color: 'var(--amber-600)',
+                valColor: 'var(--amber-800)',
+              },
             ].map((m) => (
               <div key={m.label} style={{ marginBottom: 14 }}>
                 <div className="row" style={{ marginBottom: 6 }}>

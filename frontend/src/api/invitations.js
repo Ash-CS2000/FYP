@@ -59,6 +59,10 @@ export function listAssignments() {
   return request('/api/reviewer/assignments/');
 }
 
+export function getReviewerKpi() {
+  return request('/api/reviewer/kpi/');
+}
+
 /**
  * Accept an invitation.
  *

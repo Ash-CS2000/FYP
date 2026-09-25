@@ -178,6 +178,7 @@ export default function RegisterPage() {
   const [institution, setInstitution]         = useState('');
   const [researchAreas, setResearchAreas]     = useState('');
   const [expertiseAreas, setExpertiseAreas]   = useState('');
+  const [orcidId, setOrcidId]                 = useState('');
   const [studentId, setStudentId]             = useState('');
   const [affiliationType, setAffiliationType] = useState('student');
   const [myState, setMyState]                 = useState('');
@@ -208,10 +209,10 @@ export default function RegisterPage() {
     return null;
   }
 
-  async function handleOrcidClick() {
+  async function handleOrcidClick(role = 'author') {
     setError('');
     try {
-      const res = await fetch(`${API_URL}/api/users/orcid/url/`);
+      const res = await fetch(`${API_URL}/api/users/orcid/url/?role=${encodeURIComponent(role)}`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -232,8 +233,14 @@ export default function RegisterPage() {
     if (!REGISTRABLE_ROLES.includes(role)) {
       return setError('That account type cannot be created here. Editor access is granted by an administrator.');
     }
+    if (role === 'reviewer') {
+      return setError('Reviewer applications must use ORCID, or be submitted from your existing author account.');
+    }
     const err = validateBase();
     if (err) return setError(err);
+    if (role === 'author' && !orcidId.trim()) {
+      return setError('ORCID iD is required for author registration.');
+    }
     setError('');
     setLoading(true);
     try {
@@ -248,6 +255,7 @@ export default function RegisterPage() {
         body.affiliation_type  = affiliationType;
         body.research_areas    = researchAreas;
         body.state             = myState;
+        body.orcid_id          = orcidId.trim();
         if (dateOfBirth) body.date_of_birth = dateOfBirth;
       }
       if (role === 'reviewer') {
@@ -268,6 +276,7 @@ export default function RegisterPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(
         data?.email?.[0] || data?.password?.[0] || data?.full_name?.[0] ||
+        data?.orcid_id?.[0] ||
         data?.non_field_errors?.[0] || 'Registration failed. Please try again.'
       );
 
@@ -508,14 +517,7 @@ export default function RegisterPage() {
                 Back
               </button>
               <h1 className="auth-form-title">Register as an <em>author</em>.</h1>
-              <p className="auth-form-sub">Provide your details to set up your author account.</p>
-
-              <button type="button" className="orcid-btn" onClick={handleOrcidClick}>
-                <span className="orcid-badge">iD</span>
-                Continue with ORCID iD
-              </button>
-
-              <div className="divider">or fill in manually</div>
+              <p className="auth-form-sub">Create one author identity for submissions and future reviewer approval. Your ORCID iD is required so the account stays unique and verifiable.</p>
 
               {error && <div className="auth-error">{error}</div>}
 
@@ -529,6 +531,12 @@ export default function RegisterPage() {
                   <label className="field-label">Email address <span className="req">*</span></label>
                   <input className="field-input" type="email" placeholder="you@university.edu" value={email}
                     onChange={e => setEmail(e.target.value)} autoComplete="email" required />
+                </div>
+                <div className="field">
+                  <label className="field-label">ORCID iD <span className="req">*</span></label>
+                  <input className="field-input" type="text" placeholder="0000-0000-0000-0000" value={orcidId}
+                    onChange={e => setOrcidId(e.target.value)} required />
+                  <div className="field-hint">Required to keep one verified identity across author and reviewer roles.</div>
                 </div>
                 <div className="field">
                   <label className="field-label">Date of birth <span className="req">*</span></label>
@@ -629,17 +637,18 @@ export default function RegisterPage() {
                 Back
               </button>
               <h1 className="auth-form-title">Register as a <em>reviewer</em>.</h1>
-              <p className="auth-form-sub">Provide your credentials to apply. An administrator reviews every reviewer application before the workspace opens.</p>
+              <p className="auth-form-sub">Reviewer access is added to one verified identity. Use ORCID, or sign in to your existing author account and apply from Profile.</p>
 
-              <button type="button" className="orcid-btn" onClick={handleOrcidClick}>
+              <button type="button" className="orcid-btn" onClick={() => handleOrcidClick('reviewer')}>
                 <span className="orcid-badge">iD</span>
-                Continue with ORCID iD
+                Apply with ORCID iD
               </button>
 
-              <div className="divider">or fill in manually</div>
+              <div className="divider">existing PaperBridge user?</div>
 
               {error && <div className="auth-error">{error}</div>}
 
+              {false && (
               <form onSubmit={e => handleSubmit(e, 'reviewer')} noValidate>
                 <div className="field">
                   <label className="field-label">Full name</label>
@@ -733,6 +742,7 @@ export default function RegisterPage() {
                   {loading ? 'Submitting application…' : 'Submit Application →'}
                 </button>
               </form>
+              )}
 
               <p className="auth-switch">
                 Already have an account?{' '}

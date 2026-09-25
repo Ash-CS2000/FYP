@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 
@@ -88,6 +89,15 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f'{self.user.get_full_name() or self.user.email} ({self.role})'
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['orcid_id'],
+                condition=~Q(orcid_id=''),
+                name='unique_nonblank_userprofile_orcid_id',
+            ),
+        ]
 
 
 class UserRole(models.Model):

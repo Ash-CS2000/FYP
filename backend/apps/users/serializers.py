@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.db import IntegrityError
 from django.utils import timezone
 from rest_framework import exceptions, serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -81,6 +82,7 @@ class UserSerializer(serializers.ModelSerializer):
     website = serializers.URLField(
         source='profile.website', required=False, allow_blank=True
     )
+    orcid_id = serializers.CharField(source='profile.orcid_id', read_only=True)
     preferences = serializers.JSONField(source='profile.preferences', required=False)
 
     # Presence only — the image itself is served by GET /api/users/<pk>/avatar/,
@@ -102,6 +104,7 @@ class UserSerializer(serializers.ModelSerializer):
             'role',
             'status',
             'institution',
+            'orcid_id',
             'bio',
             'website',
             'research_areas',
@@ -121,7 +124,7 @@ class UserSerializer(serializers.ModelSerializer):
         # through an editor, who has the admin endpoints for it.
         read_only_fields = (
             'id', 'email', 'first_name', 'last_name',
-            'role', 'status', 'roles', 'reviewer_status', 'avatar_key',
+            'role', 'status', 'roles', 'reviewer_status', 'avatar_key', 'orcid_id',
         )
 
     def get_name(self, obj):
@@ -175,6 +178,8 @@ class UserSerializer(serializers.ModelSerializer):
             prefs = profile_data.pop('preferences', None)
             if prefs is not None:
                 profile.preferences = {**(profile.preferences or {}), **prefs}
+                if 'availability' in prefs and 'availability_status' not in profile_data:
+                    profile.availability_status = prefs['availability']
             for field, value in profile_data.items():
                 setattr(profile, field, value)
             profile.save()
@@ -275,6 +280,7 @@ class RegisterSerializer(serializers.Serializer):
     research_areas      = serializers.CharField(required=False, allow_blank=True)
     state               = serializers.CharField(required=False, allow_blank=True, max_length=100)
     date_of_birth       = serializers.DateField(required=False, allow_null=True)
+    orcid_id            = serializers.CharField(required=False, allow_blank=True, max_length=19)
     expertise_areas     = serializers.CharField(required=False, allow_blank=True)
     availability_status = serializers.CharField(required=False, allow_blank=True, max_length=50)
     degree              = serializers.CharField(required=False, allow_blank=True, max_length=100)
@@ -315,7 +321,29 @@ class RegisterSerializer(serializers.Serializer):
         }
         if value not in allowed:
             raise serializers.ValidationError('This role cannot self-register.')
+        if value == UserProfile.Role.REVIEWER:
+            raise serializers.ValidationError(
+                'Reviewer registration must use ORCID from an existing author account and requires approval.'
+            )
         return value
+
+    def validate_orcid_id(self, value):
+        value = (value or '').strip()
+        if not value:
+            return ''
+        import re
+        if not re.fullmatch(r'\d{4}-\d{4}-\d{4}-\d{3}[\dX]', value, flags=re.IGNORECASE):
+            raise serializers.ValidationError('Enter ORCID iD in the format 0000-0000-0000-0000.')
+        return value.upper()
+
+    def validate(self, attrs):
+        role = attrs.get('role', UserProfile.Role.AUTHOR)
+        orcid_id = attrs.get('orcid_id', '')
+        if role == UserProfile.Role.AUTHOR and not orcid_id:
+            raise serializers.ValidationError({'orcid_id': ['ORCID iD is required for author registration.']})
+        if orcid_id and User.objects.filter(profile__orcid_id__iexact=orcid_id).exists():
+            raise serializers.ValidationError({'orcid_id': ['This ORCID iD is already linked to another account.']})
+        return attrs
 
     # ── Create ───────────────────────────────────────────────────────────────
 
@@ -332,6 +360,7 @@ class RegisterSerializer(serializers.Serializer):
         research_areas      = validated_data.pop('research_areas', '')
         state               = validated_data.pop('state', '')
         date_of_birth       = validated_data.pop('date_of_birth', None)
+        orcid_id            = validated_data.pop('orcid_id', '')
         expertise_areas     = validated_data.pop('expertise_areas', '')
         availability_status = validated_data.pop('availability_status', 'available')
         degree              = validated_data.pop('degree', '')
@@ -341,13 +370,16 @@ class RegisterSerializer(serializers.Serializer):
         first_name = name_parts[0]
         last_name  = name_parts[1] if len(name_parts) > 1 else ''
 
-        user = User.objects.create_user(
-            username=email,
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            password=password,
-        )
+        try:
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                password=password,
+            )
+        except IntegrityError as exc:
+            raise serializers.ValidationError({'email': ['An account with this email already exists.']}) from exc
 
         # Reuse user.profile rather than a separate update_or_create() query.
         # The post_save signal (signals.py) already created a blank profile
@@ -367,6 +399,7 @@ class RegisterSerializer(serializers.Serializer):
         profile.research_areas = research_areas
         profile.state = state
         profile.date_of_birth = date_of_birth
+        profile.orcid_id = orcid_id
         profile.expertise_areas = expertise_areas
         profile.availability_status = availability_status
         profile.degree = degree

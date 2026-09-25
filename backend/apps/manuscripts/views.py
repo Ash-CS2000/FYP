@@ -22,7 +22,7 @@ from apps.manuscripts.conflicts import (
 )
 from apps.notifications.models import Notification
 from apps.matching.ranking import rank_candidates
-from apps.reviews.models import Review, ReviewAssignment
+from apps.reviews.models import Review, ReviewAssessment, ReviewAssignment
 from apps.reviews.notifications import (
     REVIEW_INVITE_BODY, REVIEW_INVITE_TITLE, REVIEW_REMINDER_BODY, REVIEW_REMINDER_TITLE,
     REVIEW_EXTENSION_GRANTED_BODY, REVIEW_EXTENSION_GRANTED_TITLE, REVIEW_EXTENSION_REFUSED_BODY,
@@ -30,9 +30,10 @@ from apps.reviews.notifications import (
 )
 from apps.reviews.serializers import (
     AuthorReviewSerializer, InviteReviewersSerializer, ManuscriptAssignmentSerializer,
-    ManuscriptForReviewerSerializer, ManuscriptReviewSerializer, ReviewCreateSerializer,
+    ManuscriptForReviewerSerializer, ManuscriptReviewSerializer, ReviewAssessmentSerializer, ReviewCreateSerializer,
     reviewer_labels_for,
 )
+from apps.users.models import UserProfile, UserRole
 from apps.users.permissions import is_reviewer
 
 from .models import Decision, Manuscript, PlagiarismCheck, ScreeningAction
@@ -493,7 +494,22 @@ class ManuscriptAssignmentListCreateView(APIView):
             )
 
         User = get_user_model()
-        reviewers = list(User.objects.filter(pk__in=reviewer_ids).select_related('profile'))
+        reviewers = list(
+            User.objects
+            .filter(
+                pk__in=reviewer_ids,
+                roles__role=UserProfile.Role.REVIEWER,
+                roles__status=UserRole.Status.ACTIVE,
+            )
+            .select_related('profile')
+            .distinct()
+        )
+        reviewer_ids_found = {reviewer.id for reviewer in reviewers}
+        if reviewer_ids_found != set(reviewer_ids):
+            return Response(
+                {'detail': 'One or more selected reviewers are not active reviewers.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # The candidate list already hides these; this stops a crafted request.
         if any(not r.is_active for r in reviewers):
             return Response(
@@ -512,8 +528,6 @@ class ManuscriptAssignmentListCreateView(APIView):
                 {'detail': f'{names} — author(s) of this manuscript — cannot be invited to review it.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-
-
         if not data['force']:
             conflicted = [u for u in reviewers if soft_conflicts(author_index, u)]
             if conflicted:
@@ -727,6 +741,37 @@ class ManuscriptReviewListCreateView(APIView):
             ManuscriptReviewSerializer(assignment, context={'labels': labels}).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class ManuscriptReviewAssessmentView(APIView):
+    """
+    PUT /api/manuscripts/<int:pk>/reviews/<assignment_id>/assessment/
+    Chief-editor assessment of the submitted review's usefulness and accuracy.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request, pk, assignment_id):
+        if not is_editor(request.user):
+            return Response({'detail': 'You do not have permission to assess reviews.'}, status=status.HTTP_403_FORBIDDEN)
+
+        assignment = get_object_or_404(
+            ReviewAssignment.objects.select_related('review'),
+            pk=assignment_id,
+            manuscript_id=pk,
+            status=ReviewAssignment.Status.SUBMITTED,
+        )
+        review = getattr(assignment, 'review', None)
+        if review is None:
+            return Response({'detail': 'This reviewer has not submitted a review yet.'}, status=status.HTTP_409_CONFLICT)
+
+        existing = getattr(review, 'assessment', None)
+        serializer = ReviewAssessmentSerializer(instance=existing, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        assessment, _ = ReviewAssessment.objects.update_or_create(
+            review=review,
+            defaults={**serializer.validated_data, 'assessed_by': request.user},
+        )
+        return Response(ReviewAssessmentSerializer(assessment).data)
 
 
 class ManuscriptAuthorReviewsView(APIView):

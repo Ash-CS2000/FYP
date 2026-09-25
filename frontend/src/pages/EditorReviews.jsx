@@ -14,13 +14,70 @@ import {
 } from '../data/reviews.js';
 import { formatDate } from '../data/invitations.js';
 import { getManuscript } from '../api/manuscripts.js';
-import { getReviews } from '../api/reviews.js';
+import { assessReview, getReviews } from '../api/reviews.js';
 
 function StatusPill({ review }) {
   if (review.status === 'submitted') return <span className="pill pill-approved">Submitted</span>;
   if (review.status === 'declined')  return <span className="pill pill-revision">Declined</span>;
   if (review.status === 'accepted')  return <span className="pill pill-pending">In progress</span>;
   return <span className="pill pill-pending">Invited</span>;
+}
+
+function AssessmentForm({ review, onSaved }) {
+  const [quality, setQuality] = useState(review.assessment?.quality || 4);
+  const [accuracy, setAccuracy] = useState(review.assessment?.accuracy || 4);
+  const [errors, setErrors] = useState(review.assessment?.errors || 0);
+  const [note, setNote] = useState(review.assessment?.note || '');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const save = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      const assessment = await assessReview(review.manuscript_id, review.id, { quality, accuracy, errors, note });
+      onSaved(review.id, assessment);
+      setMessage('Assessment saved.');
+    } catch (err) {
+      setMessage(err.message || 'Could not save assessment.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rv-assess">
+      <div className="rv-assess-title">Reviewer KPI assessment</div>
+      <div className="rv-assess-grid">
+        <label>
+          <span>Quality</span>
+          <select value={quality} onChange={(event) => setQuality(Number(event.target.value))}>
+            {[5, 4, 3, 2, 1].map(v => <option key={v} value={v}>{v} / 5</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Accuracy</span>
+          <select value={accuracy} onChange={(event) => setAccuracy(Number(event.target.value))}>
+            {[5, 4, 3, 2, 1].map(v => <option key={v} value={v}>{v} / 5</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Corrections needed</span>
+          <input type="number" min="0" max="20" value={errors} onChange={(event) => setErrors(Number(event.target.value))} />
+        </label>
+      </div>
+      <label className="rv-assess-note">
+        <span>Private assessment note</span>
+        <textarea value={note} rows={3} onChange={(event) => setNote(event.target.value)} />
+      </label>
+      <div className="row" style={{ gap: 10 }}>
+        <button className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
+          {saving ? 'Saving...' : review.assessment ? 'Update assessment' : 'Save assessment'}
+        </button>
+        {message && <span className="muted" style={{ fontSize: 12.5 }}>{message}</span>}
+      </div>
+    </div>
+  );
 }
 
 export default function EditorReviews({ role = 'editor' }) {
@@ -45,6 +102,9 @@ export default function EditorReviews({ role = 'editor' }) {
   }, [id]);
 
   const submitted = reviews.filter(r => r.status === 'submitted');
+  const updateAssessment = (assignmentId, assessment) => {
+    setReviews(rows => rows.map(r => (r.id === assignmentId ? { ...r, assessment } : r)));
+  };
 
   if (loading) {
     return (
@@ -89,6 +149,12 @@ export default function EditorReviews({ role = 'editor' }) {
         .rv-conf p { color: var(--amber-800); }
         .rv-muted { font-size: 13px; color: var(--ink-600); font-style: italic; }
         .rv-empty { padding: 28px; text-align: center; color: var(--ink-600); font-size: 13.5px; }
+        .rv-assess { margin-top: 16px; border: 1px solid var(--ink-200); background: var(--ink-50); border-radius: var(--r-md); padding: 14px 16px; }
+        .rv-assess-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-700); font-weight: 700; margin-bottom: 10px; }
+        .rv-assess-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+        .rv-assess label, .rv-assess-note { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-700); font-weight: 700; }
+        .rv-assess select, .rv-assess input, .rv-assess textarea { width: 100%; border: 1px solid var(--ink-200); border-radius: var(--r-sm); background: var(--white); color: var(--navy-900); padding: 9px 10px; font: inherit; font-size: 13px; }
+        .rv-assess-note { margin-bottom: 10px; }
       `}</style>
 
       <div className="page-header fade-up">
@@ -169,6 +235,8 @@ export default function EditorReviews({ role = 'editor' }) {
                       ? <p>{r.confidential_to_editor}</p>
                       : <p className="rv-muted">No confidential comments left.</p>}
                   </div>
+
+                  {!isAdmin && <AssessmentForm review={r} onSaved={updateAssessment} />}
                 </>
               )}
             </div>

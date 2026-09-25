@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Review, ReviewAssignment
+from .models import Review, ReviewAssessment, ReviewAssignment
 
 
 class ReviewerAssignmentSerializer(serializers.Serializer):
@@ -156,6 +156,7 @@ class ManuscriptReviewSerializer(serializers.Serializer):
     # Set when the reviewer became an author after submitting -- the review is
     # kept for the record but withheld from the author (see signals.py).
     authorship_conflict_at = serializers.DateTimeField(allow_null=True)
+    assessment = serializers.SerializerMethodField()
 
     def get_reviewer_label(self, obj):
         return self.context.get('labels', {}).get(obj.id, 'Reviewer')
@@ -192,6 +193,25 @@ class ManuscriptReviewSerializer(serializers.Serializer):
     def get_confidential_to_editor(self, obj):
         review = getattr(obj, 'review', None)
         return review.confidential_to_editor if review else None
+
+    def get_assessment(self, obj):
+        review = getattr(obj, 'review', None)
+        if review is None:
+            return None
+        assessment = getattr(review, 'assessment', None)
+        if assessment is None:
+            return None
+        assessed_by = 'The Editorial Office'
+        if assessment.assessed_by:
+            assessed_by = assessment.assessed_by.get_full_name() or assessment.assessed_by.email
+        return {
+            'quality': assessment.quality,
+            'accuracy': assessment.accuracy,
+            'errors': assessment.errors,
+            'note': assessment.note,
+            'assessed_at': assessment.assessed_at,
+            'assessed_by': assessed_by,
+        }
 
 
 class AuthorReviewSerializer(serializers.Serializer):
@@ -239,6 +259,38 @@ class ReviewCreateSerializer(serializers.Serializer):
         return value.strip()
 
     def validate_confidential_to_editor(self, value):
+        return value.strip()
+
+
+class ReviewAssessmentSerializer(serializers.ModelSerializer):
+    assessed_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReviewAssessment
+        fields = ('quality', 'accuracy', 'errors', 'note', 'assessed_by', 'assessed_at')
+        read_only_fields = ('assessed_by', 'assessed_at')
+
+    def get_assessed_by(self, obj):
+        if not obj.assessed_by:
+            return 'The Editorial Office'
+        return obj.assessed_by.get_full_name() or obj.assessed_by.email
+
+    def validate_quality(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError('Quality must be between 1 and 5.')
+        return value
+
+    def validate_accuracy(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError('Accuracy must be between 1 and 5.')
+        return value
+
+    def validate_errors(self, value):
+        if value < 0 or value > 20:
+            raise serializers.ValidationError('Errors must be between 0 and 20.')
+        return value
+
+    def validate_note(self, value):
         return value.strip()
 
 
