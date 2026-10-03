@@ -31,7 +31,7 @@ class ReviewerAssignmentListView(generics.ListAPIView):
         return (
             ReviewAssignment.objects
             .filter(reviewer=self.request.user)
-            .select_related('manuscript')
+            .select_related('manuscript', 'review', 'review__assessment', 'review__assessment__assessed_by')
         )
 
 

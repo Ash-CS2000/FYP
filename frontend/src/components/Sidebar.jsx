@@ -5,7 +5,6 @@ import { clearDemoSession } from '../data/demoAccounts.js';
 import { clearSession } from '../api/auth';
 import { workspaceEntry, ROLE_LABELS, setActiveRole } from '../auth/roles';
 import Avatar from './Avatar.jsx';
-import ThemeSwitch from './ThemeSwitch.jsx';
 import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 
 // Remember the sidebar's scroll position across route changes. Each page mounts
@@ -125,7 +124,6 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificati
             )}
           </div>
         )}
-        <ThemeSwitch />
         <div className="sidebar-user">
           <Avatar
             user={displayUser}

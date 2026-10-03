@@ -9,6 +9,15 @@ import { deadlineState, formatDate } from '../data/invitations.js';
 import { RATING_CRITERIA } from '../data/reviews.js';
 import { getManuscriptForReview, submitReview } from '../api/reviews.js';
 
+const RECOMMENDATIONS = [
+  { id: 'accept', title: 'Accept', desc: 'Publish as-is, no revisions needed.' },
+  { id: 'minor', title: 'Minor Revision', desc: 'Small changes; no second review needed.' },
+  { id: 'major', title: 'Major Revision', desc: 'Substantive changes; second review needed.' },
+  { id: 'reject', title: 'Reject', desc: 'Not suitable for this journal.' },
+];
+
+const recommendationLabel = id => RECOMMENDATIONS.find(r => r.id === id)?.title || id || 'Not recorded';
+
 export default function ReviewForm() {
   const { id } = useParams();
   const assignment = useOutletContext();
@@ -93,6 +102,16 @@ export default function ReviewForm() {
         .recommend-card-desc { font-size: 12.5px; color: var(--ink-600); }
         .confidential-field { border-left: 3px solid var(--amber-500); background: var(--amber-50); border-radius: var(--r-md); padding: 16px 18px; margin-top: 8px; }
         .confidential-field .field-label { color: var(--amber-800); display: flex; align-items: center; }
+        .review-readonly-grid { display:grid; grid-template-columns:1.35fr .85fr; gap:24px; }
+        .review-section { padding: 18px 20px; border: 1px solid var(--ink-200); border-radius: var(--r-md); background: var(--white); }
+        .review-section + .review-section { margin-top: 14px; }
+        .review-section-title { font-size: 12px; font-weight: 700; color: var(--ink-600); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+        .review-section-body { font-size: 14px; line-height: 1.65; color: var(--navy-900); white-space: pre-wrap; }
+        .review-score-grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px; margin-bottom: 14px; }
+        .review-score { border: 1px solid var(--ink-200); border-radius: var(--r-md); padding: 12px; background: var(--ink-50); }
+        .review-score strong { display:block; font-family: var(--font-display); font-size: 24px; color: var(--teal-700); line-height: 1; margin-bottom: 4px; }
+        .review-score span { font-size: 11px; font-weight: 700; color: var(--ink-600); text-transform: uppercase; letter-spacing: .04em; }
+        .assessment-card { border-left: 3px solid var(--teal-500); background: var(--teal-50); }
       `}</style>
 
       <div className="page-header fade-up">
@@ -139,9 +158,94 @@ export default function ReviewForm() {
       )}
 
       {alreadySubmitted ? (
-        <div className="card fade-up delay-1">
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-600)' }}>
-            Your review has been submitted and cannot be edited.
+        <div className="review-readonly-grid fade-up delay-1">
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">Your submitted review</div>
+                <div className="card-meta">
+                  Submitted {formatDate(assignment.review?.submitted_at)} - {recommendationLabel(assignment.review?.recommendation)}
+                </div>
+              </div>
+              <span className="pill pill-approved">Read-only</span>
+            </div>
+
+            {assignment.review?.ratings && (
+              <div className="review-score-grid">
+                {RATING_CRITERIA.map(c => (
+                  <div key={c.key} className="review-score">
+                    <strong>{assignment.review.ratings[c.key]} / 5</strong>
+                    <span>{c.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="review-section">
+              <div className="review-section-title">Summary of contributions</div>
+              <div className="review-section-body">{assignment.review?.summary || 'Not recorded.'}</div>
+            </div>
+            <div className="review-section">
+              <div className="review-section-title">Strengths</div>
+              <div className="review-section-body">{assignment.review?.strengths || 'Not recorded.'}</div>
+            </div>
+            <div className="review-section">
+              <div className="review-section-title">Weaknesses and suggestions</div>
+              <div className="review-section-body">{assignment.review?.weaknesses || 'Not recorded.'}</div>
+            </div>
+            {assignment.review?.confidential_to_editor && (
+              <div className="review-section confidential-field">
+                <div className="review-section-title">Confidential to editor</div>
+                <div className="review-section-body">{assignment.review.confidential_to_editor}</div>
+              </div>
+            )}
+          </div>
+
+          <div className="gap-grid">
+            <div className="card assessment-card">
+              <div className="card-header">
+                <div>
+                  <div className="card-title">Chief editor assessment</div>
+                  <div className="card-meta">
+                    {assignment.review?.assessment
+                      ? `Assessed by ${assignment.review.assessment.assessed_by}`
+                      : 'No assessment note has been added yet.'}
+                  </div>
+                </div>
+              </div>
+              {assignment.review?.assessment ? (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    <div className="review-score"><strong>{assignment.review.assessment.quality} / 5</strong><span>Quality</span></div>
+                    <div className="review-score"><strong>{assignment.review.assessment.accuracy} / 5</strong><span>Accuracy</span></div>
+                    <div className="review-score"><strong>{assignment.review.assessment.errors}</strong><span>Corrections</span></div>
+                  </div>
+                  <div className="review-section-body">
+                    {assignment.review.assessment.note || 'No private note recorded.'}
+                  </div>
+                </div>
+              ) : (
+                <div className="card-meta">Once the chief editor assesses this review, their note will appear here for your reference.</div>
+              )}
+            </div>
+
+            <div className="card">
+              <div className="card-header"><div className="card-title">Manuscript</div><span className="pill pill-pending">Reference</span></div>
+              <div style={{ padding: 14, background: 'var(--ink-50)', borderRadius: 'var(--r-md)', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <div style={{ width: 44, height: 56, background: 'var(--red-50)', color: 'var(--red-700)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--navy-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{manuscript.file_name}</div>
+                </div>
+                <a href={manuscript.file_url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">Open</a>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div><div className="label" style={{ marginBottom: 4 }}>Category</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)', fontWeight: 500 }}>{manuscript.category}</div></div>
+                {manuscript.sub_category && <div><div className="label" style={{ marginBottom: 4 }}>Sub-category</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>{manuscript.sub_category}</div></div>}
+                <div><div className="label" style={{ marginBottom: 4 }}>Review due</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>{formatDate(assignment.due_at)}</div></div>
+              </div>
+            </div>
           </div>
         </div>
       ) : (
@@ -234,12 +338,7 @@ export default function ReviewForm() {
           <div className="field">
             <label className="field-label" style={{ marginBottom: 12 }}>Final recommendation <span className="req">*</span></label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-              {[
-                { id: 'accept', title: 'Accept', desc: 'Publish as-is, no revisions needed.' },
-                { id: 'minor', title: 'Minor Revision', desc: 'Small changes; no second review needed.' },
-                { id: 'major', title: 'Major Revision', desc: 'Substantive changes; second review needed.' },
-                { id: 'reject', title: 'Reject', desc: 'Not suitable for this journal.' },
-              ].map(r => (
+              {RECOMMENDATIONS.map(r => (
                 <div key={r.id} className={`recommend-card ${recommendation === r.id ? 'selected' : ''}`} onClick={() => setRecommendation(r.id)}>
                   <div className="recommend-card-title">{r.title}</div>
                   <div className="recommend-card-desc">{r.desc}</div>

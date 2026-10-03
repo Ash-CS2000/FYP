@@ -37,7 +37,32 @@ class ReviewerAssignmentSerializer(serializers.Serializer):
         review = getattr(obj, 'review', None)
         if review is None:
             return None
-        return {'recommendation': review.recommendation}
+        assessment = getattr(review, 'assessment', None)
+        assessed_by = 'The Editorial Office'
+        if assessment and assessment.assessed_by:
+            assessed_by = assessment.assessed_by.get_full_name() or assessment.assessed_by.email
+        return {
+            'submitted_at': review.submitted_at,
+            'ratings': {
+                'originality': review.originality,
+                'technical': review.technical,
+                'clarity': review.clarity,
+                'relevance': review.relevance,
+            },
+            'recommendation': review.recommendation,
+            'summary': review.summary,
+            'strengths': review.strengths,
+            'weaknesses': review.weaknesses,
+            'confidential_to_editor': review.confidential_to_editor,
+            'assessment': {
+                'quality': assessment.quality,
+                'accuracy': assessment.accuracy,
+                'errors': assessment.errors,
+                'note': assessment.note,
+                'assessed_at': assessment.assessed_at,
+                'assessed_by': assessed_by,
+            } if assessment else None,
+        }
 
 
 class ManuscriptAssignmentSerializer(serializers.Serializer):
