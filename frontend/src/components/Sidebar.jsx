@@ -12,7 +12,7 @@ import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
 // A module-level value survives those remounts within the SPA session.
 let savedSidebarScroll = 0;
 
-export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificationCount }) {
+export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificationCount, badgeCounts }) {
   const navigate = useNavigate();
   const asideRef = useRef(null);
 
@@ -78,7 +78,9 @@ export default function Sidebar({ role, sidebarOpen, onToggleSidebar, notificati
           <div className="sidebar-section">{section.title}</div>
           <nav className="sidebar-nav">
             {section.items.map((item) => {
-              const badge = item.id === 'notifications' ? notificationCount : item.badge;
+              const badge = item.id === 'notifications'
+                ? notificationCount
+                : (item.badgeKey ? badgeCounts?.[item.badgeKey] : item.badge);
               return (
                 <NavLink
                   key={item.id}

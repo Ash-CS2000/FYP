@@ -25,31 +25,53 @@
 
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useParams } from 'react-router-dom';
-import { listAssignments } from '../api/invitations.js';
+import AppShell from '../components/AppShell.jsx';
+import { getManuscriptForReview } from '../api/reviews.js';
+import { useReviewerAssignments } from '../hooks/useReviewerAssignments.jsx';
+
+// Why the reviewer was sent back — shown as a banner on the assignment list.
+const BLOCKED_NOTICE = {
+  missing: 'You do not have access to that manuscript.',
+  invited: 'Accept the invitation before opening the manuscript.',
+  declined: 'You declined this invitation, so the manuscript is no longer available to you.',
+};
 
 export default function AssignmentGate() {
   const { id } = useParams();
-  const [state, setState] = useState('loading'); // 'loading' | 'blocked' | 'ok'
-  const [assignment, setAssignment] = useState(null);
+  const { assignments, loading } = useReviewerAssignments();
+  const [manuscript, setManuscript] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
+  // Fetched alongside the assignment list rather than after it: the server
+  // 403s anyone without an accepted/submitted assignment, so starting early
+  // leaks nothing and halves the wait.
   useEffect(() => {
     let cancelled = false;
-    listAssignments()
-      .then((rows) => {
-        if (cancelled) return;
-        const found = rows.find(a => String(a.manuscript_id) === String(id)) || null;
-        if (!found || found.status === 'invited' || found.status === 'declined') {
-          setState('blocked');
-        } else {
-          setAssignment(found);
-          setState('ok');
-        }
-      })
-      .catch(() => { if (!cancelled) setState('blocked'); });
+    setManuscript(null);
+    setLoadError('');
+    getManuscriptForReview(id)
+      .then((m) => { if (!cancelled) setManuscript(m); })
+      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load this manuscript.'); });
     return () => { cancelled = true; };
   }, [id]);
 
-  if (state === 'loading') return null;
-  if (state === 'blocked') return <Navigate to="/reviewer/assignments" replace />;
-  return <Outlet context={assignment} />;
+  if (loading) return <GateLoading />;
+
+  const assignment = assignments.find(a => String(a.manuscript_id) === String(id)) || null;
+  const blocked = !assignment ? 'missing'
+    : (assignment.status === 'invited' || assignment.status === 'declined') ? assignment.status
+    : null;
+  if (blocked) {
+    return <Navigate to="/reviewer/assignments" replace state={{ notice: BLOCKED_NOTICE[blocked] }} />;
+  }
+
+  return <Outlet context={{ assignment, manuscript, loadError }} />;
+}
+
+function GateLoading() {
+  return (
+    <AppShell role="reviewer" searchPlaceholder="Search your assignments...">
+      <div className="card fade-up"><div style={{ padding: 24 }}>Loading…</div></div>
+    </AppShell>
+  );
 }

@@ -2,12 +2,16 @@
 // redirects anyone else back to the assignment list before this component renders.
 // The gate is a courtesy; the server still has to check (see api/reviews.js).
 
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { deadlineState, formatDate } from '../data/invitations.js';
 import { RATING_CRITERIA } from '../data/reviews.js';
-import { getManuscriptForReview, submitReview } from '../api/reviews.js';
+import { submitReview } from '../api/reviews.js';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
+import { useReviewerAssignments } from '../hooks/useReviewerAssignments.jsx';
+import { clearDraft, loadDraft, saveDraft } from '../utils/reviewDraft.js';
 
 const RECOMMENDATIONS = [
   { id: 'accept', title: 'Accept', desc: 'Publish as-is, no revisions needed.' },
@@ -18,36 +22,87 @@ const RECOMMENDATIONS = [
 
 const recommendationLabel = id => RECOMMENDATIONS.find(r => r.id === id)?.title || id || 'Not recorded';
 
+// Nothing is pre-selected: a default score or recommendation is one the
+// reviewer never chose, and it anchors everyone towards the same answer.
+const EMPTY_RATINGS = { originality: null, technical: null, clarity: null, relevance: null };
+
+const isEmptyDraft = d => (
+  Object.values(d.ratings).every(v => v == null)
+  && !d.summary.trim() && !d.strengths.trim() && !d.weaknesses.trim()
+  && !d.confidential.trim() && !d.recommendation
+);
+
 export default function ReviewForm() {
-  const { id } = useParams();
-  const assignment = useOutletContext();
+  // AssignmentGate has already checked the assignment and started loading the
+  // manuscript; both arrive through the outlet context.
+  const { assignment, manuscript, loadError } = useOutletContext();
   const navigate = useNavigate();
+  const { user } = useCurrentUser();
+  const store = useReviewerAssignments();
+  const userId = user?.id;
+  const assignmentId = assignment.id;
 
-  const [manuscript, setManuscript] = useState(null);
-  const [loadError, setLoadError] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    getManuscriptForReview(id)
-      .then((m) => { if (!cancelled) setManuscript(m); })
-      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load this manuscript.'); });
-    return () => { cancelled = true; };
-  }, [id]);
-
-  const [ratings, setRatings] = useState({ originality: 4, technical: 3, clarity: 4, relevance: 5 });
-  const [summary, setSummary] = useState('');
-  const [strengths, setStrengths] = useState('');
-  const [weaknesses, setWeaknesses] = useState('');
-  const [recommendation, setRecommendation] = useState('minor');
-  const [confidential, setConfidential] = useState('');
+  // Restored synchronously so the form never flashes empty before the draft.
+  const [initial] = useState(() => (userId ? loadDraft(userId, assignmentId) : null));
+  const [ratings, setRatings] = useState(() => ({ ...EMPTY_RATINGS, ...(initial?.ratings || {}) }));
+  const [summary, setSummary] = useState(initial?.summary || '');
+  const [strengths, setStrengths] = useState(initial?.strengths || '');
+  const [weaknesses, setWeaknesses] = useState(initial?.weaknesses || '');
+  const [recommendation, setRecommendation] = useState(initial?.recommendation || null);
+  const [confidential, setConfidential] = useState(initial?.confidential || '');
+  const [savedAt, setSavedAt] = useState(initial?.saved_at || null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const composite = ((ratings.originality + ratings.technical + ratings.clarity + ratings.relevance) / 4).toFixed(1);
-  const due = deadlineState(assignment?.due_at);
-  const alreadySubmitted = assignment?.status === 'submitted';
+  const alreadySubmitted = assignment.status === 'submitted';
+
+  // ── Draft autosave ──────────────────────────────────────────────────────
+  const draft = useMemo(
+    () => ({ ratings, summary, strengths, weaknesses, recommendation, confidential }),
+    [ratings, summary, strengths, weaknesses, recommendation, confidential],
+  );
+  const debouncedDraft = useDebouncedValue(draft, 800);
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
+  const finished = useRef(false); // set after a successful submit so nothing re-saves
+  // What storage already holds, so an untouched form is not re-saved with a
+  // fresh timestamp.
+  const lastWritten = useRef(JSON.stringify(draft));
+
+  const persist = useCallback((d) => {
+    if (!userId || alreadySubmitted || finished.current) return;
+    const serialized = JSON.stringify(d);
+    if (serialized === lastWritten.current) return;
+    lastWritten.current = serialized;
+    if (isEmptyDraft(d)) {
+      clearDraft(userId, assignmentId);
+      setSavedAt(null);
+    } else {
+      const at = saveDraft(userId, assignmentId, d);
+      if (at) setSavedAt(at);
+    }
+  }, [userId, assignmentId, alreadySubmitted]);
+
+  useEffect(() => { persist(debouncedDraft); }, [debouncedDraft, persist]);
+
+  // Write whatever the debounce has not yet — when leaving the page inside the
+  // app (unmount) and when the tab is closed or reloaded (pagehide).
+  useEffect(() => {
+    const flush = () => persist(latestDraft.current);
+    window.addEventListener('pagehide', flush);
+    return () => { window.removeEventListener('pagehide', flush); flush(); };
+  }, [persist]);
+
+  const ratingValues = Object.values(ratings);
+  const allRated = ratingValues.every(v => v != null);
+  const composite = allRated ? ratingValues.reduce((a, b) => a + b, 0) / ratingValues.length : null;
+  const due = deadlineState(assignment.due_at);
 
   const handleSubmit = async () => {
+    if (!allRated || !recommendation) {
+      setError('Score all four criteria and choose a final recommendation.');
+      return;
+    }
     if (!summary.trim() || !strengths.trim() || !weaknesses.trim()) {
       setError('Summary, strengths, and weaknesses are all required.');
       return;
@@ -55,7 +110,7 @@ export default function ReviewForm() {
     setSubmitting(true);
     setError('');
     try {
-      await submitReview(id, {
+      await submitReview(assignment.manuscript_id, {
         ...ratings,
         recommendation,
         summary: summary.trim(),
@@ -63,6 +118,9 @@ export default function ReviewForm() {
         weaknesses: weaknesses.trim(),
         confidential_to_editor: confidential.trim(),
       });
+      finished.current = true;
+      if (userId) clearDraft(userId, assignmentId);
+      await store?.refetch();
       navigate('/reviewer/assignments');
     } catch (err) {
       setError(err.message || 'Could not submit the review. Please try again.');
@@ -72,7 +130,7 @@ export default function ReviewForm() {
 
   if (loadError) {
     return (
-      <AppShell role="reviewer" searchPlaceholder="Search...">
+      <AppShell role="reviewer" searchPlaceholder="Search your assignments...">
         <div className="page-header fade-up">
           <h1 className="page-title">{loadError}</h1>
           <Link to="/reviewer/assignments" className="btn btn-ghost btn-sm">← Back to assignments</Link>
@@ -81,16 +139,16 @@ export default function ReviewForm() {
     );
   }
 
-  if (!assignment || !manuscript) {
+  if (!manuscript) {
     return (
-      <AppShell role="reviewer" searchPlaceholder="Search...">
+      <AppShell role="reviewer" searchPlaceholder="Search your assignments...">
         <div className="card fade-up"><div style={{ padding: 24 }}>Loading…</div></div>
       </AppShell>
     );
   }
 
   return (
-    <AppShell role="reviewer" searchPlaceholder="Search...">
+    <AppShell role="reviewer" searchPlaceholder="Search your assignments...">
       <style>{`
         .rating-btn { width: 38px; height: 38px; border: 1px solid var(--ink-300); border-radius: var(--r-md); background: var(--white); font-weight: 600; color: var(--ink-700); cursor: pointer; transition: all var(--t-fast); font-size: 14px; }
         .rating-btn:hover { border-color: var(--navy-700); }
@@ -112,6 +170,15 @@ export default function ReviewForm() {
         .review-score strong { display:block; font-family: var(--font-display); font-size: 24px; color: var(--teal-700); line-height: 1; margin-bottom: 4px; }
         .review-score span { font-size: 11px; font-weight: 700; color: var(--ink-600); text-transform: uppercase; letter-spacing: .04em; }
         .assessment-card { border-left: 3px solid var(--teal-500); background: var(--teal-50); }
+        .review-form-grid { grid-template-columns: 1.6fr 1fr; }
+        .assessment-score-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .recommend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .draft-status { font-size: 12.5px; color: var(--ink-600); margin-right: auto; }
+        @media (max-width: 900px) {
+          .review-readonly-grid, .review-form-grid { grid-template-columns: minmax(0, 1fr); }
+          .review-score-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .recommend-grid { grid-template-columns: 1fr; }
+        }
       `}</style>
 
       <div className="page-header fade-up">
@@ -215,7 +282,7 @@ export default function ReviewForm() {
               </div>
               {assignment.review?.assessment ? (
                 <div style={{ display: 'grid', gap: 12 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  <div className="assessment-score-grid">
                     <div className="review-score"><strong>{assignment.review.assessment.quality} / 5</strong><span>Quality</span></div>
                     <div className="review-score"><strong>{assignment.review.assessment.accuracy} / 5</strong><span>Accuracy</span></div>
                     <div className="review-score"><strong>{assignment.review.assessment.errors}</strong><span>Corrections</span></div>
@@ -249,7 +316,7 @@ export default function ReviewForm() {
           </div>
         </div>
       ) : (
-      <div className="split-grid fade-up delay-1" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
+      <div className="split-grid review-form-grid fade-up delay-1">
         <div className="card">
           {RATING_CRITERIA.map(c => (
             <div key={c.key} className="field">
@@ -274,10 +341,10 @@ export default function ReviewForm() {
             <div className="row" style={{ marginBottom: 8 }}>
               <span className="label">Composite Score</span>
               <span className="spacer"></span>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 500, color: 'var(--teal-700)', letterSpacing: '-0.02em' }}>{composite} / 5</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 500, color: 'var(--teal-700)', letterSpacing: '-0.02em' }}>{composite == null ? '—' : composite.toFixed(1)} / 5</span>
             </div>
             <div className="progress" style={{ '--accent': 'var(--teal-500)', height: 8 }}>
-              <div className="progress-fill" style={{ width: `${(composite / 5) * 100}%` }}></div>
+              <div className="progress-fill" style={{ width: `${((composite || 0) / 5) * 100}%` }}></div>
             </div>
           </div>
 
@@ -337,7 +404,7 @@ export default function ReviewForm() {
 
           <div className="field">
             <label className="field-label" style={{ marginBottom: 12 }}>Final recommendation <span className="req">*</span></label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+            <div className="recommend-grid">
               {RECOMMENDATIONS.map(r => (
                 <div key={r.id} className={`recommend-card ${recommendation === r.id ? 'selected' : ''}`} onClick={() => setRecommendation(r.id)}>
                   <div className="recommend-card-title">{r.title}</div>
@@ -351,7 +418,12 @@ export default function ReviewForm() {
             <div className="field-hint" style={{ color: 'var(--red-800)', marginTop: 12 }}>{error}</div>
           )}
 
-          <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--ink-200)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--ink-200)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span className="draft-status">
+              {savedAt
+                ? `Draft saved on this device · ${new Date(savedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+                : 'Your draft saves automatically on this device.'}
+            </span>
             <button onClick={handleSubmit} className="btn btn-primary" disabled={submitting}>
               {submitting ? 'Submitting…' : 'Submit Review →'}
             </button>
@@ -376,7 +448,9 @@ export default function ReviewForm() {
             <div className="card-header"><div className="card-title">Paper Metadata</div></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div><div className="label" style={{ marginBottom: 4 }}>Category</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)', fontWeight: 500 }}>{manuscript.category}</div></div>
-              <div><div className="label" style={{ marginBottom: 4 }}>You accepted</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>{formatDate(assignment.invited_at)}</div></div>
+              {assignment.responded_at && (
+                <div><div className="label" style={{ marginBottom: 4 }}>You accepted</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>{formatDate(assignment.responded_at)}</div></div>
+              )}
               <div><div className="label" style={{ marginBottom: 4 }}>Review due</div><div style={{ fontSize: 13.5, color: 'var(--navy-900)' }}>{formatDate(assignment.due_at)}</div></div>
             </div>
           </div>

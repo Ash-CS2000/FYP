@@ -3234,3 +3234,51 @@ button:disabled {
   margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--ink-100);
 }
 .dv-credit a { color: var(--navy-700); font-weight: 500; }
+
+/* ============================================================
+   Narrow screens — the sidebar becomes an off-canvas drawer
+   (AppShell toggles .mobile-nav-open; Topbar shows the menu button)
+   ============================================================ */
+.topbar-menu,
+.mobile-nav-backdrop { display: none; }
+
+/* The assistant button is fixed bottom-right; leave room so the end of the
+   page can scroll clear of it. */
+.app.has-assistant .page-content { padding-bottom: 96px; }
+
+/* Wide tables scroll inside their card instead of widening the page. */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 900px) {
+  .app,
+  .app.sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 272px;
+    max-width: 85vw;
+    transform: translateX(-100%);
+    transition: transform var(--t-base);
+    z-index: 200;
+  }
+  .app.mobile-nav-open .sidebar { transform: translateX(0); box-shadow: 0 0 40px rgba(0, 0, 0, 0.3); }
+
+  .app.mobile-nav-open .mobile-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 16, 32, 0.45);
+    z-index: 199;
+  }
+
+  .topbar { padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top, 0px)); gap: 12px; }
+  .topbar-menu { display: inline-flex; flex-shrink: 0; }
+  .topbar-actions { gap: 4px; }
+  .admin-mobile-menu { margin: 12px 16px 0; }
+
+  .page-content { padding: 20px 16px; }
+  .app.has-assistant .page-content { padding-bottom: 96px; }
+  .page-header { flex-wrap: wrap; gap: 12px; }
+}

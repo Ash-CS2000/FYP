@@ -93,8 +93,10 @@ def reviewer_kpi_for(user):
 
     avg_turnaround_days = round(sum(turnaround_days) / len(turnaround_days), 1) if turnaround_days else None
 
+    # Newest submission first — invited_at order (the queryset's) can disagree.
+    by_submission = sorted(submitted, key=lambda a: a.review.submitted_at, reverse=True)
     recent = []
-    for assignment in submitted[:5]:
+    for assignment in by_submission[:5]:
         assessment = getattr(assignment.review, 'assessment', None)
         recent.append({
             'assignment_id': assignment.id,

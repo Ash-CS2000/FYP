@@ -9,7 +9,8 @@ import {
   deadlineState,
   formatDate,
 } from '../data/invitations.js';
-import { getReviewerKpi, listAssignments } from '../api/invitations.js';
+import { getReviewerKpi } from '../api/invitations.js';
+import { useReviewerAssignments } from '../hooks/useReviewerAssignments.jsx';
 import { getMe } from '../api/users.js';
 import { SPECIALTY_TAG_LABELS } from '../data/specialtyTags.js';
 import { RECOMMENDATION_LABELS } from '../data/reviews.js';
@@ -30,15 +31,12 @@ function metricText(value, suffix = '%') {
 export default function ReviewerDashboard() {
   const firstName = getFirstName(useCurrentUser().user) || 'Reviewer';
 
-  const [assignments, setAssignments] = useState([]);
+  const assignments = useReviewerAssignments()?.assignments || [];
   const [specialtyTags, setSpecialtyTags] = useState([]);
   const [kpi, setKpi] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    listAssignments()
-      .then((data) => { if (!cancelled) setAssignments(data); })
-      .catch(() => { /* dashboard still renders with zero counts */ });
     getMe()
       .then((me) => { if (!cancelled) setSpecialtyTags(me.specialty_tags || []); })
       .catch(() => { /* left empty */ });
@@ -121,6 +119,7 @@ export default function ReviewerDashboard() {
             Nothing open. Anything new will appear here and in your invitations.
           </div>
         ) : (
+          <div className="table-scroll">
           <table className="data-table">
             <thead><tr><th>Paper</th><th>Category</th><th>Author</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
             <tbody>
@@ -134,7 +133,7 @@ export default function ReviewerDashboard() {
                     : undefined}>
                     <td>
                       <div className="table-title">{a.title}</div>
-                      <div className="table-meta">{a.manuscript_id}</div>
+                      <div className="table-meta">Manuscript #{a.manuscript_id}</div>
                     </td>
                     <td><span className="muted">{a.category}</span></td>
                     <td><AnonymousAuthor /></td>
@@ -156,6 +155,7 @@ export default function ReviewerDashboard() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

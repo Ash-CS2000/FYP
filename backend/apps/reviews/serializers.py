@@ -17,6 +17,7 @@ class ReviewerAssignmentSerializer(serializers.Serializer):
     invited_at = serializers.DateTimeField()
     respond_by = serializers.DateTimeField()
     due_at = serializers.DateTimeField(allow_null=True)
+    responded_at = serializers.DateTimeField(allow_null=True)
     status = serializers.CharField()
     decline_reason = serializers.CharField()
     decline_note = serializers.CharField()

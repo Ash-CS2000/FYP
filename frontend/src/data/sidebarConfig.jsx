@@ -1,11 +1,8 @@
 // Sidebar nav configurations per role
-import { myAssignments } from './invitations.js';
 
-// Badges on the reviewer's entries. Like FLAGGED_COUNT below, these are read once
-// at module load — a response made this session shows on the next full page load.
-const MY_ASSIGNMENTS = myAssignments();
-const INVITED_COUNT = MY_ASSIGNMENTS.filter(a => a.status === 'invited').length;
-const ACCEPTED_COUNT = MY_ASSIGNMENTS.filter(a => a.status === 'accepted').length;
+// The reviewer's Invitations/Assigned badges are live counts, not numbers in
+// this file: an item's `badgeKey` names a key of the `badgeCounts` AppShell
+// passes to Sidebar (from hooks/useReviewerAssignments.jsx).
 
 // Badge on the editor's Screening entry: submissions sitting in the flagged band.
 // Evaluated once at module load, like the other badge numbers here — an admin
@@ -100,8 +97,8 @@ export const SIDEBAR_CONFIG = {
         title: 'Reviews',
         items: [
           { id: 'dashboard', label: 'Dashboard', to: '/reviewer/dashboard', icon: ICONS.dashboard },
-          { id: 'invitations', label: 'Invitations', to: '/reviewer/invitations', icon: ICONS.bell, badge: INVITED_COUNT },
-          { id: 'assigned', label: 'Assigned', to: '/reviewer/assigned', icon: ICONS.check, badge: ACCEPTED_COUNT },
+          { id: 'invitations', label: 'Invitations', to: '/reviewer/invitations', icon: ICONS.bell, badgeKey: 'invited' },
+          { id: 'assigned', label: 'Assigned', to: '/reviewer/assigned', icon: ICONS.check, badgeKey: 'accepted' },
           { id: 'completed', label: 'Completed', to: '/reviewer/completed', icon: ICONS.done },
         ],
       },
