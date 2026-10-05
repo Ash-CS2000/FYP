@@ -11,6 +11,7 @@ from apps.users.permissions import IsReviewer
 
 from .models import ReviewAssignment
 from .performance import reviewer_kpi_for
+from .reminders import send_due_reminders
 from .notifications import (
     REVIEW_ACCEPTED_BODY, REVIEW_ACCEPTED_TITLE, REVIEW_DECLINED_BODY, REVIEW_DECLINED_TITLE,
     REVIEW_EXTENSION_REQUESTED_BODY, REVIEW_EXTENSION_REQUESTED_TITLE, REVIEW_RECUSED_BODY,
@@ -28,6 +29,7 @@ class ReviewerAssignmentListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsReviewer]
 
     def get_queryset(self):
+        send_due_reminders(reviewer=self.request.user)
         return (
             ReviewAssignment.objects
             .filter(reviewer=self.request.user)

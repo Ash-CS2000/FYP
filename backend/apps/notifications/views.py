@@ -3,6 +3,9 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.reviews.reminders import send_due_reminders
+from apps.users.permissions import is_reviewer
+
 from .models import Notification
 from .serializers import NotificationSerializer
 
@@ -15,6 +18,10 @@ class NotificationListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # Deadline reminders are generated on read (there is no scheduler), so a
+        # reviewer who opens the bell first still sees them.
+        if is_reviewer(self.request.user):
+            send_due_reminders(reviewer=self.request.user)
         return Notification.objects.filter(recipient=self.request.user).select_related('manuscript')
 
 

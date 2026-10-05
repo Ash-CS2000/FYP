@@ -24,7 +24,10 @@ async function request(path, options = {}) {
     let detail = '';
     try {
       const body = await res.json();
-      detail = body?.detail || body?.error || '';
+      // Field validation errors arrive as { field: ['message'] }; surface the
+      // first one rather than a bare status code.
+      const firstField = body && typeof body === 'object' ? Object.values(body)[0] : null;
+      detail = body?.detail || body?.error || (Array.isArray(firstField) ? firstField[0] : '') || '';
     } catch {
       /* non-JSON error body */
     }

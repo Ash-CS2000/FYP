@@ -19,6 +19,13 @@ REVIEW_RECUSED_BODY = '{reviewer} recused themselves from reviewing "{title}" af
 REVIEW_REMINDER_TITLE = 'Reminder: a review is waiting on you'
 REVIEW_REMINDER_BODY = 'The editor sent a reminder about your review of "{title}".'
 
+# Automatic deadline reminders -- see apps/reviews/reminders.py.
+REVIEW_DUE_SOON_TITLE = 'Your review is due soon'
+REVIEW_DUE_SOON_BODY = 'Your review of "{title}" is due {due}.'
+
+REVIEW_OVERDUE_TITLE = 'Your review is overdue'
+REVIEW_OVERDUE_BODY = 'Your review of "{title}" was due {due}. Submit it or request an extension.'
+
 REVIEW_EXTENSION_REQUESTED_TITLE = 'A reviewer requested more time'
 REVIEW_EXTENSION_REQUESTED_BODY = '{reviewer} requested {days} extra day(s) on "{title}".'
 

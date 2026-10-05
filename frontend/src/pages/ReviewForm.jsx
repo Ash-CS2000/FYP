@@ -26,6 +26,20 @@ const recommendationLabel = id => RECOMMENDATIONS.find(r => r.id === id)?.title 
 // reviewer never chose, and it anchors everyone towards the same answer.
 const EMPTY_RATINGS = { originality: null, technical: null, clarity: null, relevance: null };
 
+// Each written section needs some substance. Mirrors MIN_REVIEW_TEXT in
+// backend/apps/reviews/serializers.py, which enforces it.
+const MIN_TEXT = 50;
+
+function LengthHint({ value }) {
+  const n = value.trim().length;
+  const met = n >= MIN_TEXT;
+  return (
+    <div className="field-hint" style={{ color: met ? 'var(--teal-700)' : 'var(--ink-600)' }}>
+      {met ? `${n} characters` : `${n} / ${MIN_TEXT} characters minimum`}
+    </div>
+  );
+}
+
 const isEmptyDraft = d => (
   Object.values(d.ratings).every(v => v == null)
   && !d.summary.trim() && !d.strengths.trim() && !d.weaknesses.trim()
@@ -105,6 +119,10 @@ export default function ReviewForm() {
     }
     if (!summary.trim() || !strengths.trim() || !weaknesses.trim()) {
       setError('Summary, strengths, and weaknesses are all required.');
+      return;
+    }
+    if ([summary, strengths, weaknesses].some(t => t.trim().length < MIN_TEXT)) {
+      setError(`Each of summary, strengths and weaknesses needs at least ${MIN_TEXT} characters.`);
       return;
     }
     setSubmitting(true);
@@ -357,6 +375,7 @@ export default function ReviewForm() {
               onChange={e => setSummary(e.target.value)}
               placeholder="What does this paper contribute?"
             />
+            <LengthHint value={summary} />
           </div>
           <div className="field">
             <label className="field-label">Strengths <span className="req">*</span></label>
@@ -367,6 +386,7 @@ export default function ReviewForm() {
               onChange={e => setStrengths(e.target.value)}
               placeholder="What does the paper do well?"
             />
+            <LengthHint value={strengths} />
           </div>
           <div className="field">
             <label className="field-label">Weaknesses & suggestions <span className="req">*</span></label>
@@ -377,6 +397,7 @@ export default function ReviewForm() {
               onChange={e => setWeaknesses(e.target.value)}
               placeholder="What should the authors address?"
             />
+            <LengthHint value={weaknesses} />
           </div>
 
           {/* Editor-only channel. The author never sees this — see

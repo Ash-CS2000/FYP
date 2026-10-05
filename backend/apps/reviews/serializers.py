@@ -258,6 +258,10 @@ class AuthorReviewSerializer(serializers.Serializer):
         return self.context.get('labels', {}).get(obj.assignment_id, 'Reviewer')
 
 
+# A one-word "ok" is not a review. Mirrored by MIN_TEXT in frontend/src/pages/ReviewForm.jsx.
+MIN_REVIEW_TEXT = 50
+
+
 class ReviewCreateSerializer(serializers.Serializer):
     originality = serializers.IntegerField(min_value=1, max_value=5)
     technical = serializers.IntegerField(min_value=1, max_value=5)
@@ -269,20 +273,23 @@ class ReviewCreateSerializer(serializers.Serializer):
     weaknesses = serializers.CharField()
     confidential_to_editor = serializers.CharField(required=False, allow_blank=True, default='')
 
-    def validate_summary(self, value):
-        if not value.strip():
+    @staticmethod
+    def _require_text(value):
+        value = value.strip()
+        if not value:
             raise serializers.ValidationError('Required.')
-        return value.strip()
+        if len(value) < MIN_REVIEW_TEXT:
+            raise serializers.ValidationError(f'Write at least {MIN_REVIEW_TEXT} characters.')
+        return value
+
+    def validate_summary(self, value):
+        return self._require_text(value)
 
     def validate_strengths(self, value):
-        if not value.strip():
-            raise serializers.ValidationError('Required.')
-        return value.strip()
+        return self._require_text(value)
 
     def validate_weaknesses(self, value):
-        if not value.strip():
-            raise serializers.ValidationError('Required.')
-        return value.strip()
+        return self._require_text(value)
 
     def validate_confidential_to_editor(self, value):
         return value.strip()
