@@ -89,7 +89,13 @@ export default function ReviewerDashboard() {
             label: 'Reviewer KPI',
             value: kpi ? `${kpi.score}%` : '...',
             accent: 'var(--navy-700)',
-            trend: kpi ? `${kpi.summary.submitted} submitted - ${kpi.band.replace('_', ' ')}` : 'Calculating',
+            trend: kpi
+              ? [
+                `${kpi.summary.submitted} submitted`,
+                kpi.summary.overdue_open ? `${kpi.summary.overdue_open} overdue` : null,
+                kpi.band.replace('_', ' '),
+              ].filter(Boolean).join(' · ')
+              : 'Calculating',
           },
         ].map((s, i) => (
           <div key={s.label} className={`stat fade-up delay-${i + 1}`} style={{ '--accent': s.accent }}>
@@ -213,7 +219,7 @@ export default function ReviewerDashboard() {
           <div style={{ paddingTop: 16, borderTop: '1px solid var(--ink-200)' }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--navy-900)', marginBottom: 12 }}>Reviewer Performance</div>
             {[
-              { label: 'On-time submissions', value: metricText(onTimeRate), width: onTimeRate ?? 0, color: 'var(--teal-500)', valColor: 'var(--teal-700)' },
+              { label: 'On-time reviews', value: metricText(onTimeRate), width: onTimeRate ?? 0, color: 'var(--teal-500)', valColor: 'var(--teal-700)' },
               {
                 label: 'Editor quality rating',
                 value: quality == null ? 'Awaiting assessment' : `${quality} / 5`,

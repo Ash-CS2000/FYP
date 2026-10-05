@@ -79,6 +79,7 @@ export default function AppShell({ role, children, searchPlaceholder, topbarActi
             unreadCount={unreadCount}
             onSearch={onSearch}
             onOpenNav={() => setMobileNavOpen(true)}
+            helpTo={role === 'reviewer' ? '/reviewer/guidelines' : undefined}
           />
         )}
         <div className="page-content">{children}</div>

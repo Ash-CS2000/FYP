@@ -423,6 +423,18 @@ function AssignmentCard({ assignment, onChanged }) {
           Waiting on the editor — the deadline above has not moved.
         </div>
       )}
+      {assignment.extension?.status === 'granted' && (
+        <div className="asg-note">
+          <strong>Extension granted:</strong> {assignment.extension.requested_days} extra days.
+          New deadline {formatDate(assignment.due_at)}. Only one extension is allowed per review.
+        </div>
+      )}
+      {assignment.extension?.status === 'refused' && (
+        <div className="asg-note">
+          <strong>Extension refused:</strong> your request for {assignment.extension.requested_days} extra
+          days was refused. The original deadline stands.
+        </div>
+      )}
 
       {assignment.local_only && (
         <div className="asg-note">
@@ -447,7 +459,8 @@ function AssignmentCard({ assignment, onChanged }) {
               <Link to={`/reviewer/review/${assignment.manuscript_id}`} className="btn btn-primary btn-sm">
                 Open the manuscript →
               </Link>
-              {!assignment.extension && (
+              {/* One granted extension per review; a refused one may be re-asked. */}
+              {(!assignment.extension || assignment.extension.status === 'refused') && (
                 <button className="btn btn-ghost btn-sm" onClick={() => setPanel('extension')}>
                   Request extension
                 </button>

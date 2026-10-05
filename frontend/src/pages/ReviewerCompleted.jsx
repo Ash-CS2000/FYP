@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { formatDate } from '../data/invitations.js';
-import { RECOMMENDATION_LABELS, RECOMMENDATION_TONE } from '../data/reviews.js';
+import { DECISION_LABELS, DECISION_TONE, RECOMMENDATION_LABELS, RECOMMENDATION_TONE } from '../data/reviews.js';
 import { useReviewerAssignments } from '../hooks/useReviewerAssignments.jsx';
 
 const submittedAt = a => a.review?.submitted_at || '';
@@ -36,7 +36,7 @@ export default function ReviewerCompleted() {
         {!loading && !loadError && completed.length > 0 && (
           <div className="table-scroll">
           <table className="data-table">
-            <thead><tr><th>Paper</th><th>Submitted</th><th>Recommendation</th><th></th></tr></thead>
+            <thead><tr><th>Paper</th><th>Submitted</th><th>Your recommendation</th><th>Decision</th><th></th></tr></thead>
             <tbody>
               {completed.map(a => {
                 const rec = a.review?.recommendation;
@@ -51,6 +51,13 @@ export default function ReviewerCompleted() {
                           {RECOMMENDATION_LABELS[rec]}
                         </span>
                       ) : <span className="muted">—</span>}
+                    </td>
+                    <td>
+                      {a.decision ? (
+                        <span className="pill" style={{ background: DECISION_TONE[a.decision.type]?.bg, color: DECISION_TONE[a.decision.type]?.fg }}>
+                          {DECISION_LABELS[a.decision.type] || a.decision.type}
+                        </span>
+                      ) : <span className="muted">Awaiting decision</span>}
                     </td>
                     <td>
                       <Link to={`/reviewer/review/${a.manuscript_id}`} style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>

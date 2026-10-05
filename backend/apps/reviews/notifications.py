@@ -16,6 +16,9 @@ REVIEW_DECLINED_BODY = '{reviewer} declined to review "{title}".'
 REVIEW_RECUSED_TITLE = 'A reviewer recused themselves'
 REVIEW_RECUSED_BODY = '{reviewer} recused themselves from reviewing "{title}" after accepting.'
 
+REVIEW_COI_TITLE = 'A reviewer declared a possible conflict'
+REVIEW_COI_BODY = '{reviewer} declared a possible conflict of interest on "{title}".'
+
 REVIEW_REMINDER_TITLE = 'Reminder: a review is waiting on you'
 REVIEW_REMINDER_BODY = 'The editor sent a reminder about your review of "{title}".'
 

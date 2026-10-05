@@ -59,6 +59,23 @@ export function listAssignments() {
   return request('/api/reviewer/assignments/');
 }
 
+/**
+ * Declare, from the review form, a conflict the reviewer believes they can
+ * still review past. The editor is notified and decides.
+ *
+ *   POST /api/reviewer/assignments/:id/conflict/
+ *   body   { note }   required
+ *   200    the updated Assignment (coi_declared, coi_note)
+ *   403    not this reviewer's assignment, or not accepted
+ */
+export function declareConflict(assignmentId, note) {
+  return request(`/api/reviewer/assignments/${encodeURIComponent(assignmentId)}/conflict/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  });
+}
+
 export function getReviewerKpi() {
   return request('/api/reviewer/kpi/');
 }

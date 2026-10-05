@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
+function HelpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01" />
+    </svg>
+  );
+}
+
 export default function Topbar({
   searchPlaceholder = 'Search...',
   actions,
@@ -8,6 +17,7 @@ export default function Topbar({
   unreadCount = 0,
   onSearch,
   onOpenNav,
+  helpTo,
 }) {
   const [term, setTerm] = useState('');
 
@@ -41,12 +51,15 @@ export default function Topbar({
         />
       </form>
       <div className="topbar-actions">
-        <button className="icon-btn" title="Help" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01" />
-          </svg>
-        </button>
+        {helpTo ? (
+          <Link className="icon-btn" title="Help" to={helpTo}>
+            <HelpIcon />
+          </Link>
+        ) : (
+          <button className="icon-btn" title="Help" type="button">
+            <HelpIcon />
+          </button>
+        )}
         <Link className="icon-btn" title="Notifications" to={role ? `/${role}/notifications` : '#'}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" />

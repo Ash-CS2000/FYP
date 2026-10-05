@@ -3,6 +3,12 @@ from rest_framework import serializers
 from .models import Review, ReviewAssessment, ReviewAssignment
 
 
+def latest_decision(manuscript):
+    """The manuscript's most recent Decision, or None. Uses prefetched
+    decisions when the queryset has them (ReviewerAssignmentListView)."""
+    return max(manuscript.decisions.all(), key=lambda d: d.decided_at, default=None)
+
+
 class ReviewerAssignmentSerializer(serializers.Serializer):
     """
     Reviewer-facing shape — GET /api/reviewer/assignments/. No author
@@ -22,8 +28,16 @@ class ReviewerAssignmentSerializer(serializers.Serializer):
     decline_reason = serializers.CharField()
     decline_note = serializers.CharField()
     coi_declared = serializers.BooleanField()
+    coi_note = serializers.CharField()
     extension = serializers.SerializerMethodField()
     review = serializers.SerializerMethodField()
+    decision = serializers.SerializerMethodField()
+
+    def get_decision(self, obj):
+        # Type and date only. The letter is written to the author and may
+        # identify them, so it never reaches a reviewer.
+        decision = latest_decision(obj.manuscript)
+        return {'type': decision.type, 'decided_at': decision.decided_at} if decision else None
 
     def get_extension(self, obj):
         if not obj.extension_status:
@@ -84,6 +98,10 @@ class ManuscriptAssignmentSerializer(serializers.Serializer):
     match_score = serializers.IntegerField(allow_null=True)
     model_version = serializers.CharField()
     authorship_conflict_at = serializers.DateTimeField(allow_null=True)
+    # A conflict the reviewer declared but judged not disqualifying -- the
+    # editor decides whether it is.
+    coi_declared = serializers.BooleanField()
+    coi_note = serializers.CharField()
 
     def get_name(self, obj):
         return obj.reviewer.get_full_name() or obj.reviewer.email
@@ -144,6 +162,15 @@ class ExtensionRequestSerializer(serializers.Serializer):
     def validate_reason(self, value):
         if not value.strip():
             raise serializers.ValidationError('Give the editor a reason.')
+        return value.strip()
+
+
+class ConflictDeclarationSerializer(serializers.Serializer):
+    note = serializers.CharField()
+
+    def validate_note(self, value):
+        if not value.strip():
+            raise serializers.ValidationError('Describe the conflict so the editor can judge it.')
         return value.strip()
 
 
@@ -256,6 +283,27 @@ class AuthorReviewSerializer(serializers.Serializer):
 
     def get_label(self, obj):
         return self.context.get('labels', {}).get(obj.assignment_id, 'Reviewer')
+
+
+class ReviewerOutcomeReviewSerializer(serializers.Serializer):
+    """
+    Reviewer-facing shape of every report on a decided manuscript --
+    GET /api/manuscripts/<pk>/reviewer-outcome/. Positional labels only, never a
+    name; no ratings and no confidential_to_editor. `obj` is a Review.
+    Expects context={'labels': reviewer_labels_for(manuscript), 'own_assignment_id': id}.
+    """
+    label = serializers.SerializerMethodField()
+    is_you = serializers.SerializerMethodField()
+    recommendation = serializers.CharField()
+    summary = serializers.CharField()
+    strengths = serializers.CharField()
+    weaknesses = serializers.CharField()
+
+    def get_label(self, obj):
+        return self.context.get('labels', {}).get(obj.assignment_id, 'Reviewer')
+
+    def get_is_you(self, obj):
+        return obj.assignment_id == self.context.get('own_assignment_id')
 
 
 # A one-word "ok" is not a review. Mirrored by MIN_TEXT in frontend/src/pages/ReviewForm.jsx.

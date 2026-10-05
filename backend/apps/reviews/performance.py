@@ -50,7 +50,9 @@ def reviewer_kpi_for(user):
     response_rate = _pct(len(responded), invited_total)
     acceptance_rate = _pct(len(accepted), len(responded))
     completion_rate = _pct(len(submitted), len(accepted))
-    on_time_rate = _pct(len(on_time), len(submitted))
+    # A review that is overdue and still open is already late: counting only
+    # submitted reviews let a reviewer sit on overdue work at no cost.
+    on_time_rate = _pct(len(on_time), len(submitted) + len(overdue_open))
     no_extension_rate = _pct(len(no_extension_submitted), len(submitted))
 
     if assessed:

@@ -33,6 +33,7 @@ import SelectWorkspace from './pages/SelectWorkspace.jsx';
 import ProtectedRoute from './auth/ProtectedRoute.jsx';
 import TrainingGate from './auth/TrainingGate.jsx';
 import ReviewerActiveGate from './auth/ReviewerActiveGate.jsx';
+import ReviewerGuidelinesPage from './pages/ReviewerGuidelinesPage.jsx';
 import ReviewerPending from './pages/ReviewerPending.jsx';
 import EditorReviews from './pages/EditorReviews.jsx';
 import SimilarityReport from './pages/SimilarityReport.jsx';
@@ -137,6 +138,7 @@ export default function App() {
           <Route path="/reviewer/notifications" element={<Notifications role="reviewer" />} />
           <Route path="/reviewer/profile" element={<Profile role="reviewer" />} />
           <Route path="/reviewer/settings" element={<Settings role="reviewer" />} />
+          <Route path="/reviewer/guidelines" element={<ReviewerGuidelinesPage />} />
         </Route>
         </Route>
       </Route>
