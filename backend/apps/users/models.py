@@ -1,7 +1,9 @@
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+
 from django.utils import timezone
+
+from .encryption import EncryptedCharField
 
 
 class UserProfile(models.Model):
@@ -43,7 +45,8 @@ class UserProfile(models.Model):
     institution = models.CharField(max_length=255, blank=True)
     student_id = models.CharField(max_length=50, blank=True)
     programme = models.CharField(max_length=255, blank=True)
-    orcid_id = models.CharField(max_length=50, blank=True)
+    # Encrypted at rest — max_length=200 accommodates Fernet ciphertext (~4× plaintext + overhead)
+    orcid_id = EncryptedCharField(max_length=200, blank=True)
     website = models.URLField(blank=True)
     research_areas = models.TextField(blank=True)
     expertise_areas = models.TextField(blank=True)
@@ -91,13 +94,10 @@ class UserProfile(models.Model):
         return f'{self.user.get_full_name() or self.user.email} ({self.role})'
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=['orcid_id'],
-                condition=~Q(orcid_id=''),
-                name='unique_nonblank_userprofile_orcid_id',
-            ),
-        ]
+        # The DB-level unique constraint on orcid_id was removed because Fernet
+        # encryption produces different ciphertext for the same plaintext, making
+        # a DB constraint impossible. Uniqueness is enforced in the serializer instead.
+        pass
 
 
 class UserRole(models.Model):

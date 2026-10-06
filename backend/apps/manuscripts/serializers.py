@@ -13,15 +13,29 @@ from .models import (
 from .services.noplag_client import submit_check, NoPlagClientError
 from .services.plagiarism import restart_check_for_resubmission
 
-MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB — mirrors the frontend's MAX_UPLOAD_SIZE
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024        # 20 MB for the main manuscript
+MAX_SUPPLEMENTARY_SIZE = 10 * 1024 * 1024  # 10 MB per supplementary file
+PDF_MAGIC = b'%PDF'
 
 
 def validate_pdf_file(value):
-    is_pdf = value.content_type == 'application/pdf' or value.name.lower().endswith('.pdf')
-    if not is_pdf:
+    if value.content_type not in ('application/pdf',) and not value.name.lower().endswith('.pdf'):
         raise serializers.ValidationError('File must be a PDF.')
     if value.size > MAX_UPLOAD_SIZE:
-        raise serializers.ValidationError('File exceeds the 20MB size limit.')
+        raise serializers.ValidationError('File exceeds the 20 MB size limit.')
+    # Check the actual file signature — content_type can be spoofed by the client.
+    header = value.read(4)
+    value.seek(0)
+    if header != PDF_MAGIC:
+        raise serializers.ValidationError('File is not a valid PDF (bad file signature).')
+    return value
+
+
+def validate_supplementary_file(value):
+    if value.size > MAX_SUPPLEMENTARY_SIZE:
+        raise serializers.ValidationError(
+            f'Supplementary file "{value.name}" exceeds the 10 MB per-file limit.'
+        )
     return value
 
 
@@ -366,6 +380,9 @@ class ManuscriptSubmitSerializer(serializers.Serializer):
     def validate_specialty_tags(self, value):
         return validate_specialty_tags_json(value)
 
+    def validate_supplementary(self, value):
+        return [validate_supplementary_file(f) for f in value]
+
     # ── Create ───────────────────────────────────────────────────────────────
 
     def create(self, validated_data):
@@ -490,6 +507,9 @@ class ManuscriptRevisionCreateSerializer(serializers.Serializer):
 
     def validate_specialty_tags(self, value):
         return validate_specialty_tags_json(value)
+
+    def validate_supplementary(self, value):
+        return [validate_supplementary_file(f) for f in value]
 
     def create(self, validated_data):
         target = self.context['manuscript']

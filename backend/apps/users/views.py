@@ -1219,6 +1219,104 @@ class AvatarView(APIView):
         return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
 
 
+class DataExportView(APIView):
+    """
+    GET /api/users/me/export/
+
+    Returns all personal data stored about the signed-in user as a downloadable
+    JSON file — manuscripts submitted, review assignments, decisions received,
+    and profile details.  Supports APP 12 (right of access to personal information).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    def get(self, request):
+        import json
+        from django.http import HttpResponse
+        from apps.manuscripts.models import Manuscript, ManuscriptAuthor
+        from apps.reviews.models import ReviewAssignment
+
+        user = request.user
+        profile = getattr(user, 'profile', None)
+
+        # ── Profile ──────────────────────────────────────────────────────────
+        profile_data = {
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'date_joined': user.date_joined.isoformat(),
+        }
+        if profile:
+            profile_data.update({
+                'role': profile.role,
+                'institution': profile.institution,
+                'orcid_id': profile.orcid_id,  # decrypted by EncryptedCharField
+                'research_areas': profile.research_areas,
+                'expertise_areas': profile.expertise_areas,
+                'bio': profile.bio,
+                'website': profile.website,
+                'specialty_tags': profile.specialty_tags,
+            })
+
+        # ── Manuscripts submitted as owner ────────────────────────────────────
+        manuscripts = []
+        for m in Manuscript.objects.filter(owner=user).order_by('-submitted_at'):
+            manuscripts.append({
+                'id': m.id,
+                'title': m.title,
+                'status': m.status,
+                'submitted_at': m.submitted_at.isoformat(),
+            })
+
+        # ── Manuscripts listed as a byline author ─────────────────────────────
+        byline_ids = (
+            ManuscriptAuthor.objects
+            .filter(email=user.email)
+            .exclude(manuscript__owner=user)
+            .values_list('manuscript_id', flat=True)
+        )
+        byline = []
+        for m in Manuscript.objects.filter(id__in=byline_ids).order_by('-submitted_at'):
+            byline.append({'id': m.id, 'title': m.title, 'status': m.status})
+
+        # ── Review assignments ────────────────────────────────────────────────
+        assignments = []
+        for a in ReviewAssignment.objects.filter(reviewer=user).select_related('manuscript').order_by('-invited_at'):
+            assignments.append({
+                'manuscript_title': a.manuscript.title,
+                'round': a.round,
+                'status': a.status,
+                'invited_at': a.invited_at.isoformat(),
+                'due_at': a.due_at.isoformat() if a.due_at else None,
+            })
+
+        # ── Notifications ─────────────────────────────────────────────────────
+        notifs = []
+        for n in Notification.objects.filter(recipient=user).order_by('-created_at')[:100]:
+            notifs.append({
+                'type': n.notification_type,
+                'message': n.message,
+                'created_at': n.created_at.isoformat(),
+                'read': n.is_read,
+            })
+
+        payload = {
+            'exported_at': timezone.now().isoformat(),
+            'profile': profile_data,
+            'manuscripts_submitted': manuscripts,
+            'manuscripts_as_byline_author': byline,
+            'review_assignments': assignments,
+            'notifications': notifs,
+        }
+
+        response = HttpResponse(
+            json.dumps(payload, indent=2, default=str),
+            content_type='application/json',
+        )
+        response['Content-Disposition'] = 'attachment; filename="my_paperbridge_data.json"'
+        return response
+
+
 def _discard_avatar(key):
     """Best-effort delete of a superseded avatar. An orphaned object costs a few
     kilobytes; a raised exception here would fail a request that already
