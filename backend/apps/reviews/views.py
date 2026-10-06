@@ -11,13 +11,16 @@ from apps.users.permissions import IsReviewer
 
 from .models import ReviewAssignment
 from .performance import reviewer_kpi_for
+from .reminders import send_due_reminders
 from .notifications import (
-    REVIEW_ACCEPTED_BODY, REVIEW_ACCEPTED_TITLE, REVIEW_DECLINED_BODY, REVIEW_DECLINED_TITLE,
+    REVIEW_ACCEPTED_BODY, REVIEW_ACCEPTED_TITLE, REVIEW_COI_BODY, REVIEW_COI_TITLE,
+    REVIEW_DECLINED_BODY, REVIEW_DECLINED_TITLE,
     REVIEW_EXTENSION_REQUESTED_BODY, REVIEW_EXTENSION_REQUESTED_TITLE, REVIEW_RECUSED_BODY,
     REVIEW_RECUSED_TITLE,
 )
 from .serializers import (
-    AcceptAssignmentSerializer, DeclineAssignmentSerializer, ExtensionRequestSerializer,
+    AcceptAssignmentSerializer, ConflictDeclarationSerializer, DeclineAssignmentSerializer,
+    ExtensionRequestSerializer,
     RecuseAssignmentSerializer, ReviewerAssignmentSerializer,
 )
 
@@ -28,10 +31,12 @@ class ReviewerAssignmentListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsReviewer]
 
     def get_queryset(self):
+        send_due_reminders(reviewer=self.request.user)
         return (
             ReviewAssignment.objects
             .filter(reviewer=self.request.user)
             .select_related('manuscript', 'review', 'review__assessment', 'review__assessment__assessed_by')
+            .prefetch_related('manuscript__decisions')
         )
 
 
@@ -171,9 +176,20 @@ class ReviewAssignmentExtensionRequestView(APIView):
         assignment = _get_own_assignment(request, pk)
         if assignment is None:
             return Response({'detail': 'Not your assignment.'}, status=status.HTTP_403_FORBIDDEN)
+        if assignment.status != ReviewAssignment.Status.ACCEPTED:
+            return Response(
+                {'detail': 'Extensions are only for reviews you have accepted and not yet submitted.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if assignment.extension_status == ReviewAssignment.ExtensionStatus.PENDING:
             return Response(
                 {'detail': 'An extension request is already pending.'}, status=status.HTTP_409_CONFLICT,
+            )
+        # One granted extension per review; a refused request may be retried.
+        if assignment.extension_status == ReviewAssignment.ExtensionStatus.GRANTED:
+            return Response(
+                {'detail': 'You have already been granted an extension on this review.'},
+                status=status.HTTP_409_CONFLICT,
             )
 
         serializer = ExtensionRequestSerializer(data=request.data)
@@ -193,6 +209,47 @@ class ReviewAssignmentExtensionRequestView(APIView):
                     body=REVIEW_EXTENSION_REQUESTED_BODY.format(
                         reviewer=request.user.get_full_name() or request.user.email,
                         days=data['days'],
+                        title=assignment.manuscript.title,
+                    ),
+                    manuscript=assignment.manuscript,
+                )
+
+        return Response(ReviewerAssignmentSerializer(assignment).data)
+
+
+class ReviewAssignmentConflictView(APIView):
+    """
+    POST /api/reviewer/assignments/<pk>/conflict/ {note} -- declare, from the
+    review form, a conflict the reviewer believes they can still review past.
+    Same fields as declaring at accept time; the editor is notified and
+    decides. A disqualifying conflict is a recusal instead.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsReviewer]
+
+    def post(self, request, pk):
+        assignment = _get_own_assignment(request, pk)
+        if assignment is None:
+            return Response({'detail': 'Not your assignment.'}, status=status.HTTP_403_FORBIDDEN)
+        if assignment.status != ReviewAssignment.Status.ACCEPTED:
+            return Response(
+                {'detail': 'Only a review you have accepted and not yet submitted can take a conflict declaration.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = ConflictDeclarationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            assignment.coi_declared = True
+            assignment.coi_note = serializer.validated_data['note']
+            assignment.save(update_fields=['coi_declared', 'coi_note'])
+            if assignment.invited_by_id:
+                Notification.objects.create(
+                    recipient_id=assignment.invited_by_id,
+                    category=Notification.Category.REVIEW_RESPONSE,
+                    title=REVIEW_COI_TITLE,
+                    body=REVIEW_COI_BODY.format(
+                        reviewer=request.user.get_full_name() or request.user.email,
                         title=assignment.manuscript.title,
                     ),
                     manuscript=assignment.manuscript,

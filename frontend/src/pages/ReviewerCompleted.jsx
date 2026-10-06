@@ -1,26 +1,17 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
 import { formatDate } from '../data/invitations.js';
-import { RECOMMENDATION_LABELS, RECOMMENDATION_TONE } from '../data/reviews.js';
-import { listAssignments } from '../api/invitations.js';
+import { DECISION_LABELS, DECISION_TONE, RECOMMENDATION_LABELS, RECOMMENDATION_TONE } from '../data/reviews.js';
+import { useReviewerAssignments } from '../hooks/useReviewerAssignments.jsx';
+
+const submittedAt = a => a.review?.submitted_at || '';
 
 export default function ReviewerCompleted() {
-  const [completed, setCompleted] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    listAssignments()
-      .then((rows) => {
-        if (cancelled) return;
-        setCompleted(rows.filter(a => a.status === 'submitted'));
-      })
-      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load your reviews.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
+  const { assignments, loading, error: loadError } = useReviewerAssignments();
+  // Newest submission first.
+  const completed = assignments
+    .filter(a => a.status === 'submitted')
+    .sort((a, b) => submittedAt(b).localeCompare(submittedAt(a)));
 
   return (
     <AppShell role="reviewer" searchPlaceholder="Search completed reviews...">
@@ -43,8 +34,9 @@ export default function ReviewerCompleted() {
           <div className="card-meta" style={{ padding: 20 }}>Nothing submitted yet.</div>
         )}
         {!loading && !loadError && completed.length > 0 && (
+          <div className="table-scroll">
           <table className="data-table">
-            <thead><tr><th>Paper</th><th>Submitted</th><th>Recommendation</th><th></th></tr></thead>
+            <thead><tr><th>Paper</th><th>Submitted</th><th>Your recommendation</th><th>Decision</th><th></th></tr></thead>
             <tbody>
               {completed.map(a => {
                 const rec = a.review?.recommendation;
@@ -52,13 +44,20 @@ export default function ReviewerCompleted() {
                 return (
                   <tr key={a.id}>
                     <td><div className="table-title">{a.title}</div></td>
-                    <td><span className="muted">{formatDate(a.due_at)}</span></td>
+                    <td><span className="muted">{formatDate(a.review?.submitted_at)}</span></td>
                     <td>
                       {rec && tone ? (
                         <span className="pill" style={{ background: tone.bg, color: tone.fg }}>
                           {RECOMMENDATION_LABELS[rec]}
                         </span>
                       ) : <span className="muted">—</span>}
+                    </td>
+                    <td>
+                      {a.decision ? (
+                        <span className="pill" style={{ background: DECISION_TONE[a.decision.type]?.bg, color: DECISION_TONE[a.decision.type]?.fg }}>
+                          {DECISION_LABELS[a.decision.type] || a.decision.type}
+                        </span>
+                      ) : <span className="muted">Awaiting decision</span>}
                     </td>
                     <td>
                       <Link to={`/reviewer/review/${a.manuscript_id}`} style={{ color: 'var(--navy-700)', fontWeight: 600, fontSize: 13 }}>
@@ -70,6 +69,7 @@ export default function ReviewerCompleted() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </AppShell>

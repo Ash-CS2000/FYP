@@ -24,7 +24,10 @@ async function request(path, options = {}) {
     let detail = '';
     try {
       const body = await res.json();
-      detail = body?.detail || body?.error || '';
+      // Field validation errors arrive as { field: ['message'] }; surface the
+      // first one rather than a bare status code.
+      const firstField = body && typeof body === 'object' ? Object.values(body)[0] : null;
+      detail = body?.detail || body?.error || (Array.isArray(firstField) ? firstField[0] : '') || '';
     } catch {
       /* non-JSON error body */
     }
@@ -49,6 +52,20 @@ async function request(path, options = {}) {
  * getAuthorReviews in api/editorial.js for why: two endpoints with two
  * serialisers cannot leak into each other by a forgotten branch.
  */
+/**
+ * Once a manuscript is decided, its decision and every released report — for
+ * a reviewer who submitted on it. Labels only, never names; no decision
+ * letter, ratings or confidential notes.
+ *
+ *   GET /api/manuscripts/:id/reviewer-outcome/
+ *   200  { decision: { type, decided_at }, reviews: [{ label, is_you, recommendation, summary, strengths, weaknesses }] }
+ *   403  caller did not submit a review on this manuscript
+ *   404  no decision yet
+ */
+export function getReviewOutcome(manuscriptId) {
+  return request(`/api/manuscripts/${encodeURIComponent(manuscriptId)}/reviewer-outcome/`);
+}
+
 export function getManuscriptForReview(manuscriptId) {
   return request(`/api/manuscripts/${encodeURIComponent(manuscriptId)}/reviewer-view/`);
 }

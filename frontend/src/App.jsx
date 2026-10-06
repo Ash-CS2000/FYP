@@ -33,6 +33,7 @@ import SelectWorkspace from './pages/SelectWorkspace.jsx';
 import ProtectedRoute from './auth/ProtectedRoute.jsx';
 import TrainingGate from './auth/TrainingGate.jsx';
 import ReviewerActiveGate from './auth/ReviewerActiveGate.jsx';
+import ReviewerGuidelinesPage from './pages/ReviewerGuidelinesPage.jsx';
 import ReviewerPending from './pages/ReviewerPending.jsx';
 import EditorReviews from './pages/EditorReviews.jsx';
 import SimilarityReport from './pages/SimilarityReport.jsx';
@@ -45,6 +46,7 @@ import AdminAudit from './pages/AdminAudit.jsx';
 import EditorInvite from './pages/EditorInvite.jsx';
 import AdminInviteAccept from './pages/AdminInviteAccept.jsx';
 import { NotificationsProvider } from './hooks/useNotifications.jsx';
+import { ReviewerAssignmentsProvider } from './hooks/useReviewerAssignments.jsx';
 import { ThemeProvider } from './theme/ThemeContext.jsx';
 
 export default function App() {
@@ -114,6 +116,7 @@ export default function App() {
       <Route element={<NotificationsProvider />}>
         {/* Reviewing is approval-gated — an admin must accept the application. */}
         <Route element={<ReviewerActiveGate />}>
+        <Route element={<ReviewerAssignmentsProvider />}>
           <Route path="/reviewer" element={<Navigate to="/reviewer/dashboard" replace />} />
           <Route path="/reviewer/dashboard" element={<ReviewerDashboard />} />
 
@@ -135,6 +138,8 @@ export default function App() {
           <Route path="/reviewer/notifications" element={<Notifications role="reviewer" />} />
           <Route path="/reviewer/profile" element={<Profile role="reviewer" />} />
           <Route path="/reviewer/settings" element={<Settings role="reviewer" />} />
+          <Route path="/reviewer/guidelines" element={<ReviewerGuidelinesPage />} />
+        </Route>
         </Route>
       </Route>
       </Route>

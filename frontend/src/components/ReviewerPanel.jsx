@@ -403,6 +403,12 @@ export default function ReviewerPanel({ manuscriptId, reviews, isAdmin, currentR
           {row.extension?.status === 'granted' && (
             <div className="rp-ext">Extension granted — {row.extension.requested_days} days added.</div>
           )}
+          {row.coi_declared && (
+            <div className="rp-ext">
+              <strong>Conflict declared by the reviewer:</strong> {row.coi_note || 'No details given.'}
+              {' '}They believe they can still review fairly — your call whether it disqualifies them.
+            </div>
+          )}
           {row.authorship_conflict_at && (
             <div className="rp-conflict">
               Authorship conflict — this reviewer is now an author of the manuscript. Their review is

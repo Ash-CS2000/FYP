@@ -4,7 +4,8 @@ from .views import (
     ManuscriptAssignmentExtensionDecideView, ManuscriptAssignmentListCreateView, ManuscriptAssignmentRemindView,
     ManuscriptAuthorReviewsView, ManuscriptDecisionHistoryView, ManuscriptDecisionView, ManuscriptDetailView,
     ManuscriptEditorListView, ManuscriptListView, ManuscriptPublishView, ManuscriptRevisionView,
-    ManuscriptReviewerCandidatesView, ManuscriptReviewerViewView, ManuscriptReviewListCreateView,
+    ManuscriptReviewerCandidatesView, ManuscriptReviewerOutcomeView, ManuscriptReviewerViewView,
+    ManuscriptReviewListCreateView,
     ManuscriptReviewAssessmentView, ManuscriptScreeningView, ManuscriptUploadView, PlagiarismCheckStatusView,
     PublishedCategoryListView, PublishedManuscriptListView,
 )
@@ -31,4 +32,5 @@ urlpatterns = [
     path('<int:pk>/reviews/<int:assignment_id>/assessment/', ManuscriptReviewAssessmentView.as_view(), name='manuscript-review-assessment'),
     path('<int:pk>/reviews/author/', ManuscriptAuthorReviewsView.as_view(), name='manuscript-author-reviews'),
     path('<int:pk>/reviewer-view/', ManuscriptReviewerViewView.as_view(), name='manuscript-reviewer-view'),
+    path('<int:pk>/reviewer-outcome/', ManuscriptReviewerOutcomeView.as_view(), name='manuscript-reviewer-outcome'),
 ]

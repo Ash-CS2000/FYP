@@ -229,7 +229,10 @@ export function daysUntil(iso) {
   if (!iso) return null;
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return null;
-  return Math.ceil((then - new Date()) / 86400000);
+  // Whole calendar days in local time. Dividing a raw millisecond difference
+  // and rounding towards zero counted "overdue" one day short.
+  const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((startOfDay(then) - startOfDay(new Date())) / 86400000);
 }
 
 export function deadlineState(iso) {

@@ -31,7 +31,7 @@ from apps.reviews.notifications import (
 from apps.reviews.serializers import (
     AuthorReviewSerializer, InviteReviewersSerializer, ManuscriptAssignmentSerializer,
     ManuscriptForReviewerSerializer, ManuscriptReviewSerializer, ReviewAssessmentSerializer, ReviewCreateSerializer,
-    reviewer_labels_for,
+    ReviewerOutcomeReviewSerializer, latest_decision, reviewer_labels_for,
 )
 from apps.users.models import UserProfile, UserRole
 from apps.users.permissions import is_reviewer
@@ -828,6 +828,44 @@ class ManuscriptReviewerViewView(APIView):
         if reason:
             return Response({'detail': reason}, status=status.HTTP_403_FORBIDDEN)
         return Response(ManuscriptForReviewerSerializer(manuscript).data)
+
+
+class ManuscriptReviewerOutcomeView(APIView):
+    """
+    GET /api/manuscripts/<int:pk>/reviewer-outcome/ -> once a manuscript is
+    decided, the decision and every released report, for a reviewer who
+    submitted on it. Seeing how the editor and the other reviewers judged the
+    same paper is how a reviewer calibrates.
+
+    Mirrors ManuscriptAuthorReviewsView's release rule (404 until a decision
+    exists; co-author-conflicted reviews never shown) and keeps double-blind:
+    positional labels, no letter, no ratings, no confidential notes.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        manuscript = get_object_or_404(Manuscript, pk=pk)
+        own = ReviewAssignment.objects.filter(
+            manuscript=manuscript, reviewer=request.user, status=ReviewAssignment.Status.SUBMITTED,
+        ).first()
+        if own is None:
+            return Response(
+                {'detail': 'Only reviewers who submitted on this manuscript can see its outcome.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        decision = latest_decision(manuscript)
+        if decision is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        reviews = Review.objects.filter(
+            assignment__manuscript=manuscript, assignment__status=ReviewAssignment.Status.SUBMITTED,
+            assignment__authorship_conflict_at__isnull=True,
+        ).select_related('assignment').order_by('assignment__invited_at')
+        context = {'labels': reviewer_labels_for(manuscript), 'own_assignment_id': own.id}
+        return Response({
+            'decision': {'type': decision.type, 'decided_at': decision.decided_at},
+            'reviews': ReviewerOutcomeReviewSerializer(reviews, many=True, context=context).data,
+        })
 
 
 class ManuscriptPublishView(APIView):

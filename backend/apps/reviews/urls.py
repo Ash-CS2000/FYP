@@ -1,7 +1,8 @@
 from django.urls import path
 
 from .views import (
-    ReviewAssignmentAcceptView, ReviewAssignmentDeclineView, ReviewAssignmentExtensionRequestView,
+    ReviewAssignmentAcceptView, ReviewAssignmentConflictView, ReviewAssignmentDeclineView,
+    ReviewAssignmentExtensionRequestView,
     ReviewAssignmentRecuseView, ReviewerAssignmentListView, ReviewerKpiView,
 )
 
@@ -12,4 +13,5 @@ urlpatterns = [
     path('assignments/<int:pk>/decline/', ReviewAssignmentDeclineView.as_view(), name='reviewer-assignment-decline'),
     path('assignments/<int:pk>/recuse/', ReviewAssignmentRecuseView.as_view(), name='reviewer-assignment-recuse'),
     path('assignments/<int:pk>/extension/', ReviewAssignmentExtensionRequestView.as_view(), name='reviewer-assignment-extension'),
+    path('assignments/<int:pk>/conflict/', ReviewAssignmentConflictView.as_view(), name='reviewer-assignment-conflict'),
 ]

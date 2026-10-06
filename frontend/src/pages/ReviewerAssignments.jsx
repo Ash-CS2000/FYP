@@ -12,9 +12,12 @@
 // No manuscript file, no author, and nothing at all about the other reviewers.
 // See api/invitations.js for the contract the backend must hold up.
 
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell.jsx';
+import { useCurrentUser } from '../auth/CurrentUserContext.jsx';
+import { useReviewerAssignments } from '../hooks/useReviewerAssignments.jsx';
+import { clearDraft } from '../utils/reviewDraft.js';
 import {
   saveResponse,
   DECLINE_REASONS,
@@ -26,7 +29,6 @@ import {
 import {
   acceptAssignment,
   declineAssignment,
-  listAssignments,
   recuseAssignment,
   requestExtension,
 } from '../api/invitations.js';
@@ -213,6 +215,7 @@ function DeclinePanel({ assignment, onDone, onCancel }) {
 // for a different reason: the conflict only became visible once the reviewer read
 // the manuscript.
 function RecusePanel({ assignment, onDone, onCancel }) {
+  const { user } = useCurrentUser();
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -234,6 +237,7 @@ function RecusePanel({ assignment, onDone, onCancel }) {
     try {
       const updated = await recuseAssignment(assignment.id, { note: note.trim() });
       patch = { ...patch, ...updated, recused: true };
+      if (user?.id) clearDraft(user.id, assignment.id);
     } catch {
       patch.local_only = true;
     }
@@ -351,7 +355,7 @@ function AssignmentCard({ assignment, onChanged }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="asg-title">{assignment.title}</div>
           <div className="asg-meta">
-            {assignment.manuscript_id} · {assignment.category}
+            Manuscript #{assignment.manuscript_id} · {assignment.category}
           </div>
         </div>
         <span className="asg-status" style={{ background: tone.bg, color: tone.fg }}>
@@ -391,7 +395,7 @@ function AssignmentCard({ assignment, onChanged }) {
         {assignment.status === 'submitted' && (
           <div>
             <div className="asg-fact-label">Submitted</div>
-            <div className="asg-fact-value">{formatDate(assignment.due_at)}</div>
+            <div className="asg-fact-value">{formatDate(assignment.review?.submitted_at)}</div>
           </div>
         )}
       </div>
@@ -419,6 +423,18 @@ function AssignmentCard({ assignment, onChanged }) {
           Waiting on the editor — the deadline above has not moved.
         </div>
       )}
+      {assignment.extension?.status === 'granted' && (
+        <div className="asg-note">
+          <strong>Extension granted:</strong> {assignment.extension.requested_days} extra days.
+          New deadline {formatDate(assignment.due_at)}. Only one extension is allowed per review.
+        </div>
+      )}
+      {assignment.extension?.status === 'refused' && (
+        <div className="asg-note">
+          <strong>Extension refused:</strong> your request for {assignment.extension.requested_days} extra
+          days was refused. The original deadline stands.
+        </div>
+      )}
 
       {assignment.local_only && (
         <div className="asg-note">
@@ -443,7 +459,8 @@ function AssignmentCard({ assignment, onChanged }) {
               <Link to={`/reviewer/review/${assignment.manuscript_id}`} className="btn btn-primary btn-sm">
                 Open the manuscript →
               </Link>
-              {!assignment.extension && (
+              {/* One granted extension per review; a refused one may be re-asked. */}
+              {(!assignment.extension || assignment.extension.status === 'refused') && (
                 <button className="btn btn-ghost btn-sm" onClick={() => setPanel('extension')}>
                   Request extension
                 </button>
@@ -462,31 +479,26 @@ function AssignmentCard({ assignment, onChanged }) {
   );
 }
 
+const matchesQuery = (a, q) => (
+  [a.title, a.abstract, a.category, String(a.manuscript_id)]
+    .some(field => (field || '').toLowerCase().includes(q))
+);
+
 export default function ReviewerAssignments({ initialFilter = 'all' }) {
   const [filter, setFilter] = useState(initialFilter);
-  const [assignments, setAssignments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const { assignments, loading, error: loadError, patch } = useReviewerAssignments();
+  const [params, setParams] = useSearchParams();
+  const query = (params.get('q') || '').trim();
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Set by AssignmentGate when it sends the reviewer back here.
+  const notice = location.state?.notice;
 
-  useEffect(() => {
-    let cancelled = false;
-    listAssignments()
-      .then((data) => { if (!cancelled) setAssignments(data); })
-      .catch((err) => { if (!cancelled) setLoadError(err.message || 'Could not load your assignments.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
-
-  // A panel's onDone hands back the patch (real server response merged with
-  // any local fields) for the one row it acted on — merge it in place rather
-  // than refetching the whole list.
-  const handleChanged = (id, patch) => {
-    setAssignments(prev => prev.map(a => (a.id === id ? { ...a, ...patch } : a)));
-  };
-
+  // Search narrows every chip, so the counts and the list stay consistent.
+  const searched = query ? assignments.filter(a => matchesQuery(a, query.toLowerCase())) : assignments;
   const matcher = id => (FILTERS.find(f => f.id === id) || FILTERS[0]).match;
-  const counts = id => assignments.filter(matcher(id)).length;
-  const visible = assignments.filter(matcher(filter));
+  const counts = id => searched.filter(matcher(id)).length;
+  const visible = searched.filter(matcher(filter));
   const heading = FILTERS.find(f => f.id === filter) || FILTERS[0];
 
   return (
@@ -523,12 +535,41 @@ export default function ReviewerAssignments({ initialFilter = 'all' }) {
         </div>
       </div>
 
+      {notice && (
+        <div className="lms-banner is-todo fade-up" role="status">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" />
+          </svg>
+          <span style={{ flex: 1 }}>{notice}</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => navigate(`${location.pathname}${location.search}`, { replace: true, state: null })}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="card fade-up delay-1" style={{ marginBottom: 20 }}>
-        <div className="card-header">
+        <div className="card-header" style={{ flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div className="card-title">
               {visible.length} {filter === 'all' ? 'assignments' : `· ${heading.label}`}
             </div>
+            {query && (
+              <div className="card-meta">
+                Showing results for “{query}” ·{' '}
+                <button
+                  type="button"
+                  className="link-btn"
+                  style={{ background: 'none', border: 0, padding: 0, color: 'var(--navy-700)', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={() => { params.delete('q'); setParams(params); }}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             {filter === 'invited' && (
               <div className="card-meta">
                 You are seeing the title and abstract only. The manuscript itself opens
@@ -536,7 +577,7 @@ export default function ReviewerAssignments({ initialFilter = 'all' }) {
               </div>
             )}
           </div>
-          <div className="row">
+          <div className="row" style={{ flexWrap: 'wrap' }}>
             {FILTERS.map(f => (
               <button
                 key={f.id}
@@ -556,14 +597,14 @@ export default function ReviewerAssignments({ initialFilter = 'all' }) {
           <div className="card"><div className="asg-empty" style={{ color: 'var(--red-800)' }}>{loadError}</div></div>
         )}
         {!loading && !loadError && visible.length === 0 && (
-          <div className="card"><div className="asg-empty">Nothing here right now.</div></div>
+          <div className="card"><div className="asg-empty">{query ? 'No assignments match your search.' : 'Nothing here right now.'}</div></div>
         )}
         {!loading && !loadError && visible.length > 0 && (
           visible.map(a => (
             <AssignmentCard
               key={a.id}
               assignment={a}
-              onChanged={(patch) => handleChanged(a.id, patch)}
+              onChanged={(changes) => patch(a.id, changes)}
             />
           ))
         )}

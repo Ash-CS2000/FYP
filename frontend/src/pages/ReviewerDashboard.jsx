@@ -9,7 +9,8 @@ import {
   deadlineState,
   formatDate,
 } from '../data/invitations.js';
-import { getReviewerKpi, listAssignments } from '../api/invitations.js';
+import { getReviewerKpi } from '../api/invitations.js';
+import { useReviewerAssignments } from '../hooks/useReviewerAssignments.jsx';
 import { getMe } from '../api/users.js';
 import { SPECIALTY_TAG_LABELS } from '../data/specialtyTags.js';
 import { RECOMMENDATION_LABELS } from '../data/reviews.js';
@@ -30,15 +31,12 @@ function metricText(value, suffix = '%') {
 export default function ReviewerDashboard() {
   const firstName = getFirstName(useCurrentUser().user) || 'Reviewer';
 
-  const [assignments, setAssignments] = useState([]);
+  const assignments = useReviewerAssignments()?.assignments || [];
   const [specialtyTags, setSpecialtyTags] = useState([]);
   const [kpi, setKpi] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    listAssignments()
-      .then((data) => { if (!cancelled) setAssignments(data); })
-      .catch(() => { /* dashboard still renders with zero counts */ });
     getMe()
       .then((me) => { if (!cancelled) setSpecialtyTags(me.specialty_tags || []); })
       .catch(() => { /* left empty */ });
@@ -91,7 +89,13 @@ export default function ReviewerDashboard() {
             label: 'Reviewer KPI',
             value: kpi ? `${kpi.score}%` : '...',
             accent: 'var(--navy-700)',
-            trend: kpi ? `${kpi.summary.submitted} submitted - ${kpi.band.replace('_', ' ')}` : 'Calculating',
+            trend: kpi
+              ? [
+                `${kpi.summary.submitted} submitted`,
+                kpi.summary.overdue_open ? `${kpi.summary.overdue_open} overdue` : null,
+                kpi.band.replace('_', ' '),
+              ].filter(Boolean).join(' · ')
+              : 'Calculating',
           },
         ].map((s, i) => (
           <div key={s.label} className={`stat fade-up delay-${i + 1}`} style={{ '--accent': s.accent }}>
@@ -121,6 +125,7 @@ export default function ReviewerDashboard() {
             Nothing open. Anything new will appear here and in your invitations.
           </div>
         ) : (
+          <div className="table-scroll">
           <table className="data-table">
             <thead><tr><th>Paper</th><th>Category</th><th>Author</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
             <tbody>
@@ -134,7 +139,7 @@ export default function ReviewerDashboard() {
                     : undefined}>
                     <td>
                       <div className="table-title">{a.title}</div>
-                      <div className="table-meta">{a.manuscript_id}</div>
+                      <div className="table-meta">Manuscript #{a.manuscript_id}</div>
                     </td>
                     <td><span className="muted">{a.category}</span></td>
                     <td><AnonymousAuthor /></td>
@@ -156,6 +161,7 @@ export default function ReviewerDashboard() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -213,7 +219,7 @@ export default function ReviewerDashboard() {
           <div style={{ paddingTop: 16, borderTop: '1px solid var(--ink-200)' }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--navy-900)', marginBottom: 12 }}>Reviewer Performance</div>
             {[
-              { label: 'On-time submissions', value: metricText(onTimeRate), width: onTimeRate ?? 0, color: 'var(--teal-500)', valColor: 'var(--teal-700)' },
+              { label: 'On-time reviews', value: metricText(onTimeRate), width: onTimeRate ?? 0, color: 'var(--teal-500)', valColor: 'var(--teal-700)' },
               {
                 label: 'Editor quality rating',
                 value: quality == null ? 'Awaiting assessment' : `${quality} / 5`,
